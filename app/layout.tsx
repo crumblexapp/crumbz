@@ -42,18 +42,29 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "makesomething ☀️",
-  description: "build your first app with ai. look what i made!",
-  metadataBase: new URL("https://makesomething.so"),
+  title: "crumble-students app",
+  description: "the crumble student app.",
+  metadataBase: new URL("https://app.crumbleapp.eu"),
+  applicationName: "crumble-students app",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon",
+  },
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "crumble-students app",
+  },
   openGraph: {
-    title: "makesomething ☀️",
-    description: "look what i made!",
-    siteName: "makesomething",
+    title: "crumble-students app",
+    description: "the crumble student app.",
+    siteName: "crumble-students app",
   },
   twitter: {
     card: "summary_large_image",
-    title: "makesomething ☀️",
-    description: "look what i made!",
+    title: "crumble-students app",
+    description: "the crumble student app.",
   },
 };
 
