@@ -18,14 +18,15 @@ export default function AppleIcon() {
           color: "#FFF4DE",
           display: "flex",
           fontFamily: "Arial, sans-serif",
-          fontSize: 124,
+          fontSize: 62,
           fontWeight: 700,
           height: "100%",
           justifyContent: "center",
+          letterSpacing: "-0.06em",
           width: "100%",
         }}
       >
-        c
+        crumble
       </div>
     ),
     size,
