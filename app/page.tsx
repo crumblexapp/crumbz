@@ -815,6 +815,11 @@ export default function Page() {
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
+  const cityBreakdown = accounts.reduce<Record<string, number>>((acc, account) => {
+    const key = account.profile.city || "unknown";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
   const totalSignups = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL).length;
   const sortedCityBreakdown = Object.entries(cityBreakdown).sort(([, a], [, b]) => b - a);
   const allFoodSpots = Object.values(fallbackFavoritePlacesByCity).flat();
@@ -866,11 +871,6 @@ export default function Page() {
   const uniqueSharers = new Set(
     Object.values(interactions).flatMap((item) => item.shares.map((share) => share.authorEmail)),
   ).size;
-  const cityBreakdown = accounts.reduce<Record<string, number>>((acc, account) => {
-    const key = account.profile.city || "unknown";
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {});
   const friendableAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     const query = friendQuery.trim().toLowerCase();
@@ -910,6 +910,7 @@ export default function Page() {
       kind: "announcement" as const,
       title: announcement.title,
       detail: announcement.body,
+      picture: adminProfilePicture,
     })),
     ...user.profile.incomingFriendRequests
       .map((requestEmail) => {
@@ -945,7 +946,7 @@ export default function Page() {
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
   ].filter(Boolean) as Array<
-    | { id: string; kind: "announcement"; title: string; detail: string }
+    | { id: string; kind: "announcement"; title: string; detail: string; picture?: string }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
