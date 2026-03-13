@@ -318,6 +318,13 @@ type PostLike = {
   createdAt: string;
 };
 
+type AppAnnouncement = {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+};
+
 type PostInteraction = {
   comments: PostComment[];
   shares: PostShare[];
@@ -735,6 +742,7 @@ export default function Page() {
   const [accounts, setAccounts] = useState<StoredUser[]>([]);
   const [posts, setPosts] = useState<AppPost[]>([...defaultPosts]);
   const [interactions, setInteractions] = useState<InteractionsMap>({});
+  const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [city, setCity] = useState<string | null>(null);
@@ -746,6 +754,8 @@ export default function Page() {
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementBody, setAnnouncementBody] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
@@ -790,9 +800,36 @@ export default function Page() {
   const schoolNameValue = schoolName ?? user.profile.schoolName ?? "";
   const matchingSchools = schoolsByCity[normalizeCityKey(cityValue)] ?? [];
   const shouldShowSchoolField = isStudentValue === true;
+  const isNonStudent = user.profile.isStudent === false;
+  const weeklyDropEyebrow = isNonStudent ? "weekly drop" : "weekly dump";
+  const weeklyDropTitle = isNonStudent ? "sunday food drop" : "sunday weekly food dump";
+  const weeklyDropBody = isNonStudent
+    ? "one sunday post only. add up to 7 food photos, and your circle will see it in their feed."
+    : "one sunday post only. add up to 7 food photos, and only your friends will see it in their feed.";
+  const communityEyebrow = isNonStudent ? "community drops" : "student dumps";
+  const communityTitle = isNonStudent ? "weekly food spots from your circle" : "weekly food spots from the community";
+  const communityEmpty = isNonStudent
+    ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
+    : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
+  const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
+  const totalSignups = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL).length;
+  const sortedCityBreakdown = Object.entries(cityBreakdown).sort(([, a], [, b]) => b - a);
+  const allFoodSpots = Object.values(fallbackFavoritePlacesByCity).flat();
+  const foodSpotCounts = allFoodSpots
+    .map((place) => ({
+      ...place,
+      saves: accounts.filter((account) => account.profile.favoritePlaceIds?.includes(place.id)).length,
+    }))
+    .filter((place) => place.saves > 0)
+    .sort((a, b) => b.saves - a.saves)
+    .slice(0, 6);
+  const latestAnnouncement = announcements[0] ?? null;
+  const userManagementRows = [...accounts]
+    .filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL)
+    .sort((a, b) => (b.signedIn ? 1 : 0) - (a.signedIn ? 1 : 0));
   const adminPosts = posts.filter((post) => post.authorRole !== "student");
   const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
@@ -868,6 +905,12 @@ export default function Page() {
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
   const notificationItems = [
+    ...announcements.slice(0, 4).map((announcement) => ({
+      id: announcement.id,
+      kind: "announcement" as const,
+      title: announcement.title,
+      detail: announcement.body,
+    })),
     ...user.profile.incomingFriendRequests
       .map((requestEmail) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
@@ -902,6 +945,7 @@ export default function Page() {
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
   ].filter(Boolean) as Array<
+    | { id: string; kind: "announcement"; title: string; detail: string }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
@@ -1045,10 +1089,12 @@ export default function Page() {
     nextAccounts,
     nextPosts,
     nextInteractions,
+    nextAnnouncements,
   }: {
     nextAccounts?: StoredUser[];
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
+    nextAnnouncements?: AppAnnouncement[];
   }) => {
     void fetch("/api/state", {
       method: "POST",
@@ -1059,6 +1105,7 @@ export default function Page() {
         ...(nextAccounts ? { accounts: nextAccounts } : {}),
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
+        ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
       }),
     }).catch(() => undefined);
   };
@@ -1081,6 +1128,7 @@ export default function Page() {
         setAccounts(nextAccounts);
         setPosts(mergedPosts);
         setInteractions(nextInteractions);
+        setAnnouncements([]);
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
         hasLoadedDataRef.current = true;
       });
@@ -1095,6 +1143,7 @@ export default function Page() {
           setAccounts(payload.accounts ?? nextAccounts);
           setPosts(normalizePosts((payload.posts ?? nextPosts) as Partial<AppPost>[]));
           setInteractions(payload.interactions ?? nextInteractions);
+          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         });
       })
       .catch(() => undefined);
@@ -1276,6 +1325,7 @@ export default function Page() {
           setAccounts(payload.accounts ?? []);
           setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
           setInteractions(payload.interactions ?? {});
+          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
     };
@@ -1650,6 +1700,29 @@ export default function Page() {
     }
     persistUser(nextUser);
     syncSharedState({ nextAccounts });
+  };
+
+  const sendAnnouncement = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedTitle = announcementTitle.trim();
+    const trimmedBody = announcementBody.trim();
+    if (!trimmedTitle || !trimmedBody) return;
+
+    const nextAnnouncements = [
+      {
+        id: `announcement-${Date.now()}`,
+        title: trimmedTitle,
+        body: trimmedBody,
+        createdAt: formatNow(),
+      },
+      ...announcements,
+    ].slice(0, 12);
+
+    setAnnouncements(nextAnnouncements);
+    syncSharedState({ nextAnnouncements });
+    setAnnouncementTitle("");
+    setAnnouncementBody("");
   };
 
   const resetComposer = () => {
@@ -2466,10 +2539,9 @@ export default function Page() {
                 <div className="mt-4 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "signed in", value: accounts.length },
+                      { label: "signups", value: totalSignups },
                       { label: "posts live", value: posts.length },
                       { label: "likes", value: totalLikes },
-                      { label: "comments", value: totalComments },
                       { label: "shares", value: totalShares },
                     ].map((item) => (
                       <Card key={item.label} className="rounded-[24px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
@@ -2483,13 +2555,122 @@ export default function Page() {
 
                   <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">audience analytics</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">push notifications</p>
+                          <p className="mt-1 text-sm text-[#785c42]">send one message to everyone and it shows up in their notifications drawer.</p>
+                        </div>
+                        <Chip className="bg-[#fff5e8] text-[#d97706]">{announcements.length} live</Chip>
+                      </div>
+                      <form className="grid gap-3" onSubmit={sendAnnouncement}>
+                        <Input
+                          label="headline"
+                          labelPlacement="outside"
+                          placeholder="new post dropped"
+                          value={announcementTitle}
+                          onValueChange={setAnnouncementTitle}
+                          classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                        />
+                        <Textarea
+                          label="message"
+                          labelPlacement="outside"
+                          placeholder="come back and check this out"
+                          value={announcementBody}
+                          onValueChange={setAnnouncementBody}
+                          classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                        />
+                        <Button type="submit" radius="full" className="bg-[#FE8A01] text-white">
+                          push to all users
+                        </Button>
+                      </form>
+                      {latestAnnouncement ? (
+                        <div className="rounded-[18px] bg-[#fff8f0] px-4 py-3">
+                          <p className="text-sm font-semibold text-[#2b1530]">{latestAnnouncement.title}</p>
+                          <p className="mt-1 text-sm text-[#785c42]">{latestAnnouncement.body}</p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{latestAnnouncement.createdAt}</p>
+                        </div>
+                      ) : null}
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">overview stats</p>
                       <div className="flex flex-wrap gap-2">
+                        <Chip className="bg-[#fff5e8] text-[#d97706]">{totalComments} comments</Chip>
                         <Chip className="bg-[#fff5e8] text-[#d97706]">{uniqueCommenters} unique commenters</Chip>
                         <Chip className="bg-[#fff5e8] text-[#d97706]">{uniqueSharers} unique sharers</Chip>
                       </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">user management</p>
+                          <p className="mt-1 text-sm text-[#785c42]">who signed up, where they’re from, and whether they’re active right now.</p>
+                        </div>
+                        <Chip className="bg-[#fff5e8] text-[#d97706]">{userManagementRows.length} users</Chip>
+                      </div>
                       <div className="grid gap-2">
-                        {Object.entries(cityBreakdown).map(([cityName, count]) => (
+                        {userManagementRows.length ? (
+                          userManagementRows.map((account) => (
+                            <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
+                              <div>
+                                <p className="font-semibold text-[#2b1530]">{account.profile.fullName || account.googleProfile?.name || "new user"}</p>
+                                <p className="text-[#785c42]">
+                                  @{account.profile.username || "pending"} • {formatProfileMeta(account.profile.city, account.profile.schoolName) || "profile not finished"}
+                                </p>
+                              </div>
+                              <Chip className="bg-white text-[#c66b00]">{account.signedIn ? "active" : "saved"}</Chip>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#785c42]">no users yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">food spot data</p>
+                          <p className="mt-1 text-sm text-[#785c42]">which places are getting saved the most from day one.</p>
+                        </div>
+                        <Chip className="bg-[#fff5e8] text-[#d97706]">{foodSpotCounts.length} tracked</Chip>
+                      </div>
+                      <div className="grid gap-2">
+                        {foodSpotCounts.length ? (
+                          foodSpotCounts.map((place) => (
+                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
+                              <div>
+                                <p className="font-semibold text-[#2b1530]">{place.name}</p>
+                                <p className="text-[#785c42]">{place.address}</p>
+                              </div>
+                              <Chip className="bg-white text-[#c66b00]">{place.saves} saves</Chip>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#785c42]">no food spots saved yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">city breakdown</p>
+                          <p className="mt-1 text-sm text-[#785c42]">see where users are stacking up so you know where to focus next.</p>
+                        </div>
+                        <Chip className="bg-[#fff5e8] text-[#d97706]">{sortedCityBreakdown.length} cities</Chip>
+                      </div>
+                      <div className="grid gap-2">
+                        {sortedCityBreakdown.map(([cityName, count]) => (
                           <div key={cityName} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
                             <span className="text-[#785c42]">{cityName}</span>
                             <span className="font-semibold text-[#2b1530]">{count}</span>
@@ -2511,7 +2692,7 @@ export default function Page() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-sm text-[#785c42]">no student activity yet.</p>
+                        <p className="text-sm text-[#785c42]">no activity yet.</p>
                       )}
                     </CardBody>
                   </Card>
@@ -2846,6 +3027,23 @@ export default function Page() {
 
         {studentTab === "feed" ? (
           <>
+            {latestAnnouncement ? (
+              <motion.section
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+                className="mt-6"
+              >
+                <Card className="rounded-[28px] border border-[#ffd8ad] bg-[linear-gradient(135deg,_#fff2df,_#ffffff)] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-2 p-5">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">push from crumbz</p>
+                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{latestAnnouncement.title}</h2>
+                    <p className="text-sm text-[#785c42]">{latestAnnouncement.body}</p>
+                  </CardBody>
+                </Card>
+              </motion.section>
+            ) : null}
+
             <motion.section
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2884,13 +3082,11 @@ export default function Page() {
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">weekly dump</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">{weeklyDropEyebrow}</p>
                       <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
-                        sunday weekly food dump
+                        {weeklyDropTitle}
                       </h3>
-                      <p className="mt-2 text-sm text-[#785c42]">
-                        one sunday post only. add up to 7 food photos, and only your friends will see it in their feed.
-                      </p>
+                      <p className="mt-2 text-sm text-[#785c42]">{weeklyDropBody}</p>
                     </div>
                     <Chip className="bg-[#fff5e8] text-[#d97706]">1 per sunday</Chip>
                   </div>
@@ -2964,10 +3160,8 @@ export default function Page() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">student dumps</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
-                      weekly food spots from the community
-                    </h3>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">{communityEyebrow}</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{communityTitle}</h3>
                   </div>
                   <Chip className="bg-[#fff5e8] text-[#d97706]">{visibleStudentWeeklyDumps.length} dumps</Chip>
                 </div>
@@ -2975,9 +3169,7 @@ export default function Page() {
                   visibleStudentWeeklyDumps.map(renderFeedCard)
                 ) : (
                   <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                    <CardBody className="p-5 text-sm text-[#785c42]">
-                      no friend food dumps yet. your own sunday post and your friends' dumps will land here.
-                    </CardBody>
+                    <CardBody className="p-5 text-sm text-[#785c42]">{communityEmpty}</CardBody>
                   </Card>
                 )}
               </div>
@@ -3030,7 +3222,7 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">rewards</p>
-                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">student perks loading</h2>
+                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{rewardsTitle}</h2>
                 <p className="text-sm text-[#785c42]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
               </CardBody>
             </Card>
@@ -3241,6 +3433,19 @@ export default function Page() {
                               }}
                             >
                               decline
+                            </Button>
+                          </div>
+                        ) : item.kind === "announcement" ? (
+                          <div className="mt-3">
+                            <Button
+                              radius="full"
+                              className="bg-[#FE8A01] text-white"
+                              onPress={() => {
+                                setStudentTab("feed");
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              view update
                             </Button>
                           </div>
                         ) : (

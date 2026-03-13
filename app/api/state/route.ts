@@ -6,7 +6,7 @@ const STATE_ROW_ID = "crumbz-app-state";
 export async function GET() {
   const { data, error } = await supabaseServer
     .from("app_state")
-    .select("accounts, posts, interactions")
+    .select("accounts, posts, interactions, announcements")
     .eq("id", STATE_ROW_ID)
     .maybeSingle();
 
@@ -19,6 +19,7 @@ export async function GET() {
     accounts: data?.accounts ?? [],
     posts: data?.posts ?? [],
     interactions: data?.interactions ?? {},
+    announcements: data?.announcements ?? [],
   });
 }
 
@@ -28,12 +29,13 @@ export async function POST(request: Request) {
         accounts?: unknown;
         posts?: unknown;
         interactions?: unknown;
+        announcements?: unknown;
       }
     | null;
 
   const { data: currentData, error: currentError } = await supabaseServer
     .from("app_state")
-    .select("accounts, posts, interactions")
+    .select("accounts, posts, interactions, announcements")
     .eq("id", STATE_ROW_ID)
     .maybeSingle();
 
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
       accounts: body?.accounts ?? currentData?.accounts ?? [],
       posts: body?.posts ?? currentData?.posts ?? [],
       interactions: body?.interactions ?? currentData?.interactions ?? {},
+      announcements: body?.announcements ?? currentData?.announcements ?? [],
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },
