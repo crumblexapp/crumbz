@@ -514,6 +514,10 @@ function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
 
+function preferNonEmptyArray<T>(serverValue: T[] | null | undefined, localValue: T[]) {
+  return Array.isArray(serverValue) && serverValue.length ? serverValue : localValue;
+}
+
 function subscribeToUser(callback: () => void) {
   if (typeof window === "undefined") {
     return () => undefined;
@@ -782,6 +786,7 @@ export default function Page() {
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const userRef = useRef(user);
+  const accountsRef = useRef(accounts);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
 
@@ -1141,10 +1146,10 @@ export default function Page() {
         if (!payload?.ok) return;
 
         queueMicrotask(() => {
-          setAccounts(payload.accounts ?? nextAccounts);
-          setPosts(normalizePosts((payload.posts ?? nextPosts) as Partial<AppPost>[]));
+          setAccounts(preferNonEmptyArray(payload.accounts as StoredUser[] | undefined, nextAccounts));
+          setPosts(normalizePosts(preferNonEmptyArray((payload.posts ?? []) as Partial<AppPost>[], nextPosts)));
           setInteractions(payload.interactions ?? nextInteractions);
-          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
+          setAnnouncements(preferNonEmptyArray((payload.announcements ?? []) as AppAnnouncement[], []));
         });
       })
       .catch(() => undefined);
@@ -1153,6 +1158,10 @@ export default function Page() {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    accountsRef.current = accounts;
+  }, [accounts]);
 
   useEffect(() => {
     const currentEmail = user.googleProfile?.email;
@@ -1323,10 +1332,12 @@ export default function Page() {
         .then((payload) => {
           if (!payload?.ok) return;
 
-          setAccounts(payload.accounts ?? []);
-          setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+          const localAccounts = readAccounts();
+          const localPosts = readPosts();
+          setAccounts(preferNonEmptyArray(payload.accounts as StoredUser[] | undefined, localAccounts));
+          setPosts(normalizePosts(preferNonEmptyArray((payload.posts ?? []) as Partial<AppPost>[], localPosts)));
           setInteractions(payload.interactions ?? {});
-          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
+          setAnnouncements(preferNonEmptyArray((payload.announcements ?? []) as AppAnnouncement[], announcements));
         })
         .catch(() => undefined);
     };
@@ -1335,7 +1346,7 @@ export default function Page() {
     const interval = window.setInterval(syncFromServer, 5000);
 
     return () => window.clearInterval(interval);
-  }, [user.signedIn]);
+  }, [announcements, user.signedIn]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -1361,7 +1372,8 @@ export default function Page() {
             .then((payload) => (payload?.ok ? (payload.accounts as StoredUser[]) : null))
             .catch(() => null);
 
-          const sourceAccounts = sharedAccounts?.length ? sharedAccounts : accounts.length ? accounts : readAccounts();
+          const sourceAccounts =
+            sharedAccounts?.length ? sharedAccounts : accountsRef.current.length ? accountsRef.current : readAccounts();
           const existingAccount =
             sourceAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === profile.email.toLowerCase()) ?? null;
 
