@@ -31,12 +31,22 @@ export async function POST(request: Request) {
       }
     | null;
 
+  const { data: currentData, error: currentError } = await supabaseServer
+    .from("app_state")
+    .select("accounts, posts, interactions")
+    .eq("id", STATE_ROW_ID)
+    .maybeSingle();
+
+  if (currentError) {
+    return NextResponse.json({ ok: false, message: currentError.message }, { status: 500 });
+  }
+
   const { error } = await supabaseServer.from("app_state").upsert(
     {
       id: STATE_ROW_ID,
-      accounts: body?.accounts ?? [],
-      posts: body?.posts ?? [],
-      interactions: body?.interactions ?? {},
+      accounts: body?.accounts ?? currentData?.accounts ?? [],
+      posts: body?.posts ?? currentData?.posts ?? [],
+      interactions: body?.interactions ?? currentData?.interactions ?? {},
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },

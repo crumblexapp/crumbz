@@ -891,16 +891,24 @@ export default function Page() {
     );
   };
 
-  const syncSharedState = (nextAccounts: StoredUser[], nextPosts = posts, nextInteractions = interactions) => {
+  const syncSharedState = ({
+    nextAccounts,
+    nextPosts,
+    nextInteractions,
+  }: {
+    nextAccounts?: StoredUser[];
+    nextPosts?: AppPost[];
+    nextInteractions?: InteractionsMap;
+  }) => {
     void fetch("/api/state", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        accounts: nextAccounts,
-        posts: serializePostsForStorage(nextPosts),
-        interactions: nextInteractions,
+        ...(nextAccounts ? { accounts: nextAccounts } : {}),
+        ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
+        ...(nextInteractions ? { interactions: nextInteractions } : {}),
       }),
     }).catch(() => undefined);
   };
@@ -1097,21 +1105,14 @@ export default function Page() {
     if (!hasLoadedDataRef.current) return;
 
     const timeout = window.setTimeout(() => {
-      void fetch("/api/state", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          accounts,
-          posts: serializePostsForStorage(posts),
-          interactions,
-        }),
-      }).catch(() => undefined);
+      syncSharedState({
+        nextPosts: posts,
+        nextInteractions: interactions,
+      });
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [accounts, posts, interactions]);
+  }, [posts, interactions]);
 
   useEffect(() => {
     if (!user.signedIn) return;
@@ -1292,7 +1293,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
-    syncSharedState(nextAccounts);
+    syncSharedState({ nextAccounts });
     setError("");
   };
 
@@ -1343,7 +1344,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
-    syncSharedState(nextAccounts);
+    syncSharedState({ nextAccounts });
     setFriendQuery("");
   };
 
@@ -1383,7 +1384,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
-    syncSharedState(nextAccounts);
+    syncSharedState({ nextAccounts });
   };
 
   const declineFriendRequest = (requesterEmail: string) => {
@@ -1420,7 +1421,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
-    syncSharedState(nextAccounts);
+    syncSharedState({ nextAccounts });
   };
 
   const removeFriend = (friendEmail: string) => {
@@ -1457,7 +1458,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
-    syncSharedState(nextAccounts);
+    syncSharedState({ nextAccounts });
   };
 
   const toggleFavoritePlace = (placeId: string) => {
@@ -1482,6 +1483,7 @@ export default function Page() {
       window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
     }
     persistUser(nextUser);
+    syncSharedState({ nextAccounts });
   };
 
   const resetComposer = () => {
