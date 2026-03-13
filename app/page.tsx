@@ -1147,7 +1147,7 @@ export default function Page() {
       googleButtonRef.current.innerHTML = "";
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
-        callback: (response: GoogleCredentialResponse) => {
+        callback: async (response: GoogleCredentialResponse) => {
           const profile = response.credential ? parseJwtCredential(response.credential) : null;
           if (!profile) {
             setError("google sign-in didn’t come through. try again.");
@@ -1155,8 +1155,14 @@ export default function Page() {
           }
 
           const currentMode = authModeRef.current;
+          const sharedAccounts = await fetch("/api/state")
+            .then((result) => result.json())
+            .then((payload) => (payload?.ok ? (payload.accounts as StoredUser[]) : null))
+            .catch(() => null);
+
+          const sourceAccounts = sharedAccounts?.length ? sharedAccounts : accounts.length ? accounts : readAccounts();
           const existingAccount =
-            readAccounts().find((account) => account.googleProfile?.email === profile.email) ?? null;
+            sourceAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === profile.email.toLowerCase()) ?? null;
 
           setError("");
 
@@ -1167,6 +1173,9 @@ export default function Page() {
             }
 
             persistUser({ ...existingAccount, signedIn: true });
+            if (sharedAccounts?.length) {
+              setAccounts(sharedAccounts);
+            }
             setFullName(null);
             setUsername(null);
             setCity(null);
@@ -1180,6 +1189,9 @@ export default function Page() {
           }
 
           const currentUser = userRef.current;
+          if (sharedAccounts?.length) {
+            setAccounts(sharedAccounts);
+          }
           persistUser({
             ...currentUser,
             signedIn: true,
