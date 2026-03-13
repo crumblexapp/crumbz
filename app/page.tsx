@@ -107,6 +107,11 @@ const defaultPosts: AppPost[] = [
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
+    authorRole: "admin",
+    authorName: "crumbz",
+    authorEmail: ADMIN_EMAIL,
+    schoolName: "",
+    weekKey: "",
   },
   {
     id: "student-discount-soon",
@@ -118,6 +123,11 @@ const defaultPosts: AppPost[] = [
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
+    authorRole: "admin",
+    authorName: "crumbz",
+    authorEmail: ADMIN_EMAIL,
+    schoolName: "",
+    weekKey: "",
   },
 ];
 
@@ -132,11 +142,16 @@ const fallbackFeedPosts: AppPost[] = [
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
+    authorRole: "admin",
+    authorName: "crumbz",
+    authorEmail: ADMIN_EMAIL,
+    schoolName: "",
+    weekKey: "",
   },
 ];
 
 type AuthMode = "signup" | "login";
-type PostType = "chapter" | "story" | "discount" | "ad" | "collab";
+type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dump";
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 
@@ -184,12 +199,22 @@ type AppPost = {
   mediaKind: MediaKind;
   mediaUrls: string[];
   videoRatio: VideoRatio;
+  authorRole: "admin" | "student";
+  authorName: string;
+  authorEmail: string;
+  schoolName: string;
+  weekKey: string;
 };
 
 const defaultPostFields = {
   mediaKind: "none" as MediaKind,
   mediaUrls: [] as string[],
   videoRatio: "9:16" as VideoRatio,
+  authorRole: "admin" as const,
+  authorName: "crumbz",
+  authorEmail: ADMIN_EMAIL,
+  schoolName: "",
+  weekKey: "",
 };
 
 type PostComment = {
@@ -452,6 +477,16 @@ function formatNow() {
   });
 }
 
+function isSunday(date: Date) {
+  return date.getDay() === 0;
+}
+
+function getSundayKey(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy.toISOString().slice(0, 10);
+}
+
 function getInteractionBucket(interactions: InteractionsMap, postId: string) {
   return interactions[postId] ?? { comments: [], shares: [], likes: [] };
 }
@@ -619,6 +654,11 @@ export default function Page() {
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [weeklyDumpNotice, setWeeklyDumpNotice] = useState("");
+  const [weeklyDumpCaption, setWeeklyDumpCaption] = useState("");
+  const [weeklyDumpMediaUrls, setWeeklyDumpMediaUrls] = useState<string[]>([]);
+  const [isUploadingWeeklyDump, setIsUploadingWeeklyDump] = useState(false);
+  const [weeklyDumpInputKey, setWeeklyDumpInputKey] = useState(0);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -645,7 +685,15 @@ export default function Page() {
   const cityValue = city ?? user.profile.city ?? "";
   const schoolNameValue = schoolName ?? user.profile.schoolName ?? "";
   const matchingSchools = schoolsByCity[cityValue.trim().toLowerCase()] ?? [];
-  const displayPosts = posts.length ? posts : fallbackFeedPosts;
+  const adminPosts = posts.filter((post) => post.authorRole !== "student");
+  const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
+  const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
+    const authorEmail = post.authorEmail.toLowerCase();
+    const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+
+    return authorEmail === currentEmail || user.profile.friends.includes(post.authorEmail);
+  });
+  const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
   const fallbackStories = [
     {
       id: "story-coming-soon",
@@ -654,11 +702,16 @@ export default function Page() {
     },
   ];
   const storyPosts = (
-    displayPosts.filter((post) => post.type === "chapter" || post.type === "story" || post.type === "collab").slice(0, 5) ||
-    []
+    displayPosts.filter((post) => post.type === "chapter" || post.type === "story" || post.type === "collab").slice(0, 5) || []
   ).length
     ? displayPosts.filter((post) => post.type === "chapter" || post.type === "story" || post.type === "collab").slice(0, 5)
     : fallbackStories;
+  const today = new Date();
+  const canSubmitWeeklyDumpToday = isSunday(today);
+  const currentSundayKey = getSundayKey(today);
+  const hasSubmittedWeeklyDumpThisWeek = studentWeeklyDumps.some(
+    (post) => post.authorEmail === user.googleProfile?.email && post.weekKey === currentSundayKey,
+  );
   const totalComments = Object.values(interactions).reduce((sum, item) => sum + item.comments.length, 0);
   const totalShares = Object.values(interactions).reduce((sum, item) => sum + item.shares.length, 0);
   const totalLikes = Object.values(interactions).reduce((sum, item) => sum + item.likes.length, 0);
@@ -706,6 +759,136 @@ export default function Page() {
         })),
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
+
+  const renderFeedCard = (post: AppPost) => {
+    const bucket = getInteractionBucket(interactions, post.id);
+    const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
+    const hasLiked = bucket.likes.some((like) => like.authorEmail === user.googleProfile?.email);
+    const isStudentPost = post.authorRole === "student";
+
+    return (
+      <Card
+        id={`post-${post.id}`}
+        key={post.id}
+        className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
+      >
+        <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
+          <Avatar
+            src={isStudentPost ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture : undefined}
+            name={isStudentPost ? post.authorName : "C"}
+            className={isStudentPost ? "bg-[#fff5e8] text-[#d97706]" : "bg-[#FE8A01] text-white"}
+          />
+          <div className="flex-1">
+            <p className="font-semibold text-[#2b1530]">{isStudentPost ? post.authorName : "crumbz"}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+              {isStudentPost ? `weekly food dump • ${post.createdAt}` : `${post.type} • ${post.createdAt}`}
+            </p>
+            {isStudentPost ? <p className="mt-1 text-xs text-[#9a6b33]">{post.schoolName}</p> : null}
+          </div>
+          <Chip className="bg-[#fff5e8] text-[#d97706]">{post.cta}</Chip>
+        </CardHeader>
+        <CardBody className="gap-4 p-5">
+          <div className="rounded-[24px] bg-[linear-gradient(180deg,_#fff8f0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#ffead1]">
+            <h3 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{post.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-[#785c42]">{post.body}</p>
+          </div>
+
+          {post.mediaKind !== "none" ? (
+            post.mediaUrls.length ? (
+              <PostMediaPreview post={post} />
+            ) : (
+              <div className="rounded-[18px] border border-dashed border-[#ffd9ab] bg-white px-3 py-4 text-sm text-[#8b6338]">
+                this post’s media needs one re-upload from the admin side.
+              </div>
+            )
+          ) : null}
+
+          <div className="flex items-center gap-3">
+            <PostActionIcon label="like post" active={hasLiked} onPress={() => toggleLike(post.id)}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 20s-6.5-4.35-8.5-7.8C1.7 9 3.2 5.5 7 5.5c2 0 3.3 1.15 4 2.2.7-1.05 2-2.2 4-2.2 3.8 0 5.3 3.5 3.5 6.7C18.5 15.65 12 20 12 20Z"
+                  fill={hasLiked ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </PostActionIcon>
+            <PostActionIcon
+              label="comment on post"
+              onPress={() => {
+                setOpenCommentPostId((current) => (current === post.id ? null : post.id));
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M6 18.5L3.5 20V6.8C3.5 5.8 4.3 5 5.3 5h13.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H6Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </PostActionIcon>
+            <PostActionIcon
+              label="share post"
+              onPress={() => {
+                void sharePost(post.id);
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 4 11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="m20 4-6 16-3.4-6.6L4 10l16-6Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </PostActionIcon>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.likes.length} likes</span>
+            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{visibleComments.length} comments</span>
+            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.shares.length} shares</span>
+          </div>
+
+          <div className="space-y-3">
+            {visibleComments.map((comment) => (
+              <div key={comment.id} className="rounded-[18px] bg-[#fff8f0] p-3">
+                <p className="text-sm font-semibold text-[#2b1530]">
+                  {comment.authorName} • {comment.schoolName}
+                </p>
+                <p className="mt-1 text-sm text-[#785c42]">{comment.text}</p>
+              </div>
+            ))}
+
+            {openCommentPostId === post.id ? (
+              <form className="flex gap-2" onSubmit={(event) => addComment(event, post.id)}>
+                <Input
+                  aria-label={`comment on ${post.title}`}
+                  radius="full"
+                  placeholder="comment on this post"
+                  value={commentDrafts[post.id] ?? ""}
+                  onValueChange={(value) =>
+                    setCommentDrafts((current) => ({
+                      ...current,
+                      [post.id]: value,
+                    }))
+                  }
+                  classNames={{ inputWrapper: "bg-[#fff8f0] border border-[#ffe2c2]" }}
+                />
+                <Button type="submit" radius="full" className="bg-[#FE8A01] text-white">
+                  send
+                </Button>
+              </form>
+            ) : null}
+          </div>
+        </CardBody>
+      </Card>
+    );
+  };
 
   useEffect(() => {
     const nextUser = readUser();
@@ -1287,6 +1470,11 @@ export default function Page() {
       mediaKind: composer.mediaKind,
       mediaUrls: composer.mediaUrls,
       videoRatio: composer.videoRatio,
+      authorRole: "admin",
+      authorName: "crumbz",
+      authorEmail: ADMIN_EMAIL,
+      schoolName: "",
+      weekKey: "",
     };
 
     setPosts((current) =>
@@ -1295,6 +1483,59 @@ export default function Page() {
         : [nextPost, ...current],
     );
     resetComposer();
+  };
+
+  const submitWeeklyDump = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const authorEmail = user.googleProfile?.email;
+    if (!authorEmail) return;
+
+    if (!canSubmitWeeklyDumpToday) {
+      setWeeklyDumpNotice("weekly food dumps open on sunday only.");
+      return;
+    }
+
+    if (hasSubmittedWeeklyDumpThisWeek) {
+      setWeeklyDumpNotice("you already dropped this sunday’s food dump.");
+      return;
+    }
+
+    if (isUploadingWeeklyDump) {
+      setWeeklyDumpNotice("your photos are still uploading. wait a sec, then submit.");
+      return;
+    }
+
+    if (!weeklyDumpMediaUrls.length) {
+      setWeeklyDumpNotice("add up to 10 food photos first.");
+      return;
+    }
+
+    const firstName = user.profile.fullName.split(" ")[0] || user.profile.username || "student";
+    const caption = weeklyDumpCaption.trim();
+
+    const nextPost: AppPost = {
+      id: `weekly-dump-${authorEmail}-${currentSundayKey}`,
+      title: `${firstName}'s weekly food dump`,
+      body: caption || `${user.profile.city} • ${user.profile.schoolName}`,
+      cta: "sunday dump",
+      type: "weekly-dump",
+      createdAt: formatNow(),
+      mediaKind: "carousel",
+      mediaUrls: weeklyDumpMediaUrls,
+      videoRatio: "4:5",
+      authorRole: "student",
+      authorName: user.profile.fullName,
+      authorEmail,
+      schoolName: user.profile.schoolName,
+      weekKey: currentSundayKey,
+    };
+
+    setPosts((current) => [nextPost, ...current.filter((post) => post.id !== nextPost.id)]);
+    setWeeklyDumpCaption("");
+    setWeeklyDumpMediaUrls([]);
+    setWeeklyDumpNotice("your weekly dump is live.");
+    setWeeklyDumpInputKey((current) => current + 1);
   };
 
   const startEditingPost = (post: AppPost) => {
@@ -1327,6 +1568,120 @@ export default function Page() {
     }
   };
 
+  const uploadMediaFiles = async (
+    files: FileList | null,
+    options: {
+      mediaKind: MediaKind;
+      maxFiles?: number;
+      setNotice: (message: string) => void;
+    },
+  ) => {
+    if (!files?.length) return null;
+
+    const fileList = Array.from(files);
+    if (options.maxFiles && fileList.length > options.maxFiles) {
+      options.setNotice(`keep it to ${options.maxFiles} photos max in one dump.`);
+      return null;
+    }
+
+    const expectedTypes = options.mediaKind === "video" ? ACCEPTED_VIDEO_TYPES : ACCEPTED_IMAGE_TYPES;
+    const hasInvalidFile = fileList.some((file) => !matchesAcceptedType(file, expectedTypes));
+    const maxFileSize = options.mediaKind === "video" ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_IMAGE_FILE_SIZE_BYTES;
+    const oversizedFile = fileList.find((file) => file.size > maxFileSize);
+
+    if (hasInvalidFile) {
+      options.setNotice(
+        options.mediaKind === "video" ? "videos need to be mp4 or mov." : "photos need to be jpg, jpeg, png, or heic.",
+      );
+      return null;
+    }
+
+    if (oversizedFile) {
+      options.setNotice(
+        options.mediaKind === "video"
+          ? `that video is ${formatFileSize(oversizedFile.size)}. keep videos under ${formatFileSize(MAX_VIDEO_FILE_SIZE_BYTES)} for now.`
+          : `that image is ${formatFileSize(oversizedFile.size)}. keep photos under ${formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} for now.`,
+      );
+      return null;
+    }
+
+    const filePayloads = await Promise.all(
+      fileList.map(async (file) => {
+        const isHeic =
+          matchesAcceptedType(file, [".heic", ".heif"]) || ["image/heic", "image/heif"].includes(file.type.toLowerCase());
+
+        if (!isHeic) {
+          return file;
+        }
+
+        const { default: heic2any } = await import("heic2any");
+        const converted = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.9,
+        });
+        const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+
+        return new File([convertedBlob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+          type: "image/jpeg",
+        });
+      }),
+    );
+
+    const response = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        files: filePayloads.map((file) => ({
+          name: file.name,
+          contentType: file.type || "application/octet-stream",
+        })),
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          ok?: boolean;
+          uploads?: { path: string; token: string; publicUrl: string; contentType: string }[];
+          message?: string;
+        }
+      | null;
+
+    if (!response.ok || !payload?.ok || !payload.uploads?.length) {
+      options.setNotice(payload?.message ?? "upload failed. try a smaller file or check supabase setup.");
+      return null;
+    }
+
+    const uploadResults = await Promise.all(
+      filePayloads.map(async (file, index) => {
+        const target = payload.uploads?.[index];
+        if (!target) {
+          throw new Error("upload target missing");
+        }
+
+        const { error } = await supabaseBrowser.storage
+          .from("crumbz-media")
+          .uploadToSignedUrl(target.path, target.token, file, {
+            contentType: file.type || target.contentType,
+            upsert: true,
+          });
+
+        if (error) {
+          throw error;
+        }
+
+        return target.publicUrl;
+      }),
+    ).catch((error: { message?: string }) => {
+      options.setNotice(error.message ?? "upload failed while sending the file to storage.");
+      return null;
+    });
+
+    return uploadResults?.length ? uploadResults : null;
+  };
+
   const handleComposerFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
@@ -1334,102 +1689,9 @@ export default function Page() {
     setStorageNotice("uploading media...");
 
     try {
-      const fileList = Array.from(files);
-      const expectedTypes = composer.mediaKind === "video" ? ACCEPTED_VIDEO_TYPES : ACCEPTED_IMAGE_TYPES;
-      const hasInvalidFile = fileList.some((file) => !matchesAcceptedType(file, expectedTypes));
-      const maxFileSize = composer.mediaKind === "video" ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_IMAGE_FILE_SIZE_BYTES;
-      const oversizedFile = fileList.find((file) => file.size > maxFileSize);
-
-      if (hasInvalidFile) {
-        setStorageNotice(
-          composer.mediaKind === "video"
-            ? "videos need to be mp4 or mov."
-            : "photos need to be jpg, jpeg, png, or heic.",
-        );
-        return;
-      }
-
-      if (oversizedFile) {
-        setStorageNotice(
-          composer.mediaKind === "video"
-            ? `that video is ${formatFileSize(oversizedFile.size)}. keep videos under ${formatFileSize(MAX_VIDEO_FILE_SIZE_BYTES)} for now.`
-            : `that image is ${formatFileSize(oversizedFile.size)}. keep photos under ${formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} for now.`,
-        );
-        return;
-      }
-
-      const filePayloads = await Promise.all(
-        fileList.map(async (file) => {
-          const isHeic =
-            matchesAcceptedType(file, [".heic", ".heif"]) || ["image/heic", "image/heif"].includes(file.type.toLowerCase());
-
-          if (!isHeic) {
-            return file;
-          }
-
-          const { default: heic2any } = await import("heic2any");
-          const converted = await heic2any({
-            blob: file,
-            toType: "image/jpeg",
-            quality: 0.9,
-          });
-          const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
-
-          return new File([convertedBlob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
-            type: "image/jpeg",
-          });
-        }),
-      );
-
-      const response = await fetch("/api/upload-url", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          files: filePayloads.map((file) => ({
-            name: file.name,
-            contentType: file.type || "application/octet-stream",
-          })),
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            uploads?: { path: string; token: string; publicUrl: string; contentType: string }[];
-            message?: string;
-          }
-        | null;
-
-      if (!response.ok || !payload?.ok || !payload.uploads?.length) {
-        setStorageNotice(payload?.message ?? "upload failed. try a smaller file or check supabase setup.");
-        return;
-      }
-
-      const uploadResults = await Promise.all(
-        filePayloads.map(async (file, index) => {
-          const target = payload.uploads?.[index];
-          if (!target) {
-            throw new Error("upload target missing");
-          }
-
-          const { error } = await supabaseBrowser.storage
-            .from("crumbz-media")
-            .uploadToSignedUrl(target.path, target.token, file, {
-              contentType: file.type || target.contentType,
-              upsert: true,
-            });
-
-          if (error) {
-            throw error;
-          }
-
-          return target.publicUrl;
-        }),
-      ).catch((error: { message?: string }) => {
-        setStorageNotice(error.message ?? "upload failed while sending the file to storage.");
-        return null;
+      const uploadResults = await uploadMediaFiles(files, {
+        mediaKind: composer.mediaKind,
+        setNotice: setStorageNotice,
       });
 
       if (!uploadResults?.length) {
@@ -1444,6 +1706,31 @@ export default function Page() {
       setComposerMediaInputKey((current) => current + 1);
     } finally {
       setIsUploadingMedia(false);
+    }
+  };
+
+  const handleWeeklyDumpFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+
+    setIsUploadingWeeklyDump(true);
+    setWeeklyDumpNotice("uploading your food dump...");
+
+    try {
+      const uploadResults = await uploadMediaFiles(files, {
+        mediaKind: "carousel",
+        maxFiles: 10,
+        setNotice: setWeeklyDumpNotice,
+      });
+
+      if (!uploadResults?.length) {
+        return;
+      }
+
+      setWeeklyDumpMediaUrls(uploadResults);
+      setWeeklyDumpNotice("your weekly dump is loaded. hit submit on sunday.");
+      setWeeklyDumpInputKey((current) => current + 1);
+    } finally {
+      setIsUploadingWeeklyDump(false);
     }
   };
 
@@ -2028,6 +2315,11 @@ export default function Page() {
                                   mediaKind: composer.mediaKind,
                                   mediaUrls: composer.mediaUrls,
                                   videoRatio: composer.videoRatio,
+                                  authorRole: "admin",
+                                  authorName: "crumbz",
+                                  authorEmail: ADMIN_EMAIL,
+                                  schoolName: "",
+                                  weekKey: "",
                                 }}
                               />
                             </div>
@@ -2234,136 +2526,115 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
-              {displayPosts.map((post) => {
-            const bucket = getInteractionBucket(interactions, post.id);
-            const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
-            const hasLiked = bucket.likes.some((like) => like.authorEmail === user.googleProfile?.email);
-
-            return (
-              <Card id={`post-${post.id}`} key={post.id} className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
-                  <Avatar name="C" className="bg-[#FE8A01] text-white" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-[#2b1530]">crumbz</p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">
-                      {post.type} • {post.createdAt}
-                    </p>
-                  </div>
-                  <Chip className="bg-[#fff5e8] text-[#d97706]">{post.cta}</Chip>
-                </CardHeader>
+              <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
                 <CardBody className="gap-4 p-5">
-                  <div className="rounded-[24px] bg-[linear-gradient(180deg,_#fff8f0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#ffead1]">
-                    <h3 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
-                      {post.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-[#785c42]">{post.body}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">student post</p>
+                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                        sunday weekly food dump
+                      </h3>
+                      <p className="mt-2 text-sm text-[#785c42]">
+                        students only get one post a week here: a sunday dump with up to 10 photos from the food spots they tried.
+                      </p>
+                    </div>
+                    <Chip className="bg-[#fff5e8] text-[#d97706]">1 per sunday</Chip>
                   </div>
 
-                  {post.mediaKind !== "none" ? (
-                    post.mediaUrls.length ? (
-                      <PostMediaPreview post={post} />
-                    ) : (
-                      <div className="rounded-[18px] border border-dashed border-[#ffd9ab] bg-white px-3 py-4 text-sm text-[#8b6338]">
-                        this post’s media needs one re-upload from the admin side.
-                      </div>
-                    )
-                  ) : null}
-
-                  <div className="flex items-center gap-3">
-                    <PostActionIcon
-                      label="like post"
-                      active={hasLiked}
-                      onPress={() => toggleLike(post.id)}
-                    >
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                          d="M12 20s-6.5-4.35-8.5-7.8C1.7 9 3.2 5.5 7 5.5c2 0 3.3 1.15 4 2.2.7-1.05 2-2.2 4-2.2 3.8 0 5.3 3.5 3.5 6.7C18.5 15.65 12 20 12 20Z"
-                          fill={hasLiked ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </PostActionIcon>
-                    <PostActionIcon
-                      label="comment on post"
-                      onPress={() => {
-                        setOpenCommentPostId((current) => (current === post.id ? null : post.id));
+                  <form className="space-y-4" onSubmit={submitWeeklyDump}>
+                    <Textarea
+                      label="caption"
+                      labelPlacement="outside"
+                      placeholder="what hit this week?"
+                      value={weeklyDumpCaption}
+                      onValueChange={setWeeklyDumpCaption}
+                      classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                    />
+                    <input
+                      key={weeklyDumpInputKey}
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                      multiple
+                      onChange={(event) => {
+                        void handleWeeklyDumpFiles(event.target.files);
                       }}
-                    >
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                          d="M6 18.5L3.5 20V6.8C3.5 5.8 4.3 5 5.3 5h13.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H6Z"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinejoin="round"
+                      className="rounded-[18px] border border-[#ffe2c2] bg-[#fff8f0] px-3 py-3 text-sm text-[#785c42]"
+                    />
+                    {weeklyDumpMediaUrls.length ? (
+                      <div className="rounded-[20px] bg-[#fff8f0] p-3">
+                        <PostMediaPreview
+                          post={{
+                            id: "weekly-dump-preview",
+                            title: `${user.profile.fullName.split(" ")[0] || "your"}'s weekly food dump`,
+                            body: weeklyDumpCaption || `${user.profile.city} • ${user.profile.schoolName}`,
+                            type: "weekly-dump",
+                            cta: "sunday dump",
+                            createdAt: "preview",
+                            mediaKind: "carousel",
+                            mediaUrls: weeklyDumpMediaUrls,
+                            videoRatio: "4:5",
+                            authorRole: "student",
+                            authorName: user.profile.fullName,
+                            authorEmail: user.googleProfile?.email ?? "",
+                            schoolName: user.profile.schoolName,
+                            weekKey: currentSundayKey,
+                          }}
                         />
-                      </svg>
-                    </PostActionIcon>
-                    <PostActionIcon
-                      label="share post"
-                      onPress={() => {
-                        void sharePost(post.id);
-                      }}
-                    >
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                          d="M20 4 11 13"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                        />
-                        <path
-                          d="m20 4-6 16-3.4-6.6L4 10l16-6Z"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </PostActionIcon>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#b56d19]">
-                    <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.likes.length} likes</span>
-                    <span className="rounded-full bg-[#fff5e8] px-3 py-2">{visibleComments.length} comments</span>
-                    <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.shares.length} shares</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {visibleComments.map((comment) => (
-                      <div key={comment.id} className="rounded-[18px] bg-[#fff8f0] p-3">
-                        <p className="text-sm font-semibold text-[#2b1530]">
-                          {comment.authorName} • {comment.schoolName}
-                        </p>
-                        <p className="mt-1 text-sm text-[#785c42]">{comment.text}</p>
                       </div>
-                    ))}
-
-                    {openCommentPostId === post.id ? (
-                      <form className="flex gap-2" onSubmit={(event) => addComment(event, post.id)}>
-                        <Input
-                          aria-label={`comment on ${post.title}`}
-                          radius="full"
-                          placeholder="comment on this post"
-                          value={commentDrafts[post.id] ?? ""}
-                          onValueChange={(value) =>
-                            setCommentDrafts((current) => ({
-                              ...current,
-                              [post.id]: value,
-                            }))
-                          }
-                          classNames={{ inputWrapper: "bg-[#fff8f0] border border-[#ffe2c2]" }}
-                        />
-                        <Button type="submit" radius="full" className="bg-[#FE8A01] text-white">
-                          send
-                        </Button>
-                      </form>
                     ) : null}
-                  </div>
+                    {weeklyDumpNotice ? <p className="text-sm text-[#b45309]">{weeklyDumpNotice}</p> : null}
+                    <Button
+                      type="submit"
+                      radius="full"
+                      size="lg"
+                      isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
+                      className="bg-[#FE8A01] text-white disabled:opacity-60"
+                    >
+                      {isUploadingWeeklyDump
+                        ? "uploading your dump..."
+                        : hasSubmittedWeeklyDumpThisWeek
+                          ? "already posted this sunday"
+                          : canSubmitWeeklyDumpToday
+                            ? "submit weekly food dump"
+                            : "drops open on sunday"}
+                    </Button>
+                  </form>
                 </CardBody>
               </Card>
-            );
-              })}
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">admin feed</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                      crumbz is leading the story
+                    </h3>
+                  </div>
+                  <Chip className="bg-[#fff5e8] text-[#d97706]">{displayPosts.length} admin posts</Chip>
+                </div>
+                {displayPosts.map(renderFeedCard)}
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">student dumps</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                      weekly food spots from the community
+                    </h3>
+                  </div>
+                  <Chip className="bg-[#fff5e8] text-[#d97706]">{visibleStudentWeeklyDumps.length} dumps</Chip>
+                </div>
+                {visibleStudentWeeklyDumps.length ? (
+                  visibleStudentWeeklyDumps.map(renderFeedCard)
+                ) : (
+                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                    <CardBody className="p-5 text-sm text-[#785c42]">
+                      no friend food dumps yet. your own sunday post and your friends' dumps will land here.
+                    </CardBody>
+                  </Card>
+                )}
+              </div>
             </motion.section>
           </>
         ) : null}
