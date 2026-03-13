@@ -2861,15 +2861,11 @@ export default function Page() {
                 {storyPosts.map((story) => (
                   <div key={story.id} className="min-w-[82px] text-center">
                     <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd29f)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
-                      <div className="relative h-[76px] w-[76px] overflow-hidden rounded-full bg-white">
-                        {adminProfilePicture ? (
-                          <Image src={adminProfilePicture} alt="crumbz story" fill className="object-cover" sizes="76px" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#2b1530] text-sm font-semibold text-white">
-                            crumbz
-                          </div>
-                        )}
-                      </div>
+                      <Avatar
+                        src={adminProfilePicture}
+                        name="crumbz"
+                        className="h-[76px] w-[76px] bg-[#2b1530] text-sm font-semibold text-white"
+                      />
                     </div>
                     <p className="mt-2 text-xs font-semibold text-[#c66b00]">{story.title.replace(/\s+coming soon$/i, "")}</p>
                     <p className="text-xs text-[#9a6b33]">coming soon</p>
