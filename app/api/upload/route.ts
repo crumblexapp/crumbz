@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { isSiteAuthorized } from "@/lib/site-auth-server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 function sanitizeFileName(fileName: string) {
@@ -7,10 +6,6 @@ function sanitizeFileName(fileName: string) {
 }
 
 export async function POST(request: Request) {
-  if (!(await isSiteAuthorized())) {
-    return NextResponse.json({ ok: false, message: "not authorized" }, { status: 401 });
-  }
-
   const formData = await request.formData().catch(() => null);
   const files = formData?.getAll("files").filter((entry): entry is File => entry instanceof File) ?? [];
   if (!files.length) {
