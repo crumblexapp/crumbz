@@ -933,6 +933,20 @@ export default function Page() {
   }, [user]);
 
   useEffect(() => {
+    const currentEmail = user.googleProfile?.email;
+    if (!currentEmail || !accounts.length) return;
+
+    const freshAccount = accounts.find((account) => account.googleProfile?.email === currentEmail);
+    if (!freshAccount) return;
+
+    const currentSerialized = JSON.stringify(user);
+    const freshSerialized = JSON.stringify(freshAccount);
+    if (currentSerialized === freshSerialized) return;
+
+    persistUser(freshAccount);
+  }, [accounts, user]);
+
+  useEffect(() => {
     authModeRef.current = authMode;
   }, [authMode]);
 
@@ -1084,6 +1098,28 @@ export default function Page() {
 
     return () => window.clearTimeout(timeout);
   }, [accounts, posts, interactions]);
+
+  useEffect(() => {
+    if (!user.signedIn) return;
+
+    const syncFromServer = () => {
+      void fetch("/api/state")
+        .then((response) => response.json())
+        .then((payload) => {
+          if (!payload?.ok) return;
+
+          setAccounts(payload.accounts ?? []);
+          setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+          setInteractions(payload.interactions ?? {});
+        })
+        .catch(() => undefined);
+    };
+
+    syncFromServer();
+    const interval = window.setInterval(syncFromServer, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [user.signedIn]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -1576,6 +1612,7 @@ export default function Page() {
     options: {
       mediaKind: MediaKind;
       maxFiles?: number;
+      skipSizeLimit?: boolean;
       setNotice: (message: string) => void;
     },
   ) => {
@@ -1590,7 +1627,7 @@ export default function Page() {
     const expectedTypes = options.mediaKind === "video" ? ACCEPTED_VIDEO_TYPES : ACCEPTED_IMAGE_TYPES;
     const hasInvalidFile = fileList.some((file) => !matchesAcceptedType(file, expectedTypes));
     const maxFileSize = options.mediaKind === "video" ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_IMAGE_FILE_SIZE_BYTES;
-    const oversizedFile = fileList.find((file) => file.size > maxFileSize);
+    const oversizedFile = options.skipSizeLimit ? null : fileList.find((file) => file.size > maxFileSize);
 
     if (hasInvalidFile) {
       options.setNotice(
@@ -1715,13 +1752,20 @@ export default function Page() {
   const handleWeeklyDumpFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
+    if (!canSubmitWeeklyDumpToday) {
+      setWeeklyDumpNotice("weekly dumps only open on sunday.");
+      setWeeklyDumpInputKey((current) => current + 1);
+      return;
+    }
+
     setIsUploadingWeeklyDump(true);
     setWeeklyDumpNotice("uploading your food dump...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: "carousel",
-        maxFiles: 10,
+        maxFiles: 7,
+        skipSizeLimit: true,
         setNotice: setWeeklyDumpNotice,
       });
 
@@ -1730,7 +1774,7 @@ export default function Page() {
       }
 
       setWeeklyDumpMediaUrls(uploadResults);
-      setWeeklyDumpNotice("your weekly dump is loaded. hit submit on sunday.");
+      setWeeklyDumpNotice("your weekly dump is loaded.");
       setWeeklyDumpInputKey((current) => current + 1);
     } finally {
       setIsUploadingWeeklyDump(false);
@@ -2605,12 +2649,12 @@ export default function Page() {
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">student post</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">weekly dump</p>
                       <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
                         sunday weekly food dump
                       </h3>
                       <p className="mt-2 text-sm text-[#785c42]">
-                        students only get one post a week here: a sunday dump with up to 10 photos from the food spots they tried.
+                        one sunday post only. add up to 7 food photos, and only your friends will see it in their feed.
                       </p>
                     </div>
                     <Chip className="bg-[#fff5e8] text-[#d97706]">1 per sunday</Chip>
@@ -2630,10 +2674,11 @@ export default function Page() {
                       type="file"
                       accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
                       multiple
+                      disabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek}
                       onChange={(event) => {
                         void handleWeeklyDumpFiles(event.target.files);
                       }}
-                      className="rounded-[18px] border border-[#ffe2c2] bg-[#fff8f0] px-3 py-3 text-sm text-[#785c42]"
+                      className="rounded-[18px] border border-[#ffe2c2] bg-[#fff8f0] px-3 py-3 text-sm text-[#785c42] disabled:opacity-50"
                     />
                     {weeklyDumpMediaUrls.length ? (
                       <div className="rounded-[20px] bg-[#fff8f0] p-3">
@@ -2678,15 +2723,6 @@ export default function Page() {
               </Card>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">admin feed</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
-                      crumbz is leading the story
-                    </h3>
-                  </div>
-                  <Chip className="bg-[#fff5e8] text-[#d97706]">{displayPosts.length} admin posts</Chip>
-                </div>
                 {displayPosts.map(renderFeedCard)}
               </div>
 
