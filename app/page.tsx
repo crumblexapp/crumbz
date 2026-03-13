@@ -35,11 +35,37 @@ const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const MAX_IMAGE_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+const cityOptions = [
+  "Warsaw",
+  "Kraków",
+  "Łódź",
+  "Wrocław",
+  "Poznań",
+  "Gdańsk",
+  "Szczecin",
+  "Bydgoszcz",
+  "Lublin",
+  "Katowice",
+  "Białystok",
+  "Gdynia",
+  "Częstochowa",
+  "Toruń",
+] as const;
 const cityCenters: Record<string, [number, number]> = {
   warsaw: [52.2297, 21.0122],
+  lodz: [51.7592, 19.456],
   krakow: [50.0647, 19.945],
   wroclaw: [51.1079, 17.0385],
+  poznan: [52.4064, 16.9252],
   gdansk: [54.352, 18.6466],
+  szczecin: [53.4285, 14.5528],
+  bydgoszcz: [53.1235, 18.0084],
+  lublin: [51.2465, 22.5684],
+  katowice: [50.2649, 19.0238],
+  bialystok: [53.1325, 23.1688],
+  gdynia: [54.5189, 18.5305],
+  czestochowa: [50.8118, 19.1203],
+  torun: [53.0138, 18.5984],
 };
 const fallbackFavoritePlacesByCity: Record<string, FavoritePlace[]> = {
   warsaw: [
@@ -61,6 +87,56 @@ const fallbackFavoritePlacesByCity: Record<string, FavoritePlace[]> = {
     { id: "gdansk-drukarnia", name: "drukarnia", kind: "cafe", lat: 54.3484, lon: 18.6535, address: "mariacka" },
     { id: "gdansk-ostro", name: "ostro", kind: "restaurant", lat: 54.3514, lon: 18.6522, address: "srodmiescie" },
     { id: "gdansk-umam", name: "umam", kind: "pastry shop", lat: 54.3504, lon: 18.6539, address: "stare miasto" },
+  ],
+  lodz: [
+    { id: "lodz-off-piotrkowska", name: "off piotrkowska", kind: "food hall", lat: 51.7594, lon: 19.4587, address: "piotrkowska 138/140" },
+    { id: "lodz-dzielna43", name: "dzielna 43", kind: "restaurant", lat: 51.7648, lon: 19.4555, address: "city center" },
+    { id: "lodz-lodzka-bagieta", name: "lodzka bagieta", kind: "bakery", lat: 51.7608, lon: 19.4621, address: "piotrkowska area" },
+  ],
+  poznan: [
+    { id: "poznan-stary-browar-food", name: "stary browar food hall", kind: "food hall", lat: 52.4009, lon: 16.9289, address: "półwiejska" },
+    { id: "poznan-la-ruina", name: "la ruina", kind: "ice cream", lat: 52.408, lon: 16.9349, address: "święty marcin area" },
+    { id: "poznan-piekarnia-la-farina", name: "la farina", kind: "bakery", lat: 52.4104, lon: 16.9298, address: "centrum" },
+  ],
+  szczecin: [
+    { id: "szczecin-harnaś", name: "harnaś", kind: "restaurant", lat: 53.4307, lon: 14.5521, address: "stare miasto" },
+    { id: "szczecin-columbus", name: "columbus coffee", kind: "cafe", lat: 53.4293, lon: 14.5538, address: "aleja niepodległości" },
+    { id: "szczecin-bajgle-krola-jana", name: "bajgle króla jana", kind: "bakery", lat: 53.4314, lon: 14.5482, address: "centrum" },
+  ],
+  bydgoszcz: [
+    { id: "bydgoszcz-warzelnia", name: "warzelnia piw", kind: "restaurant", lat: 53.123, lon: 18.0005, address: "wyspa młyńska" },
+    { id: "bydgoszcz-karmelowa", name: "karmelowa", kind: "cafe", lat: 53.1224, lon: 18.0058, address: "gdańska" },
+    { id: "bydgoszcz-landrynki", name: "landrynki", kind: "ice cream", lat: 53.1239, lon: 18.0089, address: "stary rynek" },
+  ],
+  lublin: [
+    { id: "lublin-perlowa", name: "perłowa pijalnia piwa", kind: "restaurant", lat: 51.2469, lon: 22.561, address: "bernardyńska" },
+    { id: "lublin-kawka", name: "kawka", kind: "cafe", lat: 51.2488, lon: 22.5677, address: "krakowskie przedmieście" },
+    { id: "lublin-bosko", name: "bosko", kind: "ice cream", lat: 51.2482, lon: 22.5689, address: "stare miasto" },
+  ],
+  katowice: [
+    { id: "katowice-moodro", name: "moodro", kind: "restaurant", lat: 50.2597, lon: 19.021, address: "mariacka" },
+    { id: "katowice-kafej", name: "kafej", kind: "cafe", lat: 50.2583, lon: 19.0218, address: "chorzowska area" },
+    { id: "katowice-lukaszczek", name: "lukaszczek", kind: "bakery", lat: 50.2658, lon: 19.0152, address: "centrum" },
+  ],
+  bialystok: [
+    { id: "bialystok-sztuka-miesa", name: "sztuka mięsa", kind: "restaurant", lat: 53.1318, lon: 23.1586, address: "rynek kościuszki" },
+    { id: "bialystok-fama", name: "fama", kind: "cafe", lat: 53.1328, lon: 23.1574, address: "lipowa" },
+    { id: "bialystok-melba", name: "melba", kind: "ice cream", lat: 53.1336, lon: 23.1598, address: "centrum" },
+  ],
+  gdynia: [
+    { id: "gdynia-tlok", name: "tłok", kind: "restaurant", lat: 54.5205, lon: 18.5394, address: "skwer kościuszki" },
+    { id: "gdynia-delicje", name: "delicje", kind: "cafe", lat: 54.5213, lon: 18.5397, address: "świętojańska" },
+    { id: "gdynia-paczek", name: "pączuś", kind: "bakery", lat: 54.5198, lon: 18.5348, address: "centrum" },
+  ],
+  czestochowa: [
+    { id: "czestochowa-topollino", name: "topollino", kind: "restaurant", lat: 50.8112, lon: 19.1208, address: "aleja najświętszej maryi panny" },
+    { id: "czestochowa-cafe-del-corso", name: "cafe del corso", kind: "cafe", lat: 50.8105, lon: 19.1189, address: "śródmieście" },
+    { id: "czestochowa-sweet-home", name: "sweet home", kind: "pastry shop", lat: 50.8123, lon: 19.1234, address: "centrum" },
+  ],
+  torun: [
+    { id: "torun-moniuszko", name: "moniuszko", kind: "restaurant", lat: 53.0108, lon: 18.6046, address: "stare miasto" },
+    { id: "torun-projekt-nano", name: "projekt nano", kind: "cafe", lat: 53.0131, lon: 18.6038, address: "mostowa" },
+    { id: "torun-lenkiewicz", name: "lenkiewicz", kind: "ice cream", lat: 53.0119, lon: 18.6062, address: "rynek staromiejski" },
   ],
 };
 
@@ -172,6 +248,7 @@ type StoredUser = {
     fullName: string;
     username: string;
     city: string;
+    isStudent: boolean | null;
     schoolName: string;
     friends: string[];
     incomingFriendRequests: string[];
@@ -286,6 +363,7 @@ const defaultUser: StoredUser = {
     fullName: "",
     username: "",
     city: "",
+    isStudent: null,
     schoolName: "",
     friends: [],
     incomingFriendRequests: [],
@@ -325,6 +403,10 @@ function readUser(): StoredUser {
     normalized.profile.username = "josheats";
   }
 
+  if (typeof normalized.profile.isStudent !== "boolean") {
+    normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
+  }
+
   return normalized;
 }
 
@@ -343,6 +425,10 @@ function readAccounts() {
 
     if (normalized.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" && !normalized.profile.username) {
       normalized.profile.username = "josheats";
+    }
+
+    if (typeof normalized.profile.isStudent !== "boolean") {
+      normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
     }
 
     return normalized;
@@ -408,8 +494,17 @@ function formatPlaceKind(kind: string) {
   return kind.replace(/_/g, " ");
 }
 
+function normalizeCityKey(cityName: string) {
+  return cityName.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function formatProfileMeta(cityName: string, schoolName: string) {
+  if (cityName && schoolName) return `${cityName} • ${schoolName}`;
+  return cityName || schoolName || "";
+}
+
 function getFallbackFavoritePlaces(cityName: string) {
-  return fallbackFavoritePlacesByCity[cityName.trim().toLowerCase()] ?? [];
+  return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
 
 function subscribeToUser(callback: () => void) {
@@ -643,6 +738,7 @@ export default function Page() {
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [city, setCity] = useState<string | null>(null);
+  const [isStudent, setIsStudent] = useState<boolean | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [studentTab, setStudentTab] = useState<"feed" | "favorites" | "rewards" | "social" | "profile">("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -681,12 +777,19 @@ export default function Page() {
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const needsOnboarding =
-    user.signedIn && (!user.profile.fullName || !user.profile.username || !user.profile.city || !user.profile.schoolName);
+    user.signedIn &&
+    (!user.profile.fullName ||
+      !user.profile.username ||
+      !user.profile.city ||
+      user.profile.isStudent === null ||
+      (user.profile.isStudent && !user.profile.schoolName));
   const fullNameValue = fullName ?? user.profile.fullName ?? user.googleProfile?.name ?? "";
   const usernameValue = username ?? user.profile.username ?? "";
   const cityValue = city ?? user.profile.city ?? "";
+  const isStudentValue = isStudent ?? user.profile.isStudent;
   const schoolNameValue = schoolName ?? user.profile.schoolName ?? "";
-  const matchingSchools = schoolsByCity[cityValue.trim().toLowerCase()] ?? [];
+  const matchingSchools = schoolsByCity[normalizeCityKey(cityValue)] ?? [];
+  const shouldShowSchoolField = isStudentValue === true;
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
@@ -746,7 +849,7 @@ export default function Page() {
     );
   });
   const favoritePlaceIds = user.profile.favoritePlaceIds ?? [];
-  const favoriteCityCenter = cityCenters[user.profile.city.trim().toLowerCase()] ?? [52.2297, 21.0122];
+  const favoriteCityCenter = cityCenters[normalizeCityKey(user.profile.city)] ?? [52.2297, 21.0122];
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && user.profile.friends.includes(email);
@@ -774,7 +877,7 @@ export default function Page() {
           id: `friend-${requestEmail}`,
           kind: "friend_request" as const,
           title: `${requester.profile.fullName} sent you a friend request`,
-          detail: `@${requester.profile.username} • ${requester.profile.schoolName}`,
+          detail: `@${requester.profile.username}${requester.profile.schoolName ? ` • ${requester.profile.schoolName}` : ""}`,
           email: requestEmail,
           picture: requester.googleProfile?.picture,
         };
@@ -1022,7 +1125,7 @@ export default function Page() {
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
 
-    const cityKey = user.profile.city.trim().toLowerCase();
+    const cityKey = normalizeCityKey(user.profile.city);
     const center = cityCenters[cityKey];
     if (!center) {
       setFavoritePlaces(getFallbackFavoritePlaces(cityKey));
@@ -1226,6 +1329,7 @@ export default function Page() {
             setFullName(null);
             setUsername(null);
             setCity(null);
+            setIsStudent(null);
             setSchoolName(null);
             return;
           }
@@ -1253,6 +1357,7 @@ export default function Page() {
           });
           setFullName(profile.name);
           setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
+          setIsStudent(null);
         },
         auto_select: false,
         ux_mode: "popup",
@@ -1307,8 +1412,8 @@ export default function Page() {
     const trimmedCity = cityValue.trim();
     const trimmedSchool = schoolNameValue.trim();
 
-    if (!trimmedName || !trimmedUsername || !trimmedCity || !trimmedSchool) {
-      setError("drop your full name, username, city, and school so we can finish your profile.");
+    if (!trimmedName || !trimmedUsername || !trimmedCity || isStudentValue === null || (isStudentValue && !trimmedSchool)) {
+      setError("drop your full name, username, city, and whether you're a student so we can finish your profile.");
       return;
     }
 
@@ -1334,7 +1439,8 @@ export default function Page() {
         fullName: trimmedName,
         username: trimmedUsername,
         city: trimmedCity,
-        schoolName: trimmedSchool,
+        isStudent: isStudentValue,
+        schoolName: isStudentValue ? trimmedSchool : "",
         friends: user.profile.friends,
         incomingFriendRequests: user.profile.incomingFriendRequests,
         outgoingFriendRequests: user.profile.outgoingFriendRequests,
@@ -1361,6 +1467,7 @@ export default function Page() {
     setFullName(null);
     setUsername(null);
     setCity(null);
+    setIsStudent(null);
     setSchoolName(null);
     setError("");
     setAuthMode("signup");
@@ -1636,7 +1743,7 @@ export default function Page() {
     const nextPost: AppPost = {
       id: `weekly-dump-${authorEmail}-${currentSundayKey}`,
       title: `${firstName}'s weekly food dump`,
-      body: caption || `${user.profile.city} • ${user.profile.schoolName}`,
+      body: caption || formatProfileMeta(user.profile.city, user.profile.schoolName),
       cta: "sunday dump",
       type: "weekly-dump",
       createdAt: formatNow(),
@@ -2124,7 +2231,7 @@ export default function Page() {
                   </div>
                   <p className="mt-3 text-sm leading-6 text-[#785c42]">
                     {authMode === "signup"
-                      ? "new people sign up first, then fill in name, city, and school."
+                      ? "new people sign up first, then fill in name, city, and whether they're a student."
                       : "returning people log in and land on the homepage straight away."}
                   </p>
                 </div>
@@ -2214,42 +2321,87 @@ export default function Page() {
                 onValueChange={setUsername}
                 classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
               />
-              <Input
+              <Select
                 label="city"
                 labelPlacement="outside"
-                placeholder="warsaw"
                 radius="lg"
-                value={cityValue}
-                onValueChange={(value) => {
-                  setCity(value);
-                  setSchoolName(null);
-                }}
-                classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
-              />
-              <Select
-                label="university or school"
-                labelPlacement="outside"
-                placeholder={matchingSchools.length ? "pick your school" : "enter a supported city first"}
-                radius="lg"
-                selectedKeys={schoolNameValue ? [schoolNameValue] : []}
+                placeholder="pick your city"
+                selectedKeys={cityValue ? [cityValue] : []}
                 onSelectionChange={(keys) => {
                   const selected = Array.from(keys)[0];
-                  setSchoolName(typeof selected === "string" ? selected : "");
+                  setCity(typeof selected === "string" ? selected : "");
+                  setSchoolName(null);
+                  setError("");
                 }}
-                isDisabled={!matchingSchools.length}
                 classNames={{
                   trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
                   value: "text-[#2b1530]",
                 }}
               >
-                {matchingSchools.map((school) => (
-                  <SelectItem key={school}>{school}</SelectItem>
+                {cityOptions.map((option) => (
+                  <SelectItem key={option}>{option}</SelectItem>
                 ))}
               </Select>
-              {cityValue && !matchingSchools.length ? (
-                <p className="text-sm text-[#8b6338]">
-                  school lists are ready for warsaw, krakow, wroclaw, and gdansk right now.
-                </p>
+              <div>
+                <p className="mb-2 text-sm font-medium text-[#2b1530]">are you a student?</p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    radius="full"
+                    className={isStudentValue === true ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                    onPress={() => {
+                      setIsStudent(true);
+                      setError("");
+                    }}
+                  >
+                    yes
+                  </Button>
+                  <Button
+                    type="button"
+                    radius="full"
+                    className={isStudentValue === false ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                    onPress={() => {
+                      setIsStudent(false);
+                      setSchoolName("");
+                      setError("");
+                    }}
+                  >
+                    no
+                  </Button>
+                </div>
+              </div>
+              {shouldShowSchoolField ? (
+                matchingSchools.length ? (
+                  <Select
+                    label="university or school"
+                    labelPlacement="outside"
+                    placeholder="pick your school"
+                    radius="lg"
+                    selectedKeys={schoolNameValue ? [schoolNameValue] : []}
+                    onSelectionChange={(keys) => {
+                      const selected = Array.from(keys)[0];
+                      setSchoolName(typeof selected === "string" ? selected : "");
+                    }}
+                    classNames={{
+                      trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
+                      value: "text-[#2b1530]",
+                    }}
+                  >
+                    {matchingSchools.map((school) => (
+                      <SelectItem key={school}>{school}</SelectItem>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    label="university or school"
+                    labelPlacement="outside"
+                    placeholder="type your school"
+                    radius="lg"
+                    value={schoolNameValue}
+                    onValueChange={setSchoolName}
+                    classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                  />
+                )
               ) : null}
               {error ? <p className="text-sm text-[#b45309]">{error}</p> : null}
               <Button type="submit" radius="full" size="lg" className="bg-[#FE8A01] font-semibold text-white">
@@ -2674,9 +2826,7 @@ export default function Page() {
             <h1 className="mt-2 font-[family-name:var(--font-bricolage)] text-4xl leading-none text-[#2b1530]">
               hey, {user.profile.fullName.split(" ")[0]}
             </h1>
-            <p className="mt-2 text-sm text-[#785c42]">
-              {user.profile.city} • {user.profile.schoolName}
-            </p>
+            <p className="mt-2 text-sm text-[#785c42]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="light" radius="full" className="text-[#c66b00]" onPress={signOut}>
@@ -2711,13 +2861,17 @@ export default function Page() {
                 {storyPosts.map((story) => (
                   <div key={story.id} className="min-w-[82px] text-center">
                     <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd29f)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
-                      <Avatar
-                        src={adminProfilePicture}
-                        name="crumbz"
-                        className="h-[76px] w-[76px] bg-white text-[#c66b00]"
-                      />
+                      <div className="relative h-[76px] w-[76px] overflow-hidden rounded-full bg-white">
+                        {adminProfilePicture ? (
+                          <Image src={adminProfilePicture} alt="crumbz story" fill className="object-cover" sizes="76px" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-[#2b1530] text-sm font-semibold text-white">
+                            crumbz
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-[#c66b00]">{story.title}</p>
+                    <p className="mt-2 text-xs font-semibold text-[#c66b00]">{story.title.replace(/\s+coming soon$/i, "")}</p>
                     <p className="text-xs text-[#9a6b33]">coming soon</p>
                   </div>
                 ))}
@@ -2771,7 +2925,7 @@ export default function Page() {
                           post={{
                             id: "weekly-dump-preview",
                             title: `${user.profile.fullName.split(" ")[0] || "your"}'s weekly food dump`,
-                            body: weeklyDumpCaption || `${user.profile.city} • ${user.profile.schoolName}`,
+                            body: weeklyDumpCaption || formatProfileMeta(user.profile.city, user.profile.schoolName),
                             type: "weekly-dump",
                             cta: "sunday dump",
                             createdAt: "preview",
@@ -2900,7 +3054,10 @@ export default function Page() {
                     return (
                       <div key={requestEmail} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
                         <p className="text-sm font-semibold text-[#2b1530]">{requester.profile.fullName}</p>
-                        <p className="text-sm text-[#785c42]">@{requester.profile.username} • {requester.profile.schoolName}</p>
+                        <p className="text-sm text-[#785c42]">
+                          @{requester.profile.username}
+                          {requester.profile.schoolName ? ` • ${requester.profile.schoolName}` : ""}
+                        </p>
                         <div className="mt-3 flex gap-2">
                           <Button radius="full" className="bg-[#FE8A01] text-white" onPress={() => acceptFriendRequest(requestEmail)}>
                             accept
@@ -2972,7 +3129,10 @@ export default function Page() {
                     return (
                       <div key={friendEmail} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
                         <p className="text-sm font-semibold text-[#2b1530]">{friend.profile.fullName}</p>
-                        <p className="text-sm text-[#785c42]">@{friend.profile.username} • {friend.profile.schoolName}</p>
+                        <p className="text-sm text-[#785c42]">
+                          @{friend.profile.username}
+                          {friend.profile.schoolName ? ` • ${friend.profile.schoolName}` : ""}
+                        </p>
                         <Button radius="full" variant="flat" className="mt-3 bg-white text-[#c66b00]" onPress={() => removeFriend(friendEmail)}>
                           remove friend
                         </Button>
@@ -2994,7 +3154,7 @@ export default function Page() {
                 <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">profile</p>
                 <p className="text-2xl font-semibold text-[#2b1530]">{user.profile.fullName}</p>
                 <p className="text-sm text-[#785c42]">@{user.profile.username}</p>
-                <p className="text-sm text-[#785c42]">{user.profile.city} • {user.profile.schoolName}</p>
+                <p className="text-sm text-[#785c42]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
                 <p className="text-sm text-[#785c42]">{favoritePlaceIds.length} favorite food spots</p>
               </CardBody>
             </Card>
