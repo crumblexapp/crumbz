@@ -687,6 +687,9 @@ export default function Page() {
   const cityValue = city ?? user.profile.city ?? "";
   const schoolNameValue = schoolName ?? user.profile.schoolName ?? "";
   const matchingSchools = schoolsByCity[cityValue.trim().toLowerCase()] ?? [];
+  const adminAccount =
+    accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
+  const adminProfilePicture = adminAccount?.googleProfile?.picture;
   const adminPosts = posts.filter((post) => post.authorRole !== "student");
   const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
@@ -815,7 +818,11 @@ export default function Page() {
       >
         <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
           <Avatar
-            src={isStudentPost ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture : undefined}
+            src={
+              isStudentPost
+                ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
+                : adminProfilePicture
+            }
             name={isStudentPost ? post.authorName : "C"}
             className={isStudentPost ? "bg-[#fff5e8] text-[#d97706]" : "bg-[#FE8A01] text-white"}
           />
@@ -2704,11 +2711,14 @@ export default function Page() {
                 {storyPosts.map((story) => (
                   <div key={story.id} className="min-w-[82px] text-center">
                     <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd29f)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
-                      <div className="flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white px-3 text-center">
-                        <span className="text-xs font-semibold leading-4 text-[#c66b00]">{story.title}</span>
-                      </div>
+                      <Avatar
+                        src={adminProfilePicture}
+                        name="crumbz"
+                        className="h-[76px] w-[76px] bg-white text-[#c66b00]"
+                      />
                     </div>
-                    <p className="mt-2 text-xs text-[#9a6b33]">{story.type}</p>
+                    <p className="mt-2 text-xs font-semibold text-[#c66b00]">{story.title}</p>
+                    <p className="text-xs text-[#9a6b33]">coming soon</p>
                   </div>
                 ))}
               </div>
