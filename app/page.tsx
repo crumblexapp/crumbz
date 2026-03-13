@@ -645,6 +645,7 @@ export default function Page() {
   const [city, setCity] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [studentTab, setStudentTab] = useState<"feed" | "favorites" | "rewards" | "social" | "profile">("feed");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
@@ -760,6 +761,45 @@ export default function Page() {
         })),
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
+  const notificationItems = [
+    ...user.profile.incomingFriendRequests
+      .map((requestEmail) => {
+        const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
+        if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
+
+        return {
+          id: `friend-${requestEmail}`,
+          kind: "friend_request" as const,
+          title: `${requester.profile.fullName} sent you a friend request`,
+          detail: `@${requester.profile.username} • ${requester.profile.schoolName}`,
+          email: requestEmail,
+          picture: requester.googleProfile?.picture,
+        };
+      })
+      .filter(Boolean),
+    ...adminPosts.slice(0, 6).map((post) => ({
+      id: `admin-post-${post.id}`,
+      kind: "admin_post" as const,
+      title: `crumbz posted ${post.title}`,
+      detail: `${post.type} • ${post.createdAt}`,
+      postId: post.id,
+    })),
+    ...visibleStudentWeeklyDumps
+      .filter((post) => post.authorEmail !== user.googleProfile?.email)
+      .slice(0, 6)
+      .map((post) => ({
+        id: `friend-dump-${post.id}`,
+        kind: "friend_dump" as const,
+        title: `${post.authorName} posted a sunday dump`,
+        detail: `weekly food dump • ${post.createdAt}`,
+        postId: post.id,
+        picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
+      })),
+  ].filter(Boolean) as Array<
+    | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
+    | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
+  >;
+  const notificationCount = notificationItems.length;
 
   const renderFeedCard = (post: AppPost) => {
     const bucket = getInteractionBucket(interactions, post.id);
@@ -2635,13 +2675,15 @@ export default function Page() {
             <Button variant="light" radius="full" className="text-[#c66b00]" onPress={signOut}>
               log out
             </Button>
-            <Badge color="warning" content={posts.length} shape="circle">
-              <Avatar
-                src={user.googleProfile?.picture}
-                name={user.profile.fullName}
-                className="h-12 w-12 border-2 border-[#FE8A01] bg-[#fff5e8] text-[#d97706]"
-              />
-            </Badge>
+            <button type="button" onClick={() => setNotificationsOpen(true)} className="rounded-full">
+              <Badge color="warning" content={notificationCount} shape="circle">
+                <Avatar
+                  src={user.googleProfile?.picture}
+                  name={user.profile.fullName}
+                  className="h-12 w-12 border-2 border-[#FE8A01] bg-[#fff5e8] text-[#d97706]"
+                />
+              </Badge>
+            </button>
           </div>
         </motion.section>
 
@@ -2973,6 +3015,99 @@ export default function Page() {
           </div>
         </nav>
       </div>
+
+      {notificationsOpen ? (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="close notifications"
+            className="absolute inset-0 bg-[#2b1530]/20"
+            onClick={() => setNotificationsOpen(false)}
+          />
+          <motion.aside
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.25 }}
+            className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-[#ffe2c2] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)]"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">notifications</p>
+                <h2 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                  what’s new
+                </h2>
+              </div>
+              <Button radius="full" variant="light" className="text-[#c66b00]" onPress={() => setNotificationsOpen(false)}>
+                close
+              </Button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {notificationItems.length ? (
+                notificationItems.map((item) => (
+                  <div key={item.id} className="rounded-[22px] border border-[#ffe4c4] bg-[#fff8f0] p-4">
+                    <div className="flex items-start gap-3">
+                      <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#FE8A01] text-white" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-[#2b1530]">{item.title}</p>
+                        <p className="mt-1 text-sm text-[#785c42]">{item.detail}</p>
+                        {item.kind === "friend_request" ? (
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              radius="full"
+                              className="bg-[#FE8A01] text-white"
+                              onPress={() => {
+                                acceptFriendRequest(item.email);
+                                setStudentTab("social");
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              accept
+                            </Button>
+                            <Button
+                              radius="full"
+                              variant="flat"
+                              className="bg-white text-[#c66b00]"
+                              onPress={() => {
+                                declineFriendRequest(item.email);
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              decline
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mt-3">
+                            <Button
+                              radius="full"
+                              className="bg-[#FE8A01] text-white"
+                              onPress={() => {
+                                setStudentTab("feed");
+                                setNotificationsOpen(false);
+                                window.setTimeout(() => {
+                                  const target = document.getElementById(`post-${item.postId}`);
+                                  target?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                }, 120);
+                              }}
+                            >
+                              open post
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[22px] border border-[#ffe4c4] bg-[#fff8f0] p-4 text-sm text-[#785c42]">
+                  no notifications yet. friend requests, admin drops, and sunday dumps will show up here.
+                </div>
+              )}
+            </div>
+          </motion.aside>
+        </div>
+      ) : null}
     </main>
   );
 }
