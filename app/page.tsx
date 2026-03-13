@@ -650,6 +650,7 @@ export default function Page() {
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
@@ -1247,10 +1248,12 @@ export default function Page() {
   const signOut = () => {
     persistUser(defaultUser);
     setFullName(null);
+    setUsername(null);
     setCity(null);
     setSchoolName(null);
     setError("");
     setAuthMode("signup");
+    setShowWelcomeScreen(true);
   };
 
   const addFriend = (friendEmail: string) => {
@@ -1873,6 +1876,71 @@ export default function Page() {
   };
 
   if (!user.signedIn) {
+    if (showWelcomeScreen) {
+      return (
+        <main className="min-h-screen bg-white text-[#2b1530]">
+          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-[linear-gradient(180deg,_#fff4df_0%,_#ffffff_28%,_#fff7ef_100%)] px-5 pb-8 pt-6 font-[family-name:var(--font-manrope)]">
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="overflow-hidden rounded-[36px] border border-[#ffd29a] bg-white shadow-[0_28px_80px_rgba(254,138,1,0.24)]"
+            >
+              <Image
+                src="/brand/crumbz-onboarding.png"
+                alt="crumbz onboarding"
+                width={1080}
+                height={1920}
+                className="h-auto w-full object-cover"
+                priority
+              />
+            </motion.section>
+
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.08 }}
+              className="mt-6 rounded-[32px] border border-[#ffe0bf] bg-white p-6 shadow-[0_22px_60px_rgba(254,138,1,0.14)]"
+            >
+              <p className="text-xs uppercase tracking-[0.28em] text-[#c66b00]">welcome</p>
+              <h1 className="mt-3 font-[family-name:var(--font-bricolage)] text-5xl leading-none text-[#2b1530]">
+                welcome to the feed that makes you hungry
+              </h1>
+              <p className="mt-4 text-sm leading-6 text-[#785c42]">
+                crumbz is the student food world where the team drops the story live and your friends post one weekly food dump every sunday.
+              </p>
+              <Button
+                radius="full"
+                size="lg"
+                className="mt-6 w-full bg-[#FE8A01] text-white"
+                onPress={() => setShowWelcomeScreen(false)}
+              >
+                continue
+              </Button>
+            </motion.section>
+
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.16 }}
+              className="mt-5 grid grid-cols-3 gap-3"
+            >
+              {["stories first", "sunday dumps", "friends only"].map((item) => (
+                <div key={item} className="rounded-[24px] border border-[#ffe4c4] bg-white px-3 py-4 text-center">
+                  <div className="mx-auto h-14 w-14 rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd09a)] p-[3px]">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[11px] font-semibold text-[#d97706]">
+                      live
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{item}</p>
+                </div>
+              ))}
+            </motion.section>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="min-h-screen bg-white text-[#2b1530]">
         <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.22),_transparent_40%),linear-gradient(180deg,_#ffffff_0%,_#fff8f0_55%,_#ffffff_100%)] px-5 pb-8 pt-6 font-[family-name:var(--font-manrope)]">
@@ -1883,9 +1951,16 @@ export default function Page() {
             className="rounded-[32px] bg-[#FE8A01] p-6 text-white shadow-[0_26px_70px_rgba(254,138,1,0.24)]"
           >
             <Chip className="bg-white/20 text-white">crumbz</Chip>
-            <h1 className="mt-4 font-[family-name:var(--font-bricolage)] text-5xl leading-none">
-              welcome to crumbz
-            </h1>
+            <div className="mt-4 rounded-[24px] bg-[#FE8A01] p-2">
+              <Image
+                src="/brand/crumbz-logo.png"
+                alt="crumbz logo"
+                width={1600}
+                height={1600}
+                className="h-auto w-full object-contain"
+                priority
+              />
+            </div>
             <p className="mt-4 text-sm leading-6 text-white/88">
               the food brand app where the crumble team posts chapters, stories, deals, and collabs live.
             </p>

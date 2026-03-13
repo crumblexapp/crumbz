@@ -11,13 +11,13 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#FE8A01",
     icons: [
       {
-        src: "/icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: "/brand/crumbz-app-icon.png",
+        sizes: "1024x1024",
+        type: "image/png",
       },
       {
-        src: "/apple-icon",
-        sizes: "180x180",
+        src: "/brand/crumbz-app-icon.png",
+        sizes: "1024x1024",
         type: "image/png",
       },
     ],
