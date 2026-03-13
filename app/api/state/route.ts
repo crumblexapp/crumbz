@@ -2,6 +2,31 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const STATE_ROW_ID = "crumbz-app-state";
+const ANNOUNCEMENTS_META_KEY = "__announcements";
+
+function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+
+  const announcements = Array.isArray(interactions[ANNOUNCEMENTS_META_KEY]) ? interactions[ANNOUNCEMENTS_META_KEY] : [];
+  delete interactions[ANNOUNCEMENTS_META_KEY];
+
+  return { interactions, announcements };
+}
+
+function mergeInteractionsAndAnnouncements(rawInteractions: unknown, rawAnnouncements: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+
+  return {
+    ...interactions,
+    [ANNOUNCEMENTS_META_KEY]: Array.isArray(rawAnnouncements) ? rawAnnouncements : [],
+  };
+}
 
 async function readAppState() {
   const primary = await supabaseServer
@@ -34,6 +59,7 @@ async function readAppState() {
 export async function GET() {
   const { data, error, supportsAnnouncements } = await readAppState();
   const stateData = data as { accounts?: unknown; posts?: unknown; interactions?: unknown; announcements?: unknown } | null;
+  const fallbackMeta = splitInteractionsAndAnnouncements(stateData?.interactions);
 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
@@ -43,8 +69,8 @@ export async function GET() {
     ok: true,
     accounts: stateData?.accounts ?? [],
     posts: stateData?.posts ?? [],
-    interactions: stateData?.interactions ?? {},
-    announcements: supportsAnnouncements ? stateData?.announcements ?? [] : [],
+    interactions: supportsAnnouncements ? stateData?.interactions ?? {} : fallbackMeta.interactions,
+    announcements: supportsAnnouncements ? stateData?.announcements ?? [] : fallbackMeta.announcements,
   });
 }
 
@@ -60,6 +86,7 @@ export async function POST(request: Request) {
 
   const { data: currentData, error: currentError, supportsAnnouncements } = await readAppState();
   const stateData = currentData as { accounts?: unknown; posts?: unknown; interactions?: unknown; announcements?: unknown } | null;
+  const fallbackMeta = splitInteractionsAndAnnouncements(stateData?.interactions);
 
   if (currentError) {
     return NextResponse.json({ ok: false, message: currentError.message }, { status: 500 });
@@ -69,7 +96,12 @@ export async function POST(request: Request) {
     id: STATE_ROW_ID,
     accounts: body?.accounts ?? stateData?.accounts ?? [],
     posts: body?.posts ?? stateData?.posts ?? [],
-    interactions: body?.interactions ?? stateData?.interactions ?? {},
+    interactions: supportsAnnouncements
+      ? body?.interactions ?? stateData?.interactions ?? {}
+      : mergeInteractionsAndAnnouncements(
+          body?.interactions ?? fallbackMeta.interactions,
+          body?.announcements ?? fallbackMeta.announcements,
+        ),
     updated_at: new Date().toISOString(),
   };
 
