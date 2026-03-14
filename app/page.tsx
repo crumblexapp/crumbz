@@ -514,8 +514,18 @@ function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
 
-function preferNonEmptyArray<T>(serverValue: T[] | null | undefined, localValue: T[]) {
-  return Array.isArray(serverValue) && serverValue.length ? serverValue : localValue;
+function hasAnySharedState(payload: {
+  accounts?: unknown;
+  posts?: unknown;
+  interactions?: unknown;
+  announcements?: unknown;
+}) {
+  return Boolean(
+    (Array.isArray(payload.accounts) && payload.accounts.length) ||
+      (Array.isArray(payload.posts) && payload.posts.length) ||
+      (payload.interactions && typeof payload.interactions === "object" && Object.keys(payload.interactions as object).length) ||
+      (Array.isArray(payload.announcements) && payload.announcements.length),
+  );
 }
 
 function subscribeToUser(callback: () => void) {
@@ -1146,10 +1156,20 @@ export default function Page() {
         if (!payload?.ok) return;
 
         queueMicrotask(() => {
-          setAccounts(preferNonEmptyArray(payload.accounts as StoredUser[] | undefined, nextAccounts));
-          setPosts(normalizePosts(preferNonEmptyArray((payload.posts ?? []) as Partial<AppPost>[], nextPosts)));
-          setInteractions(payload.interactions ?? nextInteractions);
-          setAnnouncements(preferNonEmptyArray((payload.announcements ?? []) as AppAnnouncement[], []));
+          const serverHasState = hasAnySharedState(payload);
+
+          if (!serverHasState) {
+            syncSharedState({
+              nextAccounts,
+              nextPosts,
+              nextInteractions: nextInteractions,
+            });
+          } else {
+            setAccounts((payload.accounts ?? []) as StoredUser[]);
+            setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+            setInteractions((payload.interactions ?? {}) as InteractionsMap);
+            setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
+          }
         });
       })
       .catch(() => undefined);
@@ -1269,6 +1289,23 @@ export default function Page() {
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
+    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  }, [accounts]);
+
+  useEffect(() => {
+    if (!hasLoadedDataRef.current) return;
+
+    const timeout = window.setTimeout(() => {
+      syncSharedState({
+        nextAccounts: accounts,
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [accounts]);
+
+  useEffect(() => {
+    if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     try {
       window.localStorage.setItem(POSTS_KEY, JSON.stringify(serializePostsForStorage(posts)));
       void persistPostMedia(posts)
@@ -1332,12 +1369,25 @@ export default function Page() {
         .then((payload) => {
           if (!payload?.ok) return;
 
-          const localAccounts = readAccounts();
-          const localPosts = readPosts();
-          setAccounts(preferNonEmptyArray(payload.accounts as StoredUser[] | undefined, localAccounts));
-          setPosts(normalizePosts(preferNonEmptyArray((payload.posts ?? []) as Partial<AppPost>[], localPosts)));
-          setInteractions(payload.interactions ?? {});
-          setAnnouncements(preferNonEmptyArray((payload.announcements ?? []) as AppAnnouncement[], announcements));
+          const serverHasState = hasAnySharedState(payload);
+
+          if (!serverHasState) {
+            const localAccounts = readAccounts();
+            const localPosts = readPosts();
+            const localInteractions = readInteractions();
+            syncSharedState({
+              nextAccounts: localAccounts,
+              nextPosts: localPosts,
+              nextInteractions: localInteractions,
+              nextAnnouncements: announcements,
+            });
+            return;
+          }
+
+          setAccounts((payload.accounts ?? []) as StoredUser[]);
+          setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+          setInteractions((payload.interactions ?? {}) as InteractionsMap);
+          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
     };
