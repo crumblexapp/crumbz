@@ -3019,10 +3019,42 @@ export default function Page() {
           className="flex items-center justify-between border-b border-[#f3e7cf] pb-5"
         >
           <div>
-            <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-              what’s good, {user.profile.fullName.split(" ")[0].toLowerCase()}
-            </p>
-            <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">the feed is hungry. so are you.</p>
+            {studentTab === "feed" ? (
+              <>
+                <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
+                  what’s good, {user.profile.fullName.split(" ")[0].toLowerCase()}
+                </p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">the feed is hungry. so are you.</p>
+              </>
+            ) : studentTab === "favorites" ? (
+              <>
+                <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
+                  favorites
+                </p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">your saved spots and map overlap.</p>
+              </>
+            ) : studentTab === "rewards" ? (
+              <>
+                <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
+                  rewards
+                </p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">perks, drops, and what unlocks next.</p>
+              </>
+            ) : studentTab === "social" ? (
+              <>
+                <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
+                  social
+                </p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">find your people and grow your circle.</p>
+              </>
+            ) : (
+              <>
+                <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
+                  profile
+                </p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">your taste, identity, and saved stats.</p>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
