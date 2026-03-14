@@ -3020,9 +3020,9 @@ export default function Page() {
         >
           <div>
             <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#57657f]">
-              hey, {user.profile.fullName.split(" ")[0].toUpperCase()}
+              what’s good, {user.profile.fullName.split(" ")[0].toLowerCase()}
             </p>
-            <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">fresh drops, saved spots, good recs</p>
+            <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">the feed is hungry. so are you.</p>
           </div>
           <div className="flex items-center gap-3">
             <button
