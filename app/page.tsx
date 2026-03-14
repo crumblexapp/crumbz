@@ -2269,21 +2269,14 @@ export default function Page() {
               transition={{ duration: 0.35 }}
               className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden bg-[#F5A623]"
             >
-              <div className="flex w-full flex-col items-center justify-center px-8">
-                <Image
-                  src="/brand/crumbz-logo.png"
-                  alt="crumbz logo"
-                  width={1600}
-                  height={1600}
-                  className="h-auto w-full max-w-[40rem] object-contain"
-                  priority
-                />
-                <div className="-mt-4 w-full max-w-[36rem] rounded-[22px] bg-[#FFF0D0] px-4 py-3 text-center shadow-[0_10px_24px_rgba(44,26,14,0.14)]">
-                  <p className="text-[clamp(1.05rem,4.2vw,1.9rem)] font-extrabold tracking-[-0.04em] text-[#FF3D6B]">
-                    the feed that keeps you hungry
-                  </p>
-                </div>
-              </div>
+              <Image
+                src="/brand/crumbz-opening-exact.png"
+                alt="crumbz opening"
+                fill
+                className="object-contain"
+                priority
+                sizes="100vw"
+              />
 
               <button
                 type="button"
