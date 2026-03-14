@@ -3019,8 +3019,7 @@ export default function Page() {
           className="flex items-center justify-between border-b border-[#f3e7cf] pb-5"
         >
           <div>
-            <p className="font-[family-name:var(--font-bricolage)] text-3xl italic leading-none text-[#f05c1c]">crumbz</p>
-            <p className="mt-2 text-xl uppercase tracking-[0.08em] text-[#57657f]">
+            <p className="text-xl uppercase tracking-[0.08em] text-[#57657f]">
               hey, {user.profile.fullName.split(" ")[0].toUpperCase()}
             </p>
           </div>
@@ -3074,7 +3073,7 @@ export default function Page() {
                         </span>
                       </div>
                     ) : null}
-                    <p className="mt-2 text-sm font-medium text-[#53627b]">{item.label}</p>
+                    <p className="mt-2 text-sm font-medium text-[#53627b]">coming soon</p>
                   </div>
                 ))}
               </div>
@@ -3087,21 +3086,21 @@ export default function Page() {
               className="mt-7 space-y-4"
             >
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]">
-                <CardBody className="gap-4 p-6">
+                <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
-                      <h3 className="mt-3 text-[2rem] font-bold leading-[1.02] text-white">
+                      <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
                         {latestAnnouncement?.title || "Upcoming Food Mob"}
                       </h3>
-                      <p className="mt-3 max-w-[15rem] text-lg leading-8 text-white/76">
+                      <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
                         {latestAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
                       </p>
                     </div>
                     <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Button radius="full" className="h-14 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
+                    <Button radius="full" className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
                       remind me
                     </Button>
                     <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
