@@ -105,6 +105,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
     }
 
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
+    }
+
     nextAccounts = accounts.map((account) => {
       const email = getEmail(account);
       if (email === currentEmail) {
@@ -138,6 +144,12 @@ export async function POST(request: Request) {
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!currentEmail || !targetEmail) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
     }
 
     nextAccounts = accounts.map((account) => {
@@ -177,6 +189,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
     }
 
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
+    }
+
     nextAccounts = accounts.map((account) => {
       const email = getEmail(account);
       if (email === currentEmail) {
@@ -210,6 +228,12 @@ export async function POST(request: Request) {
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!currentEmail || !targetEmail) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
     }
 
     nextAccounts = accounts.map((account) => {

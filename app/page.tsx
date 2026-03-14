@@ -1469,8 +1469,16 @@ export default function Page() {
               return;
             }
 
-            persistUser({ ...existingAccount, signedIn: true });
-            if (sharedAccounts?.length) {
+            const nextSignedInAccount = { ...existingAccount, signedIn: true };
+            const result = await mutateAccountState({
+              action: "upsert_account",
+              account: nextSignedInAccount,
+            }).catch(() => null);
+
+            persistUser((result?.user as StoredUser | null) ?? nextSignedInAccount);
+            if (result?.accounts?.length) {
+              setAccounts(result.accounts);
+            } else if (sharedAccounts?.length) {
               setAccounts(sharedAccounts);
             }
             setFullName(null);
@@ -1487,10 +1495,7 @@ export default function Page() {
           }
 
           const currentUser = userRef.current;
-          if (sharedAccounts?.length) {
-            setAccounts(sharedAccounts);
-          }
-          persistUser({
+          const nextSignedUpAccount = {
             ...currentUser,
             signedIn: true,
             googleProfile: profile,
@@ -1501,7 +1506,18 @@ export default function Page() {
                 currentUser.profile.username ||
                 (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""),
             },
-          });
+          };
+          const result = await mutateAccountState({
+            action: "upsert_account",
+            account: nextSignedUpAccount,
+          }).catch(() => null);
+
+          if (result?.accounts?.length) {
+            setAccounts(result.accounts);
+          } else if (sharedAccounts?.length) {
+            setAccounts(sharedAccounts);
+          }
+          persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
           setFullName(profile.name);
           setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
           setIsStudent(null);
