@@ -92,28 +92,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: currentError.message }, { status: 500 });
   }
 
-  const payload = {
-    id: STATE_ROW_ID,
-    accounts: body?.accounts ?? stateData?.accounts ?? [],
-    posts: body?.posts ?? stateData?.posts ?? [],
-    interactions: supportsAnnouncements
-      ? body?.interactions ?? stateData?.interactions ?? {}
-      : mergeInteractionsAndAnnouncements(
-          body?.interactions ?? fallbackMeta.interactions,
-          body?.announcements ?? fallbackMeta.announcements,
-        ),
+  const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabaseServer.from("app_state").upsert(
-    supportsAnnouncements
-      ? {
-          ...payload,
-          announcements: body?.announcements ?? stateData?.announcements ?? [],
-        }
-      : payload,
-    { onConflict: "id" },
-  );
+  if ("accounts" in (body ?? {})) {
+    updates.accounts = body?.accounts ?? [];
+  }
+
+  if ("posts" in (body ?? {})) {
+    updates.posts = body?.posts ?? [];
+  }
+
+  if (supportsAnnouncements) {
+    if ("interactions" in (body ?? {})) {
+      updates.interactions = body?.interactions ?? {};
+    }
+
+    if ("announcements" in (body ?? {})) {
+      updates.announcements = body?.announcements ?? [];
+    }
+  } else {
+    const nextInteractions =
+      "interactions" in (body ?? {}) ? body?.interactions ?? {} : fallbackMeta.interactions;
+    const nextAnnouncements =
+      "announcements" in (body ?? {}) ? body?.announcements ?? [] : fallbackMeta.announcements;
+
+    if ("interactions" in (body ?? {}) || "announcements" in (body ?? {})) {
+      updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements);
+    }
+  }
+
+  const hasMeaningfulUpdate = Object.keys(updates).some((key) => key !== "updated_at");
+  if (!hasMeaningfulUpdate) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const { error } = await supabaseServer
+    .from("app_state")
+    .update(updates)
+    .eq("id", STATE_ROW_ID);
 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });

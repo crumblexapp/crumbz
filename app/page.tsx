@@ -593,6 +593,40 @@ function formatNow() {
   });
 }
 
+async function mutateAccountState<TUser = StoredUser>(payload: {
+  action: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites";
+  account?: StoredUser;
+  currentEmail?: string;
+  targetEmail?: string;
+  favoritePlaceIds?: string[];
+}) {
+  const response = await fetch("/api/account", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json().catch(() => null)) as
+    | {
+        ok?: boolean;
+        accounts?: StoredUser[];
+        user?: TUser;
+        message?: string;
+      }
+    | null;
+
+  if (!response.ok || !data?.ok) {
+    throw new Error(data?.message ?? "account update failed");
+  }
+
+  return {
+    accounts: data.accounts ?? [],
+    user: data.user ?? null,
+  };
+}
+
 function isSunday(date: Date) {
   return date.getDay() === 0;
 }
@@ -1561,18 +1595,18 @@ export default function Page() {
       },
     };
 
-    const nextAccounts = [
-      ...accounts.filter((account) => account.googleProfile?.email !== nextUser.googleProfile?.email),
-      nextUser,
-    ];
-
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
-    setError("");
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextUser,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        persistUser((result.user as StoredUser | null) ?? nextUser);
+        setError("");
+      })
+      .catch(() => {
+        setError("profile save didn’t stick. try once more.");
+      });
   };
 
   const signOut = () => {
@@ -1590,154 +1624,81 @@ export default function Page() {
   const addFriend = (friendEmail: string) => {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
     if (user.profile.friends.includes(friendEmail) || user.profile.outgoingFriendRequests.includes(friendEmail)) return;
-
-    const nextAccounts = accounts.map((account) => {
-      if (account.googleProfile?.email === user.googleProfile?.email) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            outgoingFriendRequests: [...new Set([...account.profile.outgoingFriendRequests, friendEmail])],
-          },
-        };
-      }
-
-      if (account.googleProfile?.email === friendEmail) {
-        const requesterEmail = user.googleProfile?.email ?? "";
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            incomingFriendRequests: [...new Set([...account.profile.incomingFriendRequests, requesterEmail])],
-          },
-        };
-      }
-
-      return account;
-    });
-
-    const nextUser = nextAccounts.find((account) => account.googleProfile?.email === user.googleProfile?.email) ?? user;
-
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
-    setFriendQuery("");
+    void mutateAccountState({
+      action: "send_friend_request",
+      currentEmail: user.googleProfile?.email ?? "",
+      targetEmail: friendEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+        setFriendQuery("");
+      })
+      .catch(() => {
+        setError("friend request didn’t stick. try again.");
+      });
   };
 
   const acceptFriendRequest = (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
 
-    const nextAccounts = accounts.map((account) => {
-      if (account.googleProfile?.email === currentEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            friends: [...new Set([...account.profile.friends, requesterEmail])],
-            incomingFriendRequests: account.profile.incomingFriendRequests.filter((email) => email !== requesterEmail),
-          },
-        };
-      }
-
-      if (account.googleProfile?.email === requesterEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            friends: [...new Set([...account.profile.friends, currentEmail])],
-            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((email) => email !== currentEmail),
-          },
-        };
-      }
-
-      return account;
-    });
-
-    const nextUser = nextAccounts.find((account) => account.googleProfile?.email === currentEmail) ?? user;
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
+    void mutateAccountState({
+      action: "accept_friend_request",
+      currentEmail,
+      targetEmail: requesterEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+      })
+      .catch(() => {
+        setError("accepting that friend request failed. try once more.");
+      });
   };
 
   const declineFriendRequest = (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
 
-    const nextAccounts = accounts.map((account) => {
-      if (account.googleProfile?.email === currentEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            incomingFriendRequests: account.profile.incomingFriendRequests.filter((email) => email !== requesterEmail),
-          },
-        };
-      }
-
-      if (account.googleProfile?.email === requesterEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((email) => email !== currentEmail),
-          },
-        };
-      }
-
-      return account;
-    });
-
-    const nextUser = nextAccounts.find((account) => account.googleProfile?.email === currentEmail) ?? user;
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
+    void mutateAccountState({
+      action: "decline_friend_request",
+      currentEmail,
+      targetEmail: requesterEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+      })
+      .catch(() => {
+        setError("declining that request failed. try again.");
+      });
   };
 
   const removeFriend = (friendEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
 
-    const nextAccounts = accounts.map((account) => {
-      if (account.googleProfile?.email === currentEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            friends: account.profile.friends.filter((email) => email !== friendEmail),
-          },
-        };
-      }
-
-      if (account.googleProfile?.email === friendEmail) {
-        return {
-          ...account,
-          profile: {
-            ...account.profile,
-            friends: account.profile.friends.filter((email) => email !== currentEmail),
-          },
-        };
-      }
-
-      return account;
-    });
-
-    const nextUser = nextAccounts.find((account) => account.googleProfile?.email === currentEmail) ?? user;
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
+    void mutateAccountState({
+      action: "remove_friend",
+      currentEmail,
+      targetEmail: friendEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+      })
+      .catch(() => {
+        setError("removing that friend failed. try again.");
+      });
   };
 
   const toggleFavoritePlace = (placeId: string) => {
@@ -1745,24 +1706,20 @@ export default function Page() {
       ? favoritePlaceIds.filter((id) => id !== placeId)
       : [...favoritePlaceIds, placeId];
 
-    const nextUser = {
-      ...user,
-      profile: {
-        ...user.profile,
-        favoritePlaceIds: nextFavoritePlaceIds,
-      },
-    };
-
-    const nextAccounts = accounts.map((account) =>
-      account.googleProfile?.email === user.googleProfile?.email ? nextUser : account,
-    );
-
-    setAccounts(nextAccounts);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(nextAccounts));
-    }
-    persistUser(nextUser);
-    syncSharedState({ nextAccounts });
+    void mutateAccountState({
+      action: "update_favorites",
+      currentEmail: user.googleProfile?.email ?? "",
+      favoritePlaceIds: nextFavoritePlaceIds,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+      })
+      .catch(() => {
+        setFavoritePlacesError("saving that spot didn’t stick. try again.");
+      });
   };
 
   const sendAnnouncement = (event: FormEvent<HTMLFormElement>) => {
