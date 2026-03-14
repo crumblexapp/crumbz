@@ -3019,7 +3019,7 @@ export default function Page() {
           className="flex items-center justify-between border-b border-[#f3e7cf] pb-5"
         >
           <div>
-            <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#57657f]">
+            <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
               what’s good, {user.profile.fullName.split(" ")[0].toLowerCase()}
             </p>
             <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">the feed is hungry. so are you.</p>
