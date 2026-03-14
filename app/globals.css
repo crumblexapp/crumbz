@@ -14,4 +14,24 @@
   --font-space-grotesk: var(--font-space-grotesk), system-ui, sans-serif;
   --font-bricolage: var(--font-bricolage), system-ui, sans-serif;
   --font-instrument-serif: var(--font-instrument-serif), Georgia, serif;
+  --font-young-serif: var(--font-young-serif), Georgia, serif;
+}
+
+:root {
+  --crumbz-orange: #F5A623;
+  --deep-brown: #2C1A0E;
+  --crumb-cream: #FFF0D0;
+  --dump-yellow: #FFD000;
+  --spicy-pink: #FF3D6B;
+  --fresh-green: #1FBF6B;
+  --grape: #7B4FFF;
+  --blue-ice: #0EA5E9;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.8), transparent 30%),
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35), transparent 22%),
+    linear-gradient(180deg, #fff8ec 0%, var(--crumb-cream) 100%);
+  color: var(--deep-brown);
 }

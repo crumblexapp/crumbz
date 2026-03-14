@@ -783,7 +783,7 @@ function PostMediaPreview({ post }: { post: AppPost }) {
       <Image
         src={mediaUrls[0]}
         alt={post.title}
-        className="h-72 w-full rounded-[24px] object-cover ring-1 ring-[#ffead1]"
+        className="h-72 w-full rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
         width={1200}
         height={1200}
       />
@@ -792,7 +792,7 @@ function PostMediaPreview({ post }: { post: AppPost }) {
 
   if (post.mediaKind === "video") {
     return (
-      <div className={`${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#fff8f0] ring-1 ring-[#ffead1]`}>
+      <div className={`${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}>
         <video src={mediaUrls[0]} controls className="h-full w-full object-cover" />
       </div>
     );
@@ -805,7 +805,7 @@ function PostMediaPreview({ post }: { post: AppPost }) {
           key={url}
           src={url}
           alt={post.title}
-          className="h-64 w-56 shrink-0 rounded-[24px] object-cover ring-1 ring-[#ffead1]"
+          className="h-64 w-56 shrink-0 rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
           width={900}
           height={1200}
         />
@@ -831,7 +831,7 @@ function PostActionIcon({
       aria-label={label}
       onClick={onPress}
       className={`flex h-11 w-11 items-center justify-center rounded-full border ${
-        active ? "border-[#FE8A01] bg-[#FE8A01] text-white" : "border-[#ffe2c2] bg-white text-[#c66b00]"
+        active ? "border-[#FFD000] bg-[#FFD000] text-[#2C1A0E]" : "border-[#FFF0D0] bg-white text-[#2C1A0E]"
       }`}
     >
       <span className="flex items-center justify-center">{children}</span>
@@ -1068,7 +1068,7 @@ export default function Page() {
       <Card
         id={`post-${post.id}`}
         key={post.id}
-        className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
+        className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
         <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
           <Avatar
@@ -1078,28 +1078,28 @@ export default function Page() {
                 : adminProfilePicture
             }
             name={isStudentPost ? post.authorName : "C"}
-            className={isStudentPost ? "bg-[#fff5e8] text-[#d97706]" : "bg-[#FE8A01] text-white"}
+            className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
           />
           <div className="flex-1">
-            <p className="font-semibold text-[#2b1530]">{isStudentPost ? post.authorName : "crumbz"}</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+            <p className="font-semibold text-[#2C1A0E]">{isStudentPost ? post.authorName : "crumbz"}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
               {isStudentPost ? `weekly food dump • ${post.createdAt}` : `${post.type} • ${post.createdAt}`}
             </p>
-            {isStudentPost ? <p className="mt-1 text-xs text-[#9a6b33]">{post.schoolName}</p> : null}
+            {isStudentPost ? <p className="mt-1 text-xs text-[#2C1A0E]">{post.schoolName}</p> : null}
           </div>
-          <Chip className="bg-[#fff5e8] text-[#d97706]">{post.cta}</Chip>
+          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
-          <div className="rounded-[24px] bg-[linear-gradient(180deg,_#fff8f0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#ffead1]">
-            <h3 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{post.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-[#785c42]">{post.body}</p>
+          <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
+            <h3 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{post.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p>
           </div>
 
           {post.mediaKind !== "none" ? (
             post.mediaUrls.length ? (
               <PostMediaPreview post={post} />
             ) : (
-              <div className="rounded-[18px] border border-dashed border-[#ffd9ab] bg-white px-3 py-4 text-sm text-[#8b6338]">
+              <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
                 this post’s media needs one re-upload from the admin side.
               </div>
             )
@@ -1150,19 +1150,19 @@ export default function Page() {
             </PostActionIcon>
           </div>
 
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#b56d19]">
-            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.likes.length} likes</span>
-            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{visibleComments.length} comments</span>
-            <span className="rounded-full bg-[#fff5e8] px-3 py-2">{bucket.shares.length} shares</span>
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{bucket.likes.length} likes</span>
+            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{visibleComments.length} comments</span>
+            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{bucket.shares.length} shares</span>
           </div>
 
           <div className="space-y-3">
             {visibleComments.map((comment) => (
-              <div key={comment.id} className="rounded-[18px] bg-[#fff8f0] p-3">
-                <p className="text-sm font-semibold text-[#2b1530]">
+              <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
+                <p className="text-sm font-semibold text-[#2C1A0E]">
                   {comment.authorName} • {comment.schoolName}
                 </p>
-                <p className="mt-1 text-sm text-[#785c42]">{comment.text}</p>
+                <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
               </div>
             ))}
 
@@ -1179,9 +1179,9 @@ export default function Page() {
                       [post.id]: value,
                     }))
                   }
-                  classNames={{ inputWrapper: "bg-[#fff8f0] border border-[#ffe2c2]" }}
+                  classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
                 />
-                <Button type="submit" radius="full" className="bg-[#FE8A01] text-white">
+                <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
                   send
                 </Button>
               </form>
@@ -2261,63 +2261,36 @@ export default function Page() {
   if (!user.signedIn) {
     if (showWelcomeScreen) {
       return (
-        <main className="min-h-screen bg-white text-[#2b1530]">
-          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-[linear-gradient(180deg,_#fff4df_0%,_#ffffff_28%,_#fff7ef_100%)] px-5 pb-8 pt-6 font-[family-name:var(--font-manrope)]">
+        <main className="min-h-screen bg-[#FFF0D0] text-[#2C1A0E]">
+          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 py-5 font-[family-name:var(--font-manrope)]">
             <motion.section
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
-              className="overflow-hidden rounded-[36px] border border-[#ffd29a] bg-white shadow-[0_28px_80px_rgba(254,138,1,0.24)]"
+              className="relative flex-1 overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
             >
               <Image
                 src="/brand/crumbz-onboarding.png"
                 alt="crumbz onboarding"
-                width={1080}
-                height={1920}
-                className="h-auto w-full object-cover"
+                fill
+                className="object-cover"
                 priority
+                sizes="(max-width: 768px) 100vw, 420px"
               />
-            </motion.section>
 
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.08 }}
-              className="mt-6 rounded-[32px] border border-[#ffe0bf] bg-white p-6 shadow-[0_22px_60px_rgba(254,138,1,0.14)]"
-            >
-              <p className="text-xs uppercase tracking-[0.28em] text-[#c66b00]">welcome</p>
-              <h1 className="mt-3 font-[family-name:var(--font-bricolage)] text-5xl leading-none text-[#2b1530]">
-                welcome to the feed that makes you hungry
-              </h1>
-              <p className="mt-4 text-sm leading-6 text-[#785c42]">
-                crumbz is the student food world where the team drops the story live and your friends post one weekly food dump every sunday.
-              </p>
-              <Button
-                radius="full"
-                size="lg"
-                className="mt-6 w-full bg-[#FE8A01] text-white"
-                onPress={() => setShowWelcomeScreen(false)}
-              >
-                continue
-              </Button>
-            </motion.section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.16 }}
-              className="mt-5 grid grid-cols-3 gap-3"
-            >
-              {["stories first", "sunday dumps", "friends only"].map((item) => (
-                <div key={item} className="rounded-[24px] border border-[#ffe4c4] bg-white px-3 py-4 text-center">
-                  <div className="mx-auto h-14 w-14 rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd09a)] p-[3px]">
-                    <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-[11px] font-semibold text-[#d97706]">
-                      live
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{item}</p>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#F5A623]/35 via-transparent to-transparent px-5 pb-5 pt-20">
+                <div className="flex justify-end">
+                  <Button
+                    radius="full"
+                    size="lg"
+                    className="h-14 bg-[#FFF0D0] px-5 text-[#FF3D6B] shadow-[0_12px_24px_rgba(47,23,20,0.18)]"
+                    onPress={() => setShowWelcomeScreen(false)}
+                    endContent={<span className="text-xl leading-none">→</span>}
+                  >
+                    continue
+                  </Button>
                 </div>
-              ))}
+              </div>
             </motion.section>
           </div>
         </main>
@@ -2325,26 +2298,31 @@ export default function Page() {
     }
 
     return (
-      <main className="min-h-screen bg-white text-[#2b1530]">
-        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.22),_transparent_40%),linear-gradient(180deg,_#ffffff_0%,_#fff8f0_55%,_#ffffff_100%)] px-5 pb-8 pt-6 font-[family-name:var(--font-manrope)]">
+      <main className="min-h-screen bg-[#FFF0D0] text-[#2C1A0E]">
+        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 py-5 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="rounded-[32px] bg-[#FE8A01] p-6 text-white shadow-[0_26px_70px_rgba(254,138,1,0.24)]"
+            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] px-6 pb-8 pt-6 text-white shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
           >
-            <Chip className="bg-white/20 text-white">crumbz</Chip>
-            <div className="mt-4 rounded-[24px] bg-[#FE8A01] p-2">
+            <Chip className="border border-white/20 bg-white/25 text-white">crumbz</Chip>
+            <div className="mt-14 flex min-h-[360px] flex-col justify-center">
               <Image
                 src="/brand/crumbz-logo.png"
                 alt="crumbz logo"
                 width={1600}
                 height={1600}
-                className="h-auto w-full object-contain"
+                className="mx-auto h-auto w-[82%] object-contain"
                 priority
               />
+              <div className="mx-auto mt-4 inline-flex max-w-full -rotate-[2deg] rounded-[22px] bg-[#FFF0D0] px-5 py-3 text-center shadow-[0_10px_18px_rgba(47,23,20,0.16)]">
+                <p className="font-[family-name:var(--font-manrope)] text-[clamp(1.3rem,4.8vw,2rem)] font-extrabold tracking-[-0.04em] text-[#FF3D6B]">
+                  the feed that keeps you hungry
+                </p>
+              </div>
             </div>
-            <p className="mt-4 text-sm leading-6 text-white/88">
+            <p className="mt-8 max-w-[18rem] text-base leading-7 text-[#FFF0D0]">
               the food brand app where the crumble team posts chapters, stories, deals, and collabs live.
             </p>
           </motion.section>
@@ -2355,14 +2333,17 @@ export default function Page() {
             transition={{ duration: 0.35, delay: 0.08 }}
             className="mt-5"
           >
-            <Card className="rounded-[30px] border border-[#ffe0bf] bg-white shadow-[0_22px_60px_rgba(254,138,1,0.14)]">
+            <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(47,23,20,0.08)]">
               <CardBody className="gap-5 p-6">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#c66b00]">start here</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-[#2C1A0E]">start here</p>
+                  <h1 className="mt-4 font-[family-name:var(--font-young-serif)] text-[2.1rem] leading-[1.02] text-[#2C1A0E]">
+                    sign up or log in
+                  </h1>
                   <div className="mt-3 flex gap-2">
                     <Button
                       radius="full"
-                      className={authMode === "signup" ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                      className={authMode === "signup" ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
                       onPress={() => {
                         setAuthMode("signup");
                         setError("");
@@ -2372,7 +2353,7 @@ export default function Page() {
                     </Button>
                     <Button
                       radius="full"
-                      className={authMode === "login" ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                      className={authMode === "login" ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
                       onPress={() => {
                         setAuthMode("login");
                         setError("");
@@ -2381,7 +2362,7 @@ export default function Page() {
                       log in with google
                     </Button>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-[#785c42]">
+                  <p className="mt-4 text-sm leading-7 text-[#2C1A0E]">
                     {authMode === "signup"
                       ? "new people sign up first, then fill in name, city, and whether they're a student."
                       : "returning people log in and land on the homepage straight away."}
@@ -2393,36 +2374,18 @@ export default function Page() {
                     <div ref={googleButtonRef} className="min-h-11" />
                   </div>
                 ) : (
-                  <div className="rounded-[24px] border border-dashed border-[#ffd3a1] bg-[#fff8f0] p-4 text-sm leading-6 text-[#8b6338]">
+                  <div className="rounded-[24px] border border-dashed border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm leading-6 text-[#2C1A0E]">
                     add `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and the real google button will appear here.
                   </div>
                 )}
 
                 {GOOGLE_CLIENT_ID && !googleReady ? (
-                  <p className="text-center text-sm text-[#b56d19]">loading google sign-in…</p>
+                  <p className="text-center text-sm text-[#2C1A0E]">loading google sign-in…</p>
                 ) : null}
 
-                {error ? <p className="text-sm text-[#b45309]">{error}</p> : null}
+                {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
               </CardBody>
             </Card>
-          </motion.section>
-
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.16 }}
-            className="mt-5 grid grid-cols-3 gap-3"
-          >
-            {["stories", "deals", "campus"].map((item) => (
-              <div key={item} className="rounded-[24px] border border-[#ffe4c4] bg-white px-3 py-4 text-center">
-                <div className="mx-auto h-14 w-14 rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd09a)] p-[3px]">
-                  <div className="flex h-full w-full items-center justify-center rounded-full bg-white text-xs font-semibold text-[#d97706]">
-                    live
-                  </div>
-                </div>
-                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{item}</p>
-              </div>
-            ))}
           </motion.section>
         </div>
       </main>
@@ -2431,26 +2394,26 @@ export default function Page() {
 
   if (needsOnboarding) {
     return (
-      <main className="min-h-screen bg-white text-[#2b1530]">
-        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_42%),linear-gradient(180deg,_#ffffff_0%,_#fff8f0_100%)] px-5 py-6 font-[family-name:var(--font-manrope)]">
+      <main className="min-h-screen bg-white text-[#2C1A0E]">
+        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.84),_transparent_30%),linear-gradient(180deg,_#fff8ec_0%,_#FFF0D0_100%)] px-5 py-6 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="rounded-[32px] bg-white p-6 shadow-[0_22px_60px_rgba(254,138,1,0.16)] ring-1 ring-[#ffe2c2]"
+            className="rounded-[36px] bg-white p-6 shadow-[0_22px_60px_rgba(44,26,14,0.08)] ring-1 ring-[#FFF0D0]"
           >
             <div className="flex items-center gap-4">
               <Avatar
                 src={user.googleProfile?.picture}
                 name={user.googleProfile?.name ?? "C"}
-                className="h-16 w-16 bg-[#FE8A01] text-white"
+                className="h-16 w-16 bg-[#F5A623] text-white"
               />
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[#c66b00]">one more step</p>
-                <h1 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-3xl">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#2C1A0E]">one more step</p>
+                <h1 className="mt-1 font-[family-name:var(--font-young-serif)] text-4xl leading-none">
                   finish your profile
                 </h1>
-                <p className="mt-1 text-sm text-[#785c42]">{user.googleProfile?.email}</p>
+                <p className="mt-1 text-sm text-[#2C1A0E]">{user.googleProfile?.email}</p>
               </div>
             </div>
 
@@ -2462,7 +2425,7 @@ export default function Page() {
                 radius="lg"
                 value={fullNameValue}
                 onValueChange={setFullName}
-                classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
               />
               <Input
                 label="username"
@@ -2471,7 +2434,7 @@ export default function Page() {
                 radius="lg"
                 value={usernameValue}
                 onValueChange={setUsername}
-                classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
               />
               <Select
                 label="city"
@@ -2486,8 +2449,8 @@ export default function Page() {
                   setError("");
                 }}
                 classNames={{
-                  trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
-                  value: "text-[#2b1530]",
+                  trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
+                  value: "text-[#2C1A0E]",
                 }}
               >
                 {cityOptions.map((option) => (
@@ -2495,12 +2458,12 @@ export default function Page() {
                 ))}
               </Select>
               <div>
-                <p className="mb-2 text-sm font-medium text-[#2b1530]">are you a student?</p>
+                <p className="mb-2 text-sm font-medium text-[#2C1A0E]">are you a student?</p>
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     radius="full"
-                    className={isStudentValue === true ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                    className={isStudentValue === true ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
                     onPress={() => {
                       setIsStudent(true);
                       setError("");
@@ -2511,7 +2474,7 @@ export default function Page() {
                   <Button
                     type="button"
                     radius="full"
-                    className={isStudentValue === false ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#c66b00]"}
+                    className={isStudentValue === false ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
                     onPress={() => {
                       setIsStudent(false);
                       setSchoolName("");
@@ -2535,8 +2498,8 @@ export default function Page() {
                       setSchoolName(typeof selected === "string" ? selected : "");
                     }}
                     classNames={{
-                      trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
-                      value: "text-[#2b1530]",
+                      trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
+                      value: "text-[#2C1A0E]",
                     }}
                   >
                     {matchingSchools.map((school) => (
@@ -2551,12 +2514,12 @@ export default function Page() {
                     radius="lg"
                     value={schoolNameValue}
                     onValueChange={setSchoolName}
-                    classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                    classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                   />
                 )
               ) : null}
-              {error ? <p className="text-sm text-[#b45309]">{error}</p> : null}
-              <Button type="submit" radius="full" size="lg" className="bg-[#FE8A01] font-semibold text-white">
+              {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
+              <Button type="submit" radius="full" size="lg" className="bg-[#2C1A0E] font-semibold text-white">
                 enter crumbz
               </Button>
             </form>
@@ -2577,13 +2540,13 @@ export default function Page() {
       .reverse();
 
     return (
-      <main className="min-h-screen bg-white text-[#2b1530]">
-        <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#fff8f0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+      <main className="min-h-screen bg-white text-[#2C1A0E]">
+        <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#FFF0D0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="rounded-[30px] bg-[#FE8A01] p-5 text-white shadow-[0_22px_60px_rgba(254,138,1,0.22)]"
+            className="rounded-[30px] bg-[#F5A623] p-5 text-white shadow-[0_22px_60px_rgba(254,138,1,0.22)]"
           >
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -2593,7 +2556,7 @@ export default function Page() {
                 </h1>
                 <p className="mt-2 text-sm text-white/88">{user.googleProfile?.email}</p>
               </div>
-              <Button radius="full" className="bg-white text-[#c66b00]" onPress={signOut}>
+              <Button radius="full" className="bg-white text-[#2C1A0E]" onPress={signOut}>
                 log out
               </Button>
             </div>
@@ -2609,8 +2572,8 @@ export default function Page() {
               aria-label="admin areas"
               classNames={{
                 tabList: "w-full rounded-full bg-white/90 p-1",
-                cursor: "rounded-full bg-[#FE8A01]",
-                tab: "h-11 text-sm font-medium text-[#8b6338]",
+                cursor: "rounded-full bg-[#F5A623]",
+                tab: "h-11 text-sm font-medium text-[#2C1A0E]",
                 tabContent: "group-data-[selected=true]:text-white",
               }}
             >
@@ -2623,23 +2586,23 @@ export default function Page() {
                       { label: "likes", value: totalLikes },
                       { label: "shares", value: totalShares },
                     ].map((item) => (
-                      <Card key={item.label} className="rounded-[24px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                      <Card key={item.label} className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                         <CardBody className="gap-1 p-4">
-                          <p className="text-2xl font-semibold text-[#2b1530]">{item.value}</p>
-                          <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">{item.label}</p>
+                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
                         </CardBody>
                       </Card>
                     ))}
                   </div>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">push notifications</p>
-                          <p className="mt-1 text-sm text-[#785c42]">send one message to everyone and it shows up in their notifications drawer.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">push notifications</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">send one message to everyone and it shows up in their notifications drawer.</p>
                         </div>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{announcements.length} live</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{announcements.length} live</Chip>
                       </div>
                       <form className="grid gap-3" onSubmit={sendAnnouncement}>
                         <Input
@@ -2648,7 +2611,7 @@ export default function Page() {
                           placeholder="new post dropped"
                           value={announcementTitle}
                           onValueChange={setAnnouncementTitle}
-                          classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                         />
                         <Textarea
                           label="message"
@@ -2656,122 +2619,122 @@ export default function Page() {
                           placeholder="come back and check this out"
                           value={announcementBody}
                           onValueChange={setAnnouncementBody}
-                          classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                         />
-                        <Button type="submit" radius="full" className="bg-[#FE8A01] text-white">
+                        <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
                           push to all users
                         </Button>
                       </form>
                       {latestAnnouncement ? (
-                        <div className="rounded-[18px] bg-[#fff8f0] px-4 py-3">
-                          <p className="text-sm font-semibold text-[#2b1530]">{latestAnnouncement.title}</p>
-                          <p className="mt-1 text-sm text-[#785c42]">{latestAnnouncement.body}</p>
-                          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{latestAnnouncement.createdAt}</p>
+                        <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                          <p className="text-sm font-semibold text-[#2C1A0E]">{latestAnnouncement.title}</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{latestAnnouncement.createdAt}</p>
                         </div>
                       ) : null}
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">overview stats</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">overview stats</p>
                       <div className="flex flex-wrap gap-2">
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{totalComments} comments</Chip>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{uniqueCommenters} unique commenters</Chip>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{uniqueSharers} unique sharers</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{totalComments} comments</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{uniqueCommenters} unique commenters</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{uniqueSharers} unique sharers</Chip>
                       </div>
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">user management</p>
-                          <p className="mt-1 text-sm text-[#785c42]">who signed up, where they’re from, and whether they’re active right now.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">user management</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">who signed up, where they’re from, and whether they’re active right now.</p>
                         </div>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{userManagementRows.length} users</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{userManagementRows.length} users</Chip>
                       </div>
                       <div className="grid gap-2">
                         {userManagementRows.length ? (
                           userManagementRows.map((account) => (
-                            <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
+                            <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
                               <div>
-                                <p className="font-semibold text-[#2b1530]">{account.profile.fullName || account.googleProfile?.name || "new user"}</p>
-                                <p className="text-[#785c42]">
+                                <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new user"}</p>
+                                <p className="text-[#2C1A0E]">
                                   @{account.profile.username || "pending"} • {formatProfileMeta(account.profile.city, account.profile.schoolName) || "profile not finished"}
                                 </p>
                               </div>
-                              <Chip className="bg-white text-[#c66b00]">{account.signedIn ? "active" : "saved"}</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{account.signedIn ? "active" : "saved"}</Chip>
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-[#785c42]">no users yet.</p>
+                          <p className="text-sm text-[#2C1A0E]">no users yet.</p>
                         )}
                       </div>
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">food spot data</p>
-                          <p className="mt-1 text-sm text-[#785c42]">which places are getting saved the most from day one.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">food spot data</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">which places are getting saved the most from day one.</p>
                         </div>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{foodSpotCounts.length} tracked</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{foodSpotCounts.length} tracked</Chip>
                       </div>
                       <div className="grid gap-2">
                         {foodSpotCounts.length ? (
                           foodSpotCounts.map((place) => (
-                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
+                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
                               <div>
-                                <p className="font-semibold text-[#2b1530]">{place.name}</p>
-                                <p className="text-[#785c42]">{place.address}</p>
+                                <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
+                                <p className="text-[#2C1A0E]">{place.address}</p>
                               </div>
-                              <Chip className="bg-white text-[#c66b00]">{place.saves} saves</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{place.saves} saves</Chip>
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-[#785c42]">no food spots saved yet.</p>
+                          <p className="text-sm text-[#2C1A0E]">no food spots saved yet.</p>
                         )}
                       </div>
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">city breakdown</p>
-                          <p className="mt-1 text-sm text-[#785c42]">see where users are stacking up so you know where to focus next.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">city breakdown</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">see where users are stacking up so you know where to focus next.</p>
                         </div>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{sortedCityBreakdown.length} cities</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{sortedCityBreakdown.length} cities</Chip>
                       </div>
                       <div className="grid gap-2">
                         {sortedCityBreakdown.map(([cityName, count]) => (
-                          <div key={cityName} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3 text-sm">
-                            <span className="text-[#785c42]">{cityName}</span>
-                            <span className="font-semibold text-[#2b1530]">{count}</span>
+                          <div key={cityName} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
+                            <span className="text-[#2C1A0E]">{cityName}</span>
+                            <span className="font-semibold text-[#2C1A0E]">{count}</span>
                           </div>
                         ))}
                       </div>
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">recent activity</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">recent activity</p>
                       {recentActivity.length ? (
                         recentActivity.map((item, index) => (
-                          <div key={`${item.kind}-${item.postId}-${item.createdAt}-${index}`} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
-                            <p className="text-sm font-semibold text-[#2b1530]">{item.label}</p>
-                            <p className="mt-1 text-sm text-[#785c42]">{item.detail}</p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{item.createdAt}</p>
+                          <div key={`${item.kind}-${item.postId}-${item.createdAt}-${index}`} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                            <p className="text-sm font-semibold text-[#2C1A0E]">{item.label}</p>
+                            <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.createdAt}</p>
                           </div>
                         ))
                       ) : (
-                        <p className="text-sm text-[#785c42]">no activity yet.</p>
+                        <p className="text-sm text-[#2C1A0E]">no activity yet.</p>
                       )}
                     </CardBody>
                   </Card>
@@ -2780,13 +2743,13 @@ export default function Page() {
 
               <Tab key="post" title="post">
                 <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="p-5">
                       <form className="grid gap-4" onSubmit={createPost}>
                       {editingPostId ? (
-                        <div className="flex items-center justify-between rounded-[20px] bg-[#fff8f0] px-4 py-3 text-sm">
-                          <span className="text-[#785c42]">editing an existing post</span>
-                          <Button type="button" radius="full" variant="light" className="text-[#c66b00]" onPress={cancelEditingPost}>
+                        <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
+                          <span className="text-[#2C1A0E]">editing an existing post</span>
+                          <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingPost}>
                             cancel
                           </Button>
                         </div>
@@ -2804,7 +2767,7 @@ export default function Page() {
                           }));
                         }}
                         classNames={{
-                          trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
+                          trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
                         }}
                       >
                         {["chapter", "story", "discount", "ad", "collab"].map((type) => (
@@ -2826,7 +2789,7 @@ export default function Page() {
                           setComposerMediaInputKey((current) => current + 1);
                         }}
                         classNames={{
-                          trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
+                          trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
                         }}
                       >
                         {["none", "photo", "video", "carousel"].map((type) => (
@@ -2847,7 +2810,7 @@ export default function Page() {
                             }));
                           }}
                           classNames={{
-                            trigger: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]",
+                            trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
                           }}
                         >
                           {["9:16", "4:5", "1:1", "16:9"].map((ratio) => (
@@ -2861,7 +2824,7 @@ export default function Page() {
                         placeholder="new chapter just dropped"
                         value={composer.title}
                         onValueChange={(value) => setComposer((current) => ({ ...current, title: value }))}
-                        classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                       />
                       <Textarea
                         label="body"
@@ -2869,7 +2832,7 @@ export default function Page() {
                         placeholder="tell students what’s happening"
                         value={composer.body}
                         onValueChange={(value) => setComposer((current) => ({ ...current, body: value }))}
-                        classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                       />
                       <Input
                         label="cta label"
@@ -2877,11 +2840,11 @@ export default function Page() {
                         placeholder="student offer live"
                         value={composer.cta}
                         onValueChange={(value) => setComposer((current) => ({ ...current, cta: value }))}
-                        classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                       />
                       {composer.mediaKind !== "none" ? (
                         <div className="grid gap-3">
-                          <label className="text-sm font-medium text-[#2b1530]">
+                          <label className="text-sm font-medium text-[#2C1A0E]">
                             {composer.mediaKind === "carousel" ? "photos for carousel" : `${composer.mediaKind} file`}
                           </label>
                           <input
@@ -2896,25 +2859,25 @@ export default function Page() {
                             onChange={(event) => {
                               void handleComposerFiles(event.target.files);
                             }}
-                            className="rounded-[18px] border border-[#ffe2c2] bg-[#fff8f0] px-3 py-3 text-sm text-[#785c42]"
+                            className="rounded-[18px] border border-[#FFF0D0] bg-[#FFF0D0] px-3 py-3 text-sm text-[#2C1A0E]"
                           />
                           {composer.mediaUrls.length ? (
                             <div className="flex gap-2">
                               <Button
                                 type="button"
                                 radius="full"
-                                className="bg-white text-[#c66b00]"
+                                className="bg-white text-[#2C1A0E]"
                                 onPress={() => setComposer((current) => ({ ...current, mediaUrls: [] }))}
                               >
                                 remove media
                               </Button>
-                              <p className="self-center text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+                              <p className="self-center text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                                 pick a new file to replace it
                               </p>
                             </div>
                           ) : null}
                           {composer.mediaUrls.length ? (
-                            <div className="rounded-[20px] bg-[#fff8f0] p-3">
+                            <div className="rounded-[20px] bg-[#FFF0D0] p-3">
                               <PostMediaPreview
                                 post={{
                                   id: "preview",
@@ -2937,13 +2900,13 @@ export default function Page() {
                           ) : null}
                         </div>
                       ) : null}
-                      {storageNotice ? <p className="text-sm text-[#b45309]">{storageNotice}</p> : null}
+                      {storageNotice ? <p className="text-sm text-[#F5A623]">{storageNotice}</p> : null}
                       <Button
                         type="submit"
                         radius="full"
                         size="lg"
                         isDisabled={isUploadingMedia}
-                        className="bg-[#FE8A01] text-white disabled:opacity-60"
+                        className="bg-[#F5A623] text-white disabled:opacity-60"
                       >
                         {isUploadingMedia ? "uploading media..." : editingPostId ? "save changes" : "publish post"}
                       </Button>
@@ -2951,38 +2914,38 @@ export default function Page() {
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">all posts</p>
-                        <Chip className="bg-[#fff5e8] text-[#d97706]">{posts.length} total</Chip>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">all posts</p>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{posts.length} total</Chip>
                       </div>
                       {posts.length ? (
                         posts.map((post) => (
-                          <div key={post.id} className="rounded-[22px] bg-[#fff8f0] p-4">
+                          <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="font-semibold text-[#2b1530]">{post.title}</p>
-                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+                                <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                                   {post.type} • {post.createdAt}
                                 </p>
                               </div>
-                              <Chip className="bg-white text-[#c66b00]">{post.mediaKind}</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
                             </div>
-                            <p className="mt-2 text-sm text-[#785c42]">{post.body}</p>
+                            <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
                             {post.mediaKind !== "none" ? (
                               <div className="mt-3">
                                 {post.mediaUrls.length ? (
                                   <PostMediaPreview post={post} />
                                 ) : (
-                                  <div className="rounded-[18px] border border-dashed border-[#ffd9ab] bg-white px-3 py-4 text-sm text-[#8b6338]">
+                                  <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
                                     media is missing on this saved post. open edit and upload it again once.
                                   </div>
                                 )}
                               </div>
                             ) : null}
                             <div className="mt-3 flex gap-2">
-                              <Button type="button" radius="full" className="bg-white text-[#c66b00]" onPress={() => startEditingPost(post)}>
+                              <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onPress={() => startEditingPost(post)}>
                                 edit
                               </Button>
                               <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
@@ -2992,7 +2955,7 @@ export default function Page() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-sm text-[#785c42]">no posts yet.</p>
+                        <p className="text-sm text-[#2C1A0E]">no posts yet.</p>
                       )}
                     </CardBody>
                   </Card>
@@ -3004,41 +2967,41 @@ export default function Page() {
                   {posts.map((post) => {
                     const bucket = getInteractionBucket(interactions, post.id);
                     return (
-                      <Card key={post.id} className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                      <Card key={post.id} className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                         <CardHeader className="flex items-start justify-between gap-3 px-5 pb-0 pt-5">
                           <div>
-                            <p className="font-semibold text-[#2b1530]">{post.title}</p>
-                            <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">
+                            <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                            <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                               {post.type} • {post.createdAt}
                             </p>
                           </div>
-                          <Chip className="bg-[#fff5e8] text-[#d97706]">{bucket.comments.length} comments</Chip>
+                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{bucket.comments.length} comments</Chip>
                         </CardHeader>
                         <CardBody className="gap-3 p-5">
-                          <p className="text-sm text-[#785c42]">{post.body}</p>
+                          <p className="text-sm text-[#2C1A0E]">{post.body}</p>
                           <div className="flex flex-wrap gap-2">
-                            <Chip className="bg-[#fff5e8] text-[#d97706]">{bucket.likes.length} likes</Chip>
-                            <Chip className="bg-[#fff5e8] text-[#d97706]">{bucket.shares.length} shares</Chip>
-                            <Chip className="bg-[#fff5e8] text-[#d97706]">{post.cta}</Chip>
+                            <Chip className="bg-[#FFF0D0] text-[#F5A623]">{bucket.likes.length} likes</Chip>
+                            <Chip className="bg-[#FFF0D0] text-[#F5A623]">{bucket.shares.length} shares</Chip>
+                            <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
                           </div>
                           {bucket.comments.length ? (
                             bucket.comments.map((comment) => (
-                              <div key={comment.id} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
+                              <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <p className="text-sm font-semibold text-[#2b1530]">
+                                    <p className="text-sm font-semibold text-[#2C1A0E]">
                                       {comment.authorName} • {comment.schoolName}
                                     </p>
-                                    <p className="mt-1 text-sm text-[#785c42]">{comment.text}</p>
+                                    <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
                                     {comment.hidden ? (
-                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#b56d19]">hidden from students</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">hidden from students</p>
                                     ) : null}
                                   </div>
                                   <div className="flex gap-2">
                                     <Button
                                       type="button"
                                       radius="full"
-                                      className="bg-white text-[#c66b00]"
+                                      className="bg-white text-[#2C1A0E]"
                                       onPress={() => toggleCommentHidden(post.id, comment.id)}
                                     >
                                       {comment.hidden ? "unhide" : "hide"}
@@ -3057,7 +3020,7 @@ export default function Page() {
                               </div>
                             ))
                           ) : (
-                            <p className="text-sm text-[#785c42]">no comments yet.</p>
+                            <p className="text-sm text-[#2C1A0E]">no comments yet.</p>
                           )}
                         </CardBody>
                       </Card>
@@ -3073,8 +3036,8 @@ export default function Page() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-[#2b1530]">
-      <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#fff8f0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+    <main className="min-h-screen bg-white text-[#2C1A0E]">
+      <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#FFF0D0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -3082,14 +3045,14 @@ export default function Page() {
           className="flex items-center justify-between"
         >
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-[#c66b00]">crumbz</p>
-            <h1 className="mt-2 font-[family-name:var(--font-bricolage)] text-4xl leading-none text-[#2b1530]">
+            <p className="text-xs uppercase tracking-[0.28em] text-[#2C1A0E]">crumbz</p>
+            <h1 className="mt-2 font-[family-name:var(--font-bricolage)] text-4xl leading-none text-[#2C1A0E]">
               hey, {user.profile.fullName.split(" ")[0]}
             </h1>
-            <p className="mt-2 text-sm text-[#785c42]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+            <p className="mt-2 text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="light" radius="full" className="text-[#c66b00]" onPress={signOut}>
+            <Button variant="light" radius="full" className="text-[#2C1A0E]" onPress={signOut}>
               log out
             </Button>
             <button type="button" onClick={() => setNotificationsOpen(true)} className="rounded-full">
@@ -3097,7 +3060,7 @@ export default function Page() {
                 <Avatar
                   src={user.googleProfile?.picture}
                   name={user.profile.fullName}
-                  className="h-12 w-12 border-2 border-[#FE8A01] bg-[#fff5e8] text-[#d97706]"
+                  className="h-12 w-12 border-2 border-[#F5A623] bg-[#FFF0D0] text-[#F5A623]"
                 />
               </Badge>
             </button>
@@ -3113,11 +3076,11 @@ export default function Page() {
                 transition={{ duration: 0.3 }}
                 className="mt-6"
               >
-                <Card className="rounded-[28px] border border-[#ffd8ad] bg-[linear-gradient(135deg,_#fff2df,_#ffffff)] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                <Card className="rounded-[28px] border border-[#FFF0D0] bg-[linear-gradient(135deg,_#FFF0D0,_#ffffff)] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-2 p-5">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">push from crumbz</p>
-                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{latestAnnouncement.title}</h2>
-                    <p className="text-sm text-[#785c42]">{latestAnnouncement.body}</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">push from crumbz</p>
+                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{latestAnnouncement.title}</h2>
+                    <p className="text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
                   </CardBody>
                 </Card>
               </motion.section>
@@ -3131,21 +3094,21 @@ export default function Page() {
             >
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl">stories</h2>
-                <Chip className="bg-[#fff5e8] text-[#d97706]">live</Chip>
+                <Chip className="bg-[#FFF0D0] text-[#F5A623]">live</Chip>
               </div>
 
               <div className="flex gap-4 overflow-x-auto pb-2">
                 {storyPosts.map((story) => (
                   <div key={story.id} className="min-w-[82px] text-center">
-                    <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#FE8A01,_#ffd29f)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
+                    <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#F5A623,_#FFF0D0)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
                       <Avatar
                         src={adminProfilePicture}
                         name="crumbz"
-                        className="h-[76px] w-[76px] bg-[#2b1530] text-sm font-semibold text-white"
+                        className="h-[76px] w-[76px] bg-[#2C1A0E] text-sm font-semibold text-white"
                       />
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-[#c66b00]">{story.title.replace(/\s+coming soon$/i, "")}</p>
-                    <p className="text-xs text-[#9a6b33]">coming soon</p>
+                    <p className="mt-2 text-xs font-semibold text-[#2C1A0E]">{story.title.replace(/\s+coming soon$/i, "")}</p>
+                    <p className="text-xs text-[#2C1A0E]">coming soon</p>
                   </div>
                 ))}
               </div>
@@ -3157,17 +3120,17 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
-              <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">{weeklyDropEyebrow}</p>
-                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{weeklyDropEyebrow}</p>
+                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">
                         {weeklyDropTitle}
                       </h3>
-                      <p className="mt-2 text-sm text-[#785c42]">{weeklyDropBody}</p>
+                      <p className="mt-2 text-sm text-[#2C1A0E]">{weeklyDropBody}</p>
                     </div>
-                    <Chip className="bg-[#fff5e8] text-[#d97706]">1 per sunday</Chip>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">1 per sunday</Chip>
                   </div>
 
                   <form className="space-y-4" onSubmit={submitWeeklyDump}>
@@ -3177,7 +3140,7 @@ export default function Page() {
                       placeholder="what hit this week?"
                       value={weeklyDumpCaption}
                       onValueChange={setWeeklyDumpCaption}
-                      classNames={{ inputWrapper: "bg-[#fff8f0] shadow-none border border-[#ffe2c2]" }}
+                      classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                     />
                     <input
                       key={weeklyDumpInputKey}
@@ -3188,10 +3151,10 @@ export default function Page() {
                       onChange={(event) => {
                         void handleWeeklyDumpFiles(event.target.files);
                       }}
-                      className="rounded-[18px] border border-[#ffe2c2] bg-[#fff8f0] px-3 py-3 text-sm text-[#785c42] disabled:opacity-50"
+                      className="rounded-[18px] border border-[#FFF0D0] bg-[#FFF0D0] px-3 py-3 text-sm text-[#2C1A0E] disabled:opacity-50"
                     />
                     {weeklyDumpMediaUrls.length ? (
-                      <div className="rounded-[20px] bg-[#fff8f0] p-3">
+                      <div className="rounded-[20px] bg-[#FFF0D0] p-3">
                         <PostMediaPreview
                           post={{
                             id: "weekly-dump-preview",
@@ -3212,13 +3175,13 @@ export default function Page() {
                         />
                       </div>
                     ) : null}
-                    {weeklyDumpNotice ? <p className="text-sm text-[#b45309]">{weeklyDumpNotice}</p> : null}
+                    {weeklyDumpNotice ? <p className="text-sm text-[#F5A623]">{weeklyDumpNotice}</p> : null}
                     <Button
                       type="submit"
                       radius="full"
                       size="lg"
                       isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
-                      className="bg-[#FE8A01] text-white disabled:opacity-60"
+                      className="bg-[#F5A623] text-white disabled:opacity-60"
                     >
                       {isUploadingWeeklyDump
                         ? "uploading your dump..."
@@ -3239,16 +3202,16 @@ export default function Page() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">{communityEyebrow}</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{communityTitle}</h3>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{communityTitle}</h3>
                   </div>
-                  <Chip className="bg-[#fff5e8] text-[#d97706]">{visibleStudentWeeklyDumps.length} dumps</Chip>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{visibleStudentWeeklyDumps.length} dumps</Chip>
                 </div>
                 {visibleStudentWeeklyDumps.length ? (
                   visibleStudentWeeklyDumps.map(renderFeedCard)
                 ) : (
-                  <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                    <CardBody className="p-5 text-sm text-[#785c42]">{communityEmpty}</CardBody>
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                    <CardBody className="p-5 text-sm text-[#2C1A0E]">{communityEmpty}</CardBody>
                   </Card>
                 )}
               </div>
@@ -3258,19 +3221,19 @@ export default function Page() {
 
         {studentTab === "favorites" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">favorites</p>
-                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">favorites</p>
+                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">
                       food map for {user.profile.city}
                     </h2>
-                    <p className="text-sm text-[#785c42]">
+                    <p className="text-sm text-[#2C1A0E]">
                       heart the cafes, restaurants, bakeries, and food spots you rate. your friends can spot the overlap.
                     </p>
                   </div>
-                  <Chip className="bg-[#fff5e8] text-[#d97706]">{favoritePlaceIds.length} liked</Chip>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{favoritePlaceIds.length} liked</Chip>
                 </div>
 
                 <FavoritesMap
@@ -3289,8 +3252,8 @@ export default function Page() {
                   }))}
                 />
 
-                {favoritePlacesLoading ? <p className="text-sm text-[#8b6338]">loading food spots around the city...</p> : null}
-                {favoritePlacesError ? <p className="text-sm text-[#8b6338]">{favoritePlacesError}</p> : null}
+                {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">loading food spots around the city...</p> : null}
+                {favoritePlacesError ? <p className="text-sm text-[#2C1A0E]">{favoritePlacesError}</p> : null}
               </CardBody>
             </Card>
           </section>
@@ -3298,11 +3261,11 @@ export default function Page() {
 
         {studentTab === "rewards" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">rewards</p>
-                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">{rewardsTitle}</h2>
-                <p className="text-sm text-[#785c42]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">rewards</p>
+                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{rewardsTitle}</h2>
+                <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
               </CardBody>
             </Card>
           </section>
@@ -3310,26 +3273,26 @@ export default function Page() {
 
         {studentTab === "social" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">friend requests</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend requests</p>
                 {liveProfile.incomingFriendRequests.length ? (
                   liveProfile.incomingFriendRequests.map((requestEmail) => {
                     const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
                     if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
                     return (
-                      <div key={requestEmail} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
-                        <p className="text-sm font-semibold text-[#2b1530]">{requester.profile.fullName}</p>
-                        <p className="text-sm text-[#785c42]">
+                      <div key={requestEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{requester.profile.fullName}</p>
+                        <p className="text-sm text-[#2C1A0E]">
                           @{requester.profile.username}
                           {requester.profile.schoolName ? ` • ${requester.profile.schoolName}` : ""}
                         </p>
                         <div className="mt-3 flex gap-2">
-                          <Button radius="full" className="bg-[#FE8A01] text-white" onPress={() => acceptFriendRequest(requestEmail)}>
+                          <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => acceptFriendRequest(requestEmail)}>
                             accept
                           </Button>
-                          <Button radius="full" variant="flat" className="bg-white text-[#c66b00]" onPress={() => declineFriendRequest(requestEmail)}>
+                          <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => declineFriendRequest(requestEmail)}>
                             decline
                           </Button>
                         </div>
@@ -3337,47 +3300,47 @@ export default function Page() {
                     );
                   })
                 ) : (
-                  <p className="text-sm text-[#785c42]">no requests waiting right now.</p>
+                  <p className="text-sm text-[#2C1A0E]">no requests waiting right now.</p>
                 )}
               </CardBody>
             </Card>
 
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">social</p>
-                  <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">add your friends</h2>
-                  <p className="text-sm text-[#785c42]">search by email or username and add them to your crumbz circle.</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">social</p>
+                  <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">add your friends</h2>
+                  <p className="text-sm text-[#2C1A0E]">search by email or username and add them to your crumbz circle.</p>
                 </div>
                 <Input
                   radius="full"
                   placeholder="search email or username"
                   value={friendQuery}
                   onValueChange={setFriendQuery}
-                  classNames={{ inputWrapper: "bg-[#fff8f0] border border-[#ffe2c2]" }}
+                  classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
                 />
                 {friendQuery ? (
                   friendableAccounts.length ? (
                     friendableAccounts.map((account) => (
-                      <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#fff8f0] px-3 py-3">
+                      <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#2b1530]">{account.profile.fullName}</p>
-                          <p className="text-sm text-[#785c42]">@{account.profile.username} • {account.googleProfile?.email}</p>
+                          <p className="text-sm font-semibold text-[#2C1A0E]">{account.profile.fullName}</p>
+                          <p className="text-sm text-[#2C1A0E]">@{account.profile.username} • {account.googleProfile?.email}</p>
                         </div>
-                        <Button radius="full" className="bg-[#FE8A01] text-white" onPress={() => addFriend(account.googleProfile?.email ?? "")}>
+                        <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => addFriend(account.googleProfile?.email ?? "")}>
                           send request
                         </Button>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-[#785c42]">no matching account yet.</p>
+                    <p className="text-sm text-[#2C1A0E]">no matching account yet.</p>
                   )
                 ) : null}
 
                 {liveProfile.outgoingFriendRequests.length ? (
-                  <div className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">pending</p>
-                    <p className="mt-1 text-sm text-[#785c42]">
+                  <div className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">pending</p>
+                    <p className="mt-1 text-sm text-[#2C1A0E]">
                       waiting on {liveProfile.outgoingFriendRequests.length} friend request{liveProfile.outgoingFriendRequests.length === 1 ? "" : "s"}.
                     </p>
                   </div>
@@ -3385,29 +3348,29 @@ export default function Page() {
               </CardBody>
             </Card>
 
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">your people</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your people</p>
                 {liveProfile.friends.length ? (
                   liveProfile.friends.map((friendEmail) => {
                     const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
                     if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
                     return (
-                      <div key={friendEmail} className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
-                        <p className="text-sm font-semibold text-[#2b1530]">{friend.profile.fullName}</p>
-                        <p className="text-sm text-[#785c42]">
+                      <div key={friendEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{friend.profile.fullName}</p>
+                        <p className="text-sm text-[#2C1A0E]">
                           @{friend.profile.username}
                           {friend.profile.schoolName ? ` • ${friend.profile.schoolName}` : ""}
                         </p>
-                        <Button radius="full" variant="flat" className="mt-3 bg-white text-[#c66b00]" onPress={() => removeFriend(friendEmail)}>
+                        <Button radius="full" variant="flat" className="mt-3 bg-white text-[#2C1A0E]" onPress={() => removeFriend(friendEmail)}>
                           remove friend
                         </Button>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-sm text-[#785c42]">no friends added yet.</p>
+                  <p className="text-sm text-[#2C1A0E]">no friends added yet.</p>
                 )}
               </CardBody>
             </Card>
@@ -3416,19 +3379,19 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">profile</p>
-                <p className="text-2xl font-semibold text-[#2b1530]">{user.profile.fullName}</p>
-                <p className="text-sm text-[#785c42]">@{user.profile.username}</p>
-                <p className="text-sm text-[#785c42]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                <p className="text-sm text-[#785c42]">{favoritePlaceIds.length} favorite food spots</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
+                <p className="text-2xl font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
+                <p className="text-sm text-[#2C1A0E]">@{user.profile.username}</p>
+                <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                <p className="text-sm text-[#2C1A0E]">{favoritePlaceIds.length} favorite food spots</p>
               </CardBody>
             </Card>
           </section>
         ) : null}
 
-        <nav className="fixed bottom-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 rounded-t-[28px] border border-[#ffe4c4] bg-white/96 px-4 py-4 shadow-[0_-12px_40px_rgba(254,138,1,0.12)] backdrop-blur">
+        <nav className="fixed bottom-3 left-1/2 z-20 w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur">
           <div className="grid grid-cols-5 gap-1 text-center">
             {[
               { label: "Feed", key: "feed" },
@@ -3440,13 +3403,15 @@ export default function Page() {
               <button
                 key={item.label}
                 type="button"
-                className="flex min-w-0 flex-col items-center gap-1"
+                className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
+                  studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
+                }`}
                 onClick={() => setStudentTab(item.key as "feed" | "favorites" | "rewards" | "social" | "profile")}
               >
-                <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#FE8A01]" : "text-[#a5b2c9]"}`}>
+                <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
                   {renderStudentTabIcon(item.key as "feed" | "favorites" | "rewards" | "social" | "profile", "h-6 w-6")}
                 </span>
-                <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#FE8A01]" : "text-[#a5b2c9]"}`}>
+                <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
                   {item.label}
                 </span>
               </button>
@@ -3460,7 +3425,7 @@ export default function Page() {
           <button
             type="button"
             aria-label="close notifications"
-            className="absolute inset-0 bg-[#2b1530]/20"
+            className="absolute inset-0 bg-[#2C1A0E]/20"
             onClick={() => setNotificationsOpen(false)}
           />
           <motion.aside
@@ -3468,16 +3433,16 @@ export default function Page() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.25 }}
-            className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-[#ffe2c2] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)]"
+            className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-[#FFF0D0] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)]"
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">notifications</p>
-                <h2 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2b1530]">
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">notifications</p>
+                <h2 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">
                   what’s new
                 </h2>
               </div>
-              <Button radius="full" variant="light" className="text-[#c66b00]" onPress={() => setNotificationsOpen(false)}>
+              <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setNotificationsOpen(false)}>
                 close
               </Button>
             </div>
@@ -3485,17 +3450,17 @@ export default function Page() {
             <div className="mt-6 space-y-3">
               {notificationItems.length ? (
                 notificationItems.map((item) => (
-                  <div key={item.id} className="rounded-[22px] border border-[#ffe4c4] bg-[#fff8f0] p-4">
+                  <div key={item.id} className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4">
                     <div className="flex items-start gap-3">
-                      <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#FE8A01] text-white" />
+                      <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#F5A623] text-white" />
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-[#2b1530]">{item.title}</p>
-                        <p className="mt-1 text-sm text-[#785c42]">{item.detail}</p>
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{item.title}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p>
                         {item.kind === "friend_request" ? (
                           <div className="mt-3 flex gap-2">
                             <Button
                               radius="full"
-                              className="bg-[#FE8A01] text-white"
+                              className="bg-[#F5A623] text-white"
                               onPress={() => {
                                 acceptFriendRequest(item.email);
                                 setStudentTab("social");
@@ -3507,7 +3472,7 @@ export default function Page() {
                             <Button
                               radius="full"
                               variant="flat"
-                              className="bg-white text-[#c66b00]"
+                              className="bg-white text-[#2C1A0E]"
                               onPress={() => {
                                 declineFriendRequest(item.email);
                                 setNotificationsOpen(false);
@@ -3520,7 +3485,7 @@ export default function Page() {
                           <div className="mt-3">
                             <Button
                               radius="full"
-                              className="bg-[#FE8A01] text-white"
+                              className="bg-[#F5A623] text-white"
                               onPress={() => {
                                 setStudentTab("feed");
                                 setNotificationsOpen(false);
@@ -3533,7 +3498,7 @@ export default function Page() {
                           <div className="mt-3">
                             <Button
                               radius="full"
-                              className="bg-[#FE8A01] text-white"
+                              className="bg-[#F5A623] text-white"
                               onPress={() => {
                                 setStudentTab("feed");
                                 setNotificationsOpen(false);
@@ -3552,7 +3517,7 @@ export default function Page() {
                   </div>
                 ))
               ) : (
-                <div className="rounded-[22px] border border-[#ffe4c4] bg-[#fff8f0] p-4 text-sm text-[#785c42]">
+                <div className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm text-[#2C1A0E]">
                   no notifications yet. friend requests, admin drops, and sunday dumps will show up here.
                 </div>
               )}

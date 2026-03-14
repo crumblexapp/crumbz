@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import {
   Geist,
   Geist_Mono,
@@ -41,11 +42,16 @@ const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
 });
 
+const youngSerif = localFont({
+  src: "./fonts/YoungSerif-Regular.ttf",
+  variable: "--font-young-serif",
+});
+
 export const metadata: Metadata = {
-  title: "crumble-students app",
-  description: "the crumble student app.",
+  title: "crumbz",
+  description: "the feed that keeps you hungry.",
   metadataBase: new URL("https://app.crumbleapp.eu"),
-  applicationName: "crumble-students app",
+  applicationName: "crumbz",
   icons: {
     icon: "/brand/crumbz-app-icon.png",
     apple: "/brand/crumbz-app-icon.png",
@@ -54,17 +60,17 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "crumble-students app",
+    title: "crumbz",
   },
   openGraph: {
-    title: "crumble-students app",
-    description: "the crumble student app.",
-    siteName: "crumble-students app",
+    title: "crumbz",
+    description: "the feed that keeps you hungry.",
+    siteName: "crumbz",
   },
   twitter: {
     card: "summary_large_image",
-    title: "crumble-students app",
-    description: "the crumble student app.",
+    title: "crumbz",
+    description: "the feed that keeps you hungry.",
   },
 };
 
@@ -77,7 +83,7 @@ export default function RootLayout({
     <html lang="en" className="light" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${spaceGrotesk.variable} ${bricolageGrotesque.variable} ${instrumentSerif.variable} min-h-screen text-foreground bg-background font-sans antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${spaceGrotesk.variable} ${bricolageGrotesque.variable} ${instrumentSerif.variable} ${youngSerif.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <Providers>{children}</Providers>
       </body>
