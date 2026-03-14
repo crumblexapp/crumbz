@@ -982,19 +982,12 @@ export default function Page() {
   });
   const storyRailItems = [
     {
-      id: "you",
-      label: "Your Feed",
-      picture: user.googleProfile?.picture,
+      id: "crumbz",
+      label: "crumbz",
+      picture: adminProfilePicture,
       ring: "#F5A623",
       badge: "live",
     },
-    ...friendAccounts.slice(0, 4).map((account, index) => ({
-      id: account.googleProfile?.email ?? `friend-${index}`,
-      label: account.profile.fullName.split(" ")[0] || account.profile.username,
-      picture: account.googleProfile?.picture,
-      ring: ["#FF3D6B", "#1FBF6B", "#7B4FFF", "#0EA5E9"][index % 4],
-      badge: null as string | null,
-    })),
   ];
   const mutualFansByPlace = Object.fromEntries(
     favoritePlaces.map((place) => [
@@ -3041,7 +3034,7 @@ export default function Page() {
                 <span className="text-2xl leading-none">🔔</span>
               </Badge>
             </button>
-            <button type="button" onClick={signOut} className="rounded-full">
+            <button type="button" onClick={() => setStudentTab("profile")} className="rounded-full">
               <Badge color="warning" content="" shape="circle" isInvisible>
                 <Avatar
                   src={user.googleProfile?.picture}
