@@ -3019,9 +3019,10 @@ export default function Page() {
           className="flex items-center justify-between border-b border-[#f3e7cf] pb-5"
         >
           <div>
-            <p className="text-xl uppercase tracking-[0.08em] text-[#57657f]">
+            <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#57657f]">
               hey, {user.profile.fullName.split(" ")[0].toUpperCase()}
             </p>
+            <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">fresh drops, saved spots, good recs</p>
           </div>
           <div className="flex items-center gap-3">
             <button
