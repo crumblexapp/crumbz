@@ -2261,13 +2261,13 @@ export default function Page() {
   if (!user.signedIn) {
     if (showWelcomeScreen) {
       return (
-        <main className="min-h-screen bg-[#FFF0D0] text-[#2C1A0E]">
-          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 py-5 font-[family-name:var(--font-manrope)]">
+        <main className="min-h-screen bg-[#F5A623] text-[#2C1A0E]">
+          <div className="mx-auto flex min-h-screen w-full max-w-md flex-col font-[family-name:var(--font-manrope)]">
             <motion.section
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
-              className="relative flex-1 overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
+              className="relative min-h-screen flex-1 overflow-hidden bg-[#F5A623]"
             >
               <Image
                 src="/brand/crumbz-onboarding.png"
@@ -2275,22 +2275,15 @@ export default function Page() {
                 fill
                 className="object-cover"
                 priority
-                sizes="(max-width: 768px) 100vw, 420px"
+                sizes="100vw"
               />
 
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#F5A623]/35 via-transparent to-transparent px-5 pb-5 pt-20">
-                <div className="flex justify-end">
-                  <Button
-                    radius="full"
-                    size="lg"
-                    className="h-14 bg-[#FFF0D0] px-5 text-[#FF3D6B] shadow-[0_12px_24px_rgba(47,23,20,0.18)]"
-                    onPress={() => setShowWelcomeScreen(false)}
-                    endContent={<span className="text-xl leading-none">→</span>}
-                  >
-                    continue
-                  </Button>
-                </div>
-              </div>
+              <button
+                type="button"
+                aria-label="continue"
+                className="absolute bottom-[6.5%] right-[7%] h-[7.5rem] w-[19rem] rounded-full"
+                onClick={() => setShowWelcomeScreen(false)}
+              />
             </motion.section>
           </div>
         </main>
