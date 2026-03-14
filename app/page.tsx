@@ -2541,7 +2541,7 @@ export default function Page() {
 
     return (
       <main className="min-h-screen bg-white text-[#2C1A0E]">
-        <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#FFF0D0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+        <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -3037,7 +3037,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-white text-[#2C1A0E]">
-      <div className="mx-auto min-h-screen w-full max-w-md bg-[radial-gradient(circle_at_top,_rgba(254,138,1,0.18),_transparent_34%),linear-gradient(180deg,_#ffffff_0%,_#FFF0D0_100%)] px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
