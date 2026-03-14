@@ -1083,7 +1083,7 @@ export default function Page() {
         </CardHeader>
         <CardBody className="gap-4 p-5">
           <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
-            <h3 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{post.title}</h3>
+            <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
             <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p>
           </div>
 
@@ -2525,7 +2525,7 @@ export default function Page() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-white/80">crumbz admin</p>
-                <h1 className="mt-2 font-[family-name:var(--font-bricolage)] text-4xl leading-none">
+                <h1 className="mt-2 font-[family-name:var(--font-young-serif)] text-4xl leading-none">
                   control room
                 </h1>
                 <p className="mt-2 text-sm text-white/88">{user.googleProfile?.email}</p>
@@ -3439,7 +3439,7 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
-                <p className="text-2xl font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
+                <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{user.profile.fullName}</p>
                 <p className="text-sm text-[#2C1A0E]">@{user.profile.username}</p>
                 <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
                 <p className="text-sm text-[#2C1A0E]">{favoritePlaceIds.length} favorite food spots</p>
