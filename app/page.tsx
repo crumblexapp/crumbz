@@ -3190,6 +3190,67 @@ export default function Page() {
                 </CardBody>
               </Card>
 
+              <Card className="overflow-hidden rounded-[30px] border-0 bg-[#eadffd] shadow-[0_18px_50px_rgba(123,79,255,0.16)]">
+                <CardBody className="flex-row items-center justify-between gap-4 p-5">
+                  <div className="max-w-[14rem]">
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2.3rem] leading-none text-[#2C1A0E]">
+                      your digest
+                    </p>
+                    <p className="mt-3 text-lg leading-7 text-[#4f526f]">
+                      your top picks and taste profile. updates sundays.
+                    </p>
+                    <Button radius="full" className="mt-4 h-12 bg-[#2C1A0E] px-8 text-white">
+                      open
+                    </Button>
+                  </div>
+                  <div className="relative h-40 w-32 shrink-0">
+                    <div className="absolute right-4 top-0 h-20 w-20 rounded-full bg-[#f05c1c]" />
+                    <div className="absolute left-2 top-4 rounded-full bg-[#dfff67] px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2C1A0E]">
+                      wild
+                    </div>
+                    <div className="absolute bottom-0 right-0 flex h-24 w-16 items-center justify-center rounded-[16px] bg-[#ff7b2f] text-4xl">
+                      🌶️
+                    </div>
+                    <div className="absolute bottom-6 left-5 text-xl text-[#dfff67]">✦</div>
+                    <div className="absolute bottom-2 left-1 text-base text-[#dfff67]">✦</div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card className="rounded-[30px] border border-[#f1e8da] bg-[#fff8ee] shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+                <CardBody className="gap-4 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        plans & perks
+                      </p>
+                      <p className="mt-2 text-base text-[#6c7289]">perfect places and perks for the squad</p>
+                    </div>
+                    <Button radius="full" variant="light" className="text-[#f05c1c]">
+                      see all
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-[22px] bg-[#dff4ff] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#0EA5E9]">links</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">campus guides</p>
+                    </div>
+                    <div className="rounded-[22px] bg-[#e7ffd7] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#1FBF6B]">deals</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">new discounts</p>
+                    </div>
+                    <div className="rounded-[22px] bg-[#ffe2ec] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#FF3D6B]">likes</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">hot picks</p>
+                    </div>
+                    <div className="rounded-[22px] bg-[#efe4ff] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#7B4FFF]">premium</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">reward drops</p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
               <div className="space-y-4">
                 {displayPosts.map(renderFeedCard)}
               </div>
@@ -3198,7 +3259,7 @@ export default function Page() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{communityTitle}</h3>
+                    <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{communityTitle}</h3>
                   </div>
                   <Chip className="bg-[#FFF0D0] text-[#F5A623]">{visibleStudentWeeklyDumps.length} dumps</Chip>
                 </div>
@@ -3221,7 +3282,7 @@ export default function Page() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">favorites</p>
-                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">
+                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
                       food map for {user.profile.city}
                     </h2>
                     <p className="text-sm text-[#2C1A0E]">
@@ -3259,7 +3320,7 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">rewards</p>
-                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{rewardsTitle}</h2>
+                <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{rewardsTitle}</h2>
                 <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
               </CardBody>
             </Card>
@@ -3304,7 +3365,7 @@ export default function Page() {
               <CardBody className="gap-4 p-5">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">social</p>
-                  <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">add your friends</h2>
+                  <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">add your friends</h2>
                   <p className="text-sm text-[#2C1A0E]">search by email or username and add them to your crumbz circle.</p>
                 </div>
                 <Input
