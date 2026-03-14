@@ -2275,11 +2275,11 @@ export default function Page() {
                   alt="crumbz logo"
                   width={1600}
                   height={1600}
-                  className="h-auto w-full max-w-[42rem] object-contain"
+                  className="h-auto w-full max-w-[40rem] object-contain"
                   priority
                 />
-                <div className="-mt-3 w-full max-w-[36rem] rounded-[24px] bg-[#FFF0D0] px-4 py-3 text-center shadow-[0_10px_24px_rgba(44,26,14,0.14)]">
-                  <p className="text-[clamp(1.15rem,4.5vw,2rem)] font-extrabold tracking-[-0.04em] text-[#FF3D6B]">
+                <div className="-mt-4 w-full max-w-[36rem] rounded-[22px] bg-[#FFF0D0] px-4 py-3 text-center shadow-[0_10px_24px_rgba(44,26,14,0.14)]">
+                  <p className="text-[clamp(1.05rem,4.2vw,1.9rem)] font-extrabold tracking-[-0.04em] text-[#FF3D6B]">
                     the feed that keeps you hungry
                   </p>
                 </div>
