@@ -2297,27 +2297,16 @@ export default function Page() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] px-6 pb-8 pt-6 text-white shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
+            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
           >
-            <Chip className="border border-white/20 bg-white/25 text-white">crumbz</Chip>
-            <div className="mt-14 flex min-h-[360px] flex-col justify-center">
-              <Image
-                src="/brand/crumbz-logo.png"
-                alt="crumbz logo"
-                width={1600}
-                height={1600}
-                className="mx-auto h-auto w-[82%] object-contain"
-                priority
-              />
-              <div className="mx-auto mt-4 inline-flex max-w-full -rotate-[2deg] rounded-[22px] bg-[#FFF0D0] px-5 py-3 text-center shadow-[0_10px_18px_rgba(47,23,20,0.16)]">
-                <p className="font-[family-name:var(--font-manrope)] text-[clamp(1.3rem,4.8vw,2rem)] font-extrabold tracking-[-0.04em] text-[#FF3D6B]">
-                  the feed that keeps you hungry
-                </p>
-              </div>
-            </div>
-            <p className="mt-8 max-w-[18rem] text-base leading-7 text-[#FFF0D0]">
-              the food brand app where the crumble team posts chapters, stories, deals, and collabs live.
-            </p>
+            <Image
+              src="/brand/onboarding-page-exact.png"
+              alt="crumbz brand card"
+              width={1080}
+              height={1920}
+              className="h-auto w-full object-cover"
+              priority
+            />
           </motion.section>
 
           <motion.section
