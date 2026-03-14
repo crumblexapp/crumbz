@@ -845,21 +845,24 @@ export default function Page() {
   const hasLoadedDataRef = useRef(false);
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
+  const liveAccount =
+    accounts.find((account) => account.googleProfile?.email === user.googleProfile?.email) ?? null;
+  const liveProfile = liveAccount?.profile ?? user.profile;
   const needsOnboarding =
     user.signedIn &&
-    (!user.profile.fullName ||
-      !user.profile.username ||
-      !user.profile.city ||
-      user.profile.isStudent === null ||
-      (user.profile.isStudent && !user.profile.schoolName));
-  const fullNameValue = fullName ?? user.profile.fullName ?? user.googleProfile?.name ?? "";
-  const usernameValue = username ?? user.profile.username ?? "";
-  const cityValue = city ?? user.profile.city ?? "";
-  const isStudentValue = isStudent ?? user.profile.isStudent;
-  const schoolNameValue = schoolName ?? user.profile.schoolName ?? "";
+    (!liveProfile.fullName ||
+      !liveProfile.username ||
+      !liveProfile.city ||
+      liveProfile.isStudent === null ||
+      (liveProfile.isStudent && !liveProfile.schoolName));
+  const fullNameValue = fullName ?? liveProfile.fullName ?? user.googleProfile?.name ?? "";
+  const usernameValue = username ?? liveProfile.username ?? "";
+  const cityValue = city ?? liveProfile.city ?? "";
+  const isStudentValue = isStudent ?? liveProfile.isStudent;
+  const schoolNameValue = schoolName ?? liveProfile.schoolName ?? "";
   const matchingSchools = schoolsByCity[normalizeCityKey(cityValue)] ?? [];
   const shouldShowSchoolField = isStudentValue === true;
-  const isNonStudent = user.profile.isStudent === false;
+  const isNonStudent = liveProfile.isStudent === false;
   const weeklyDropEyebrow = isNonStudent ? "weekly drop" : "weekly dump";
   const weeklyDropTitle = isNonStudent ? "sunday food drop" : "sunday weekly food dump";
   const weeklyDropBody = isNonStudent
@@ -900,7 +903,7 @@ export default function Page() {
     const authorEmail = post.authorEmail.toLowerCase();
     const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
 
-    return authorEmail === currentEmail || user.profile.friends.includes(post.authorEmail);
+    return authorEmail === currentEmail || liveProfile.friends.includes(post.authorEmail);
   });
   const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
   const fallbackStories = [
@@ -935,20 +938,20 @@ export default function Page() {
     const query = friendQuery.trim().toLowerCase();
     if (!query || email === user.googleProfile?.email) return false;
     if (email.toLowerCase() === ADMIN_EMAIL) return false;
-    if (user.profile.friends.includes(email)) return false;
-    if (user.profile.outgoingFriendRequests.includes(email)) return false;
-    if (user.profile.incomingFriendRequests.includes(email)) return false;
+    if (liveProfile.friends.includes(email)) return false;
+    if (liveProfile.outgoingFriendRequests.includes(email)) return false;
+    if (liveProfile.incomingFriendRequests.includes(email)) return false;
 
     return (
       email.toLowerCase().includes(query) ||
       account.profile.username.toLowerCase().includes(query)
     );
   });
-  const favoritePlaceIds = user.profile.favoritePlaceIds ?? [];
-  const favoriteCityCenter = cityCenters[normalizeCityKey(user.profile.city)] ?? [52.2297, 21.0122];
+  const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
+  const favoriteCityCenter = cityCenters[normalizeCityKey(liveProfile.city)] ?? [52.2297, 21.0122];
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
-    return email.toLowerCase() !== ADMIN_EMAIL && user.profile.friends.includes(email);
+    return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
   const mutualFansByPlace = Object.fromEntries(
     favoritePlaces.map((place) => [
@@ -971,7 +974,7 @@ export default function Page() {
       detail: announcement.body,
       picture: adminProfilePicture,
     })),
-    ...user.profile.incomingFriendRequests
+    ...liveProfile.incomingFriendRequests
       .map((requestEmail) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
         if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
@@ -3266,8 +3269,8 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">friend requests</p>
-                {user.profile.incomingFriendRequests.length ? (
-                  user.profile.incomingFriendRequests.map((requestEmail) => {
+                {liveProfile.incomingFriendRequests.length ? (
+                  liveProfile.incomingFriendRequests.map((requestEmail) => {
                     const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
                     if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
@@ -3327,11 +3330,11 @@ export default function Page() {
                   )
                 ) : null}
 
-                {user.profile.outgoingFriendRequests.length ? (
+                {liveProfile.outgoingFriendRequests.length ? (
                   <div className="rounded-[18px] bg-[#fff8f0] px-3 py-3">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#b56d19]">pending</p>
                     <p className="mt-1 text-sm text-[#785c42]">
-                      waiting on {user.profile.outgoingFriendRequests.length} friend request{user.profile.outgoingFriendRequests.length === 1 ? "" : "s"}.
+                      waiting on {liveProfile.outgoingFriendRequests.length} friend request{liveProfile.outgoingFriendRequests.length === 1 ? "" : "s"}.
                     </p>
                   </div>
                 ) : null}
@@ -3341,8 +3344,8 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#ffe4c4] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#b56d19]">your people</p>
-                {user.profile.friends.length ? (
-                  user.profile.friends.map((friendEmail) => {
+                {liveProfile.friends.length ? (
+                  liveProfile.friends.map((friendEmail) => {
                     const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
                     if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
