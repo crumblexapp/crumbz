@@ -2273,7 +2273,7 @@ export default function Page() {
                 src="/brand/onboarding-page-exact.png"
                 alt="crumbz onboarding"
                 fill
-                className="object-contain"
+                className="object-cover"
                 priority
                 sizes="100vw"
               />
