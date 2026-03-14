@@ -2270,7 +2270,7 @@ export default function Page() {
               className="relative flex min-h-screen flex-1 items-center justify-center overflow-hidden bg-[#F5A623]"
             >
               <Image
-                src="/onboarding%20page.png"
+                src="/brand/onboarding-page-exact.png"
                 alt="crumbz onboarding"
                 fill
                 className="object-contain"
