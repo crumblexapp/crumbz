@@ -907,11 +907,6 @@ export default function Page() {
   const matchingSchools = schoolsByCity[normalizeCityKey(cityValue)] ?? [];
   const shouldShowSchoolField = isStudentValue === true;
   const isNonStudent = liveProfile.isStudent === false;
-  const weeklyDropEyebrow = isNonStudent ? "weekly drop" : "weekly dump";
-  const weeklyDropTitle = isNonStudent ? "sunday food drop" : "sunday weekly food dump";
-  const weeklyDropBody = isNonStudent
-    ? "one sunday post only. add up to 7 food photos, and your circle will see it in their feed."
-    : "one sunday post only. add up to 7 food photos, and only your friends will see it in their feed.";
   const communityEyebrow = isNonStudent ? "community drops" : "student dumps";
   const communityTitle = isNonStudent ? "weekly food spots from your circle" : "weekly food spots from the community";
   const communityEmpty = isNonStudent
@@ -950,18 +945,6 @@ export default function Page() {
     return authorEmail === currentEmail || liveProfile.friends.includes(post.authorEmail);
   });
   const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
-  const fallbackStories = [
-    {
-      id: "story-coming-soon",
-      title: "chapter one",
-      type: "coming soon",
-    },
-  ];
-  const storyPosts = (
-    displayPosts.filter((post) => post.type === "chapter" || post.type === "story" || post.type === "collab").slice(0, 5) || []
-  ).length
-    ? displayPosts.filter((post) => post.type === "chapter" || post.type === "story" || post.type === "collab").slice(0, 5)
-    : fallbackStories;
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
   const currentSundayKey = getSundayKey(today);
@@ -997,6 +980,22 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
+  const storyRailItems = [
+    {
+      id: "you",
+      label: "Your Feed",
+      picture: user.googleProfile?.picture,
+      ring: "#F5A623",
+      badge: "live",
+    },
+    ...friendAccounts.slice(0, 4).map((account, index) => ({
+      id: account.googleProfile?.email ?? `friend-${index}`,
+      label: account.profile.fullName.split(" ")[0] || account.profile.username,
+      picture: account.googleProfile?.picture,
+      ring: ["#FF3D6B", "#1FBF6B", "#7B4FFF", "#0EA5E9"][index % 4],
+      badge: null as string | null,
+    })),
+  ];
   const mutualFansByPlace = Object.fromEntries(
     favoritePlaces.map((place) => [
       place.id,
@@ -3024,25 +3023,30 @@ export default function Page() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="flex items-center justify-between"
+          className="flex items-center justify-between border-b border-[#f3e7cf] pb-5"
         >
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-[#2C1A0E]">crumbz</p>
-            <h1 className="mt-2 font-[family-name:var(--font-bricolage)] text-4xl leading-none text-[#2C1A0E]">
-              hey, {user.profile.fullName.split(" ")[0]}
-            </h1>
-            <p className="mt-2 text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+            <p className="font-[family-name:var(--font-bricolage)] text-3xl italic leading-none text-[#f05c1c]">crumbz</p>
+            <p className="mt-2 text-xl uppercase tracking-[0.08em] text-[#57657f]">
+              hey, {user.profile.fullName.split(" ")[0].toUpperCase()}
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="light" radius="full" className="text-[#2C1A0E]" onPress={signOut}>
-              log out
-            </Button>
-            <button type="button" onClick={() => setNotificationsOpen(true)} className="rounded-full">
-              <Badge color="warning" content={notificationCount} shape="circle">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(true)}
+              className="rounded-full bg-[#fff7ea] p-2.5 text-[#2C1A0E] shadow-[0_8px_20px_rgba(44,26,14,0.06)]"
+            >
+              <Badge color="warning" content={notificationCount} shape="circle" className="text-[#2C1A0E]">
+                <span className="text-2xl leading-none">🔔</span>
+              </Badge>
+            </button>
+            <button type="button" onClick={signOut} className="rounded-full">
+              <Badge color="warning" content="" shape="circle" isInvisible>
                 <Avatar
                   src={user.googleProfile?.picture}
                   name={user.profile.fullName}
-                  className="h-12 w-12 border-2 border-[#F5A623] bg-[#FFF0D0] text-[#F5A623]"
+                  className="h-12 w-12 border-2 border-[#f8c6ad] bg-[#FFF0D0] text-[#F5A623]"
                 />
               </Badge>
             </button>
@@ -3051,46 +3055,33 @@ export default function Page() {
 
         {studentTab === "feed" ? (
           <>
-            {latestAnnouncement ? (
-              <motion.section
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="mt-6"
-              >
-                <Card className="rounded-[28px] border border-[#FFF0D0] bg-[linear-gradient(135deg,_#FFF0D0,_#ffffff)] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
-                  <CardBody className="gap-2 p-5">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">push from crumbz</p>
-                    <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">{latestAnnouncement.title}</h2>
-                    <p className="text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
-                  </CardBody>
-                </Card>
-              </motion.section>
-            ) : null}
-
             <motion.section
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: 0.08 }}
               className="mt-6"
             >
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-[family-name:var(--font-space-grotesk)] text-2xl">stories</h2>
-                <Chip className="bg-[#FFF0D0] text-[#F5A623]">live</Chip>
-              </div>
-
               <div className="flex gap-4 overflow-x-auto pb-2">
-                {storyPosts.map((story) => (
-                  <div key={story.id} className="min-w-[82px] text-center">
-                    <div className="mx-auto rounded-full bg-[linear-gradient(135deg,_#F5A623,_#FFF0D0)] p-[3px] shadow-[0_10px_30px_rgba(254,138,1,0.22)]">
+                {storyRailItems.map((item) => (
+                  <div key={item.id} className="min-w-[82px] text-center">
+                    <div
+                      className="mx-auto rounded-full p-[3px] shadow-[0_10px_30px_rgba(44,26,14,0.08)]"
+                      style={{ background: `linear-gradient(135deg, ${item.ring}, #f4f0e7)` }}
+                    >
                       <Avatar
-                        src={adminProfilePicture}
-                        name="crumbz"
-                        className="h-[76px] w-[76px] bg-[#2C1A0E] text-sm font-semibold text-white"
+                        src={item.picture}
+                        name={item.label}
+                        className="h-[76px] w-[76px] bg-[#f1f2f6] text-sm font-semibold text-[#2C1A0E]"
                       />
                     </div>
-                    <p className="mt-2 text-xs font-semibold text-[#2C1A0E]">{story.title.replace(/\s+coming soon$/i, "")}</p>
-                    <p className="text-xs text-[#2C1A0E]">coming soon</p>
+                    {item.badge ? (
+                      <div className="-mt-2">
+                        <span className="rounded-full bg-[#f05c1c] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
+                          {item.badge}
+                        </span>
+                      </div>
+                    ) : null}
+                    <p className="mt-2 text-sm font-medium text-[#53627b]">{item.label}</p>
                   </div>
                 ))}
               </div>
@@ -3102,27 +3093,61 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
-              <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]">
+                <CardBody className="gap-4 p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
+                      <h3 className="mt-3 text-[2rem] font-bold leading-[1.02] text-white">
+                        {latestAnnouncement?.title || "Upcoming Food Mob"}
+                      </h3>
+                      <p className="mt-3 max-w-[15rem] text-lg leading-8 text-white/76">
+                        {latestAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
+                      </p>
+                    </div>
+                    <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button radius="full" className="h-14 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
+                      remind me
+                    </Button>
+                    <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{weeklyDropEyebrow}</p>
-                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-2xl text-[#2C1A0E]">
-                        {weeklyDropTitle}
-                      </h3>
-                      <p className="mt-2 text-sm text-[#2C1A0E]">{weeklyDropBody}</p>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
+                        sunday food drop
+                      </p>
+                      <p className="mt-3 text-lg text-[#73809a]">Add up to 7 photos from your week.</p>
                     </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">1 per sunday</Chip>
+                    <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{weeklyDumpMediaUrls.length}/7</Chip>
                   </div>
 
                   <form className="space-y-4" onSubmit={submitWeeklyDump}>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[0, 1, 2, 3].map((index) => (
+                        <div
+                          key={index}
+                          className={`flex aspect-square items-center justify-center rounded-[18px] ${
+                            index === 0 && !weeklyDumpMediaUrls.length
+                              ? "border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24]"
+                              : "bg-[#eef2f8]"
+                          }`}
+                        >
+                          {index === 0 && !weeklyDumpMediaUrls.length ? "+" : null}
+                        </div>
+                      ))}
+                    </div>
                     <Textarea
-                      label="caption"
-                      labelPlacement="outside"
                       placeholder="what hit this week?"
                       value={weeklyDumpCaption}
                       onValueChange={setWeeklyDumpCaption}
-                      classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                      classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
                     />
                     <input
                       key={weeklyDumpInputKey}
@@ -3133,10 +3158,10 @@ export default function Page() {
                       onChange={(event) => {
                         void handleWeeklyDumpFiles(event.target.files);
                       }}
-                      className="rounded-[18px] border border-[#FFF0D0] bg-[#FFF0D0] px-3 py-3 text-sm text-[#2C1A0E] disabled:opacity-50"
+                      className="rounded-[18px] border border-[#f1e8da] bg-[#f8f4ec] px-3 py-3 text-sm text-[#2C1A0E] disabled:opacity-50"
                     />
                     {weeklyDumpMediaUrls.length ? (
-                      <div className="rounded-[20px] bg-[#FFF0D0] p-3">
+                      <div className="rounded-[20px] bg-[#f8f4ec] p-3">
                         <PostMediaPreview
                           post={{
                             id: "weekly-dump-preview",
@@ -3157,22 +3182,18 @@ export default function Page() {
                         />
                       </div>
                     ) : null}
-                    {weeklyDumpNotice ? <p className="text-sm text-[#F5A623]">{weeklyDumpNotice}</p> : null}
-                    <Button
-                      type="submit"
-                      radius="full"
-                      size="lg"
-                      isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
-                      className="bg-[#F5A623] text-white disabled:opacity-60"
-                    >
-                      {isUploadingWeeklyDump
-                        ? "uploading your dump..."
-                        : hasSubmittedWeeklyDumpThisWeek
-                          ? "already posted this sunday"
-                          : canSubmitWeeklyDumpToday
-                            ? "submit weekly food dump"
-                            : "drops open on sunday"}
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
+                      <Button
+                        type="submit"
+                        radius="full"
+                        size="lg"
+                        isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
+                        className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                      >
+                        →
+                      </Button>
+                    </div>
                   </form>
                 </CardBody>
               </Card>
