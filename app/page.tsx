@@ -627,6 +627,16 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
   };
 }
 
+async function seedAccountsToBackend(accounts: StoredUser[]) {
+  for (const account of accounts) {
+    if (!account.googleProfile?.email) continue;
+    await mutateAccountState({
+      action: "upsert_account",
+      account,
+    });
+  }
+}
+
 function isSunday(date: Date) {
   return date.getDay() === 0;
 }
@@ -1136,23 +1146,21 @@ export default function Page() {
   };
 
   const syncSharedState = ({
-    nextAccounts,
     nextPosts,
     nextInteractions,
     nextAnnouncements,
   }: {
-    nextAccounts?: StoredUser[];
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
     nextAnnouncements?: AppAnnouncement[];
   }) => {
     void fetch("/api/state", {
       method: "POST",
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        ...(nextAccounts ? { accounts: nextAccounts } : {}),
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
@@ -1184,7 +1192,7 @@ export default function Page() {
       });
     });
 
-    void fetch("/api/state")
+    void fetch("/api/state", { cache: "no-store" })
       .then((response) => response.json())
       .then((payload) => {
         if (!payload?.ok) return;
@@ -1193,8 +1201,8 @@ export default function Page() {
           const serverHasState = hasAnySharedState(payload);
 
           if (!serverHasState) {
+            void seedAccountsToBackend(nextAccounts).catch(() => undefined);
             syncSharedState({
-              nextAccounts,
               nextPosts,
               nextInteractions: nextInteractions,
             });
@@ -1327,18 +1335,6 @@ export default function Page() {
   }, [accounts]);
 
   useEffect(() => {
-    if (!hasLoadedDataRef.current) return;
-
-    const timeout = window.setTimeout(() => {
-      syncSharedState({
-        nextAccounts: accounts,
-      });
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [accounts]);
-
-  useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     try {
       window.localStorage.setItem(POSTS_KEY, JSON.stringify(serializePostsForStorage(posts)));
@@ -1398,7 +1394,7 @@ export default function Page() {
     if (!user.signedIn) return;
 
     const syncFromServer = () => {
-      void fetch("/api/state")
+      void fetch("/api/state", { cache: "no-store" })
         .then((response) => response.json())
         .then((payload) => {
           if (!payload?.ok) return;
@@ -1409,8 +1405,8 @@ export default function Page() {
             const localAccounts = readAccounts();
             const localPosts = readPosts();
             const localInteractions = readInteractions();
+            void seedAccountsToBackend(localAccounts).catch(() => undefined);
             syncSharedState({
-              nextAccounts: localAccounts,
               nextPosts: localPosts,
               nextInteractions: localInteractions,
               nextAnnouncements: announcements,
@@ -1451,7 +1447,7 @@ export default function Page() {
           }
 
           const currentMode = authModeRef.current;
-          const sharedAccounts = await fetch("/api/state")
+          const sharedAccounts = await fetch("/api/state", { cache: "no-store" })
             .then((result) => result.json())
             .then((payload) => (payload?.ok ? (payload.accounts as StoredUser[]) : null))
             .catch(() => null);

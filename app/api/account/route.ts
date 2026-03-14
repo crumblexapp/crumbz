@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const STATE_ROW_ID = "crumbz-app-state";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 
 type StoredUser = {
   signedIn: boolean;
@@ -41,26 +44,41 @@ function getEmail(account: StoredUser) {
 }
 
 async function readAccounts() {
-  const { data, error } = await supabaseServer
+  const primary = await supabaseServer
     .from("app_state")
     .select("accounts")
-    .eq("id", STATE_ROW_ID)
+    .eq("id", ACCOUNTS_ROW_ID)
+    .maybeSingle();
+
+  if (Array.isArray(primary.data?.accounts) && primary.data.accounts.length) {
+    return {
+      accounts: (primary.data.accounts as StoredUser[]).map(normalizeAccount),
+      error: primary.error,
+    };
+  }
+
+  const fallback = await supabaseServer
+    .from("app_state")
+    .select("accounts")
+    .eq("id", "crumbz-app-state")
     .maybeSingle();
 
   return {
-    accounts: Array.isArray(data?.accounts) ? (data.accounts as StoredUser[]).map(normalizeAccount) : [],
-    error,
+    accounts: Array.isArray(fallback.data?.accounts) ? (fallback.data.accounts as StoredUser[]).map(normalizeAccount) : [],
+    error: primary.error ?? fallback.error,
   };
 }
 
 async function writeAccounts(accounts: StoredUser[]) {
   return supabaseServer
     .from("app_state")
-    .update({
+    .upsert({
+      id: ACCOUNTS_ROW_ID,
       accounts,
       updated_at: new Date().toISOString(),
-    })
-    .eq("id", STATE_ROW_ID);
+    }, { onConflict: "id" })
+    .select("accounts")
+    .single();
 }
 
 export async function POST(request: Request) {
@@ -285,14 +303,19 @@ export async function POST(request: Request) {
     });
   }
 
-  const { error: writeError } = await writeAccounts(nextAccounts);
+  const { data: savedData, error: writeError } = await writeAccounts(nextAccounts);
   if (writeError) {
     return NextResponse.json({ ok: false, message: writeError.message }, { status: 500 });
   }
 
+  const savedAccounts = Array.isArray(savedData?.accounts) ? (savedData.accounts as StoredUser[]).map(normalizeAccount) : nextAccounts;
+  if (action !== "upsert_account" && nextUser) {
+    nextUser = savedAccounts.find((account) => getEmail(account) === getEmail(nextUser as StoredUser)) ?? nextUser;
+  }
+
   return NextResponse.json({
     ok: true,
-    accounts: nextAccounts,
+    accounts: savedAccounts,
     user: nextUser,
   });
 }

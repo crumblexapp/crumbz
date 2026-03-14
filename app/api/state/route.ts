@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const STATE_ROW_ID = "crumbz-app-state";
+const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const ANNOUNCEMENTS_META_KEY = "__announcements";
 
 function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
@@ -56,9 +60,21 @@ async function readAppState() {
   };
 }
 
+async function readAccountState() {
+  const { data, error } = await supabaseServer
+    .from("app_state")
+    .select("accounts")
+    .eq("id", ACCOUNTS_ROW_ID)
+    .maybeSingle();
+
+  return { data, error };
+}
+
 export async function GET() {
   const { data, error, supportsAnnouncements } = await readAppState();
+  const { data: accountData } = await readAccountState();
   const stateData = data as { accounts?: unknown; posts?: unknown; interactions?: unknown; announcements?: unknown } | null;
+  const accountState = accountData as { accounts?: unknown } | null;
   const fallbackMeta = splitInteractionsAndAnnouncements(stateData?.interactions);
 
   if (error) {
@@ -67,10 +83,14 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    accounts: stateData?.accounts ?? [],
+    accounts: accountState?.accounts ?? stateData?.accounts ?? [],
     posts: stateData?.posts ?? [],
     interactions: supportsAnnouncements ? stateData?.interactions ?? {} : fallbackMeta.interactions,
     announcements: supportsAnnouncements ? stateData?.announcements ?? [] : fallbackMeta.announcements,
+  }, {
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+    },
   });
 }
 
@@ -95,10 +115,6 @@ export async function POST(request: Request) {
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-
-  if ("accounts" in (body ?? {})) {
-    updates.accounts = body?.accounts ?? [];
-  }
 
   if ("posts" in (body ?? {})) {
     updates.posts = body?.posts ?? [];
