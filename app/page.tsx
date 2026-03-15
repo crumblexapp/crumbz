@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
@@ -780,13 +780,16 @@ function PostMediaPreview({ post }: { post: AppPost }) {
 
   if (post.mediaKind === "photo") {
     return (
-      <Image
+      <>
+        {/* uploaded dump images come straight from storage urls, so a plain img avoids remote loader issues here. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={mediaUrls[0]}
         alt={post.title}
         className="h-72 w-full rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
-        width={1200}
-        height={1200}
+        loading="lazy"
       />
+      </>
     );
   }
 
@@ -801,14 +804,16 @@ function PostMediaPreview({ post }: { post: AppPost }) {
   return (
     <div className="flex gap-3 overflow-x-auto pb-1">
       {mediaUrls.map((url) => (
-        <Image
-          key={url}
-          src={url}
-          alt={post.title}
-          className="h-64 w-56 shrink-0 rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
-          width={900}
-          height={1200}
-        />
+        <Fragment key={url}>
+          {/* carousel images use the same direct storage urls as the single-photo case above. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={post.title}
+            className="h-64 w-56 shrink-0 rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
+            loading="lazy"
+          />
+        </Fragment>
       ))}
     </div>
   );
@@ -941,8 +946,9 @@ export default function Page() {
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
     const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+    const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
 
-    return authorEmail === currentEmail || liveProfile.friends.includes(post.authorEmail);
+    return authorEmail === currentEmail || friendEmails.includes(authorEmail);
   });
   const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
   const today = new Date();
@@ -1887,7 +1893,7 @@ export default function Page() {
   const submitWeeklyDump = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const authorEmail = user.googleProfile?.email;
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
 
     if (!canSubmitWeeklyDumpToday) {
