@@ -947,6 +947,7 @@ export default function Page() {
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
+  const [adminActionNotice, setAdminActionNotice] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
@@ -2079,10 +2080,11 @@ export default function Page() {
 
   const deleteUserFromAdmin = (targetEmail: string) => {
     if (typeof window !== "undefined") {
-      const confirmed = window.confirm("delete this user and wipe their posts, likes, comments, shares, and friend links?");
+      const confirmed = window.confirm("delete this user from the backend and wipe their posts, likes, comments, shares, and friend links?");
       if (!confirmed) return;
     }
 
+    setAdminActionNotice("");
     void mutateAccountState({
       action: "delete_account",
       targetEmail,
@@ -2095,9 +2097,10 @@ export default function Page() {
         setAccounts(result.accounts);
         setPosts((current) => current.filter((post) => post.authorEmail.toLowerCase() !== targetEmail.toLowerCase()));
         setInteractions((current) => removeUserFromInteractions(current, targetEmail, deletedPostIds));
+        setAdminActionNotice("user deleted from backend. if they come back with google, they’ll need to sign up again.");
       })
       .catch(() => {
-        setError("that delete didn’t stick. try again.");
+        setAdminActionNotice("that delete didn’t stick. try again.");
       });
   };
 
@@ -2751,6 +2754,12 @@ export default function Page() {
                       </Card>
                     ))}
                   </div>
+
+                  {adminActionNotice ? (
+                    <Card className="rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                      <CardBody className="p-4 text-sm text-[#2C1A0E]">{adminActionNotice}</CardBody>
+                    </Card>
+                  ) : null}
 
                   <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
