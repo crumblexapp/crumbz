@@ -773,6 +773,8 @@ function getVideoAspectClass(ratio: VideoRatio) {
 
 function PostMediaPreview({ post }: { post: AppPost }) {
   const mediaUrls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
+  const [activeIndex, setActiveIndex] = useState(0);
+  const currentIndex = Math.min(activeIndex, mediaUrls.length - 1);
 
   if (post.mediaKind === "none" || !mediaUrls.length) {
     return null;
@@ -802,19 +804,51 @@ function PostMediaPreview({ post }: { post: AppPost }) {
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1">
-      {mediaUrls.map((url) => (
-        <Fragment key={url}>
-          {/* carousel images use the same direct storage urls as the single-photo case above. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt={post.title}
-            className="h-64 w-56 shrink-0 rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
-            loading="lazy"
-          />
-        </Fragment>
-      ))}
+    <div className="space-y-3">
+      <div className="relative overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
+        {/* carousel images use the same direct storage urls as the single-photo case above. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={mediaUrls[currentIndex]}
+          alt={`${post.title} ${currentIndex + 1}`}
+          className="h-[28rem] w-full object-cover"
+          loading="lazy"
+        />
+        {mediaUrls.length > 1 ? (
+          <>
+            <button
+              type="button"
+              aria-label="previous photo"
+              onClick={() => setActiveIndex((current) => (current <= 0 ? mediaUrls.length - 1 : current - 1))}
+              className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E] shadow-[0_10px_24px_rgba(44,26,14,0.16)]"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              aria-label="next photo"
+              onClick={() => setActiveIndex((current) => (current + 1) % mediaUrls.length)}
+              className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E] shadow-[0_10px_24px_rgba(44,26,14,0.16)]"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
+      </div>
+      {mediaUrls.length > 1 ? (
+        <div className="flex items-center justify-center gap-2">
+          {mediaUrls.map((url, index) => (
+            <Fragment key={url}>
+              <button
+                type="button"
+                aria-label={`show photo ${index + 1}`}
+                onClick={() => setActiveIndex(index)}
+                className={`h-2.5 rounded-full transition-all ${index === currentIndex ? "w-6 bg-[#F5A623]" : "w-2.5 bg-[#D8DFEB]"}`}
+              />
+            </Fragment>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -888,6 +922,7 @@ export default function Page() {
     videoRatio: "9:16" as VideoRatio,
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
   const authModeRef = useRef<AuthMode>("signup");
@@ -2124,13 +2159,20 @@ export default function Page() {
       return;
     }
 
+    const remainingSlots = 7 - weeklyDumpMediaUrls.length;
+    if (remainingSlots <= 0) {
+      setWeeklyDumpNotice("your sunday drop is full. send it or swap photos next.");
+      setWeeklyDumpInputKey((current) => current + 1);
+      return;
+    }
+
     setIsUploadingWeeklyDump(true);
     setWeeklyDumpNotice("uploading your food dump...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: "carousel",
-        maxFiles: 7,
+        maxFiles: remainingSlots,
         skipSizeLimit: true,
         setNotice: setWeeklyDumpNotice,
       });
@@ -2139,13 +2181,15 @@ export default function Page() {
         return;
       }
 
-      setWeeklyDumpMediaUrls(uploadResults);
+      setWeeklyDumpMediaUrls((current) => [...current, ...uploadResults].slice(0, 7));
       setWeeklyDumpNotice("your weekly dump is loaded.");
       setWeeklyDumpInputKey((current) => current + 1);
     } finally {
       setIsUploadingWeeklyDump(false);
     }
   };
+
+  const weeklyDumpTileCount = Math.max(4, weeklyDumpMediaUrls.length + (weeklyDumpMediaUrls.length < 7 ? 1 : 0));
 
   const addComment = (event: FormEvent<HTMLFormElement>, postId: string) => {
     event.preventDefault();
@@ -3190,18 +3234,37 @@ export default function Page() {
 
                   <form className="space-y-4" onSubmit={submitWeeklyDump}>
                     <div className="grid grid-cols-4 gap-3">
-                      {[0, 1, 2, 3].map((index) => (
-                        <div
-                          key={index}
-                          className={`flex aspect-square items-center justify-center rounded-[18px] ${
-                            index === 0 && !weeklyDumpMediaUrls.length
-                              ? "border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24]"
-                              : "bg-[#eef2f8]"
-                          }`}
-                        >
-                          {index === 0 && !weeklyDumpMediaUrls.length ? "+" : null}
-                        </div>
-                      ))}
+                      {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
+                        const showAddTile = weeklyDumpMediaUrls.length < 7 && index === 0;
+                        const imageIndex = weeklyDumpMediaUrls.length < 7 ? index - 1 : index;
+                        const imageUrl = weeklyDumpMediaUrls[imageIndex];
+
+                        if (showAddTile) {
+                          return (
+                            <button
+                              key="weekly-dump-add-tile"
+                              type="button"
+                              aria-label="add sunday dump photos"
+                              disabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
+                              onClick={() => weeklyDumpInputRef.current?.click()}
+                              className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
+                            >
+                              +
+                            </button>
+                          );
+                        }
+
+                        if (imageUrl) {
+                          return (
+                            <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={imageUrl} alt={`weekly dump photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                            </div>
+                          );
+                        }
+
+                        return <div key={`weekly-dump-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
+                      })}
                     </div>
                     <Textarea
                       placeholder="what hit this week?"
@@ -3210,6 +3273,7 @@ export default function Page() {
                       classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
                     />
                     <input
+                      ref={weeklyDumpInputRef}
                       key={weeklyDumpInputKey}
                       type="file"
                       accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
@@ -3218,30 +3282,8 @@ export default function Page() {
                       onChange={(event) => {
                         void handleWeeklyDumpFiles(event.target.files);
                       }}
-                      className="rounded-[18px] border border-[#f1e8da] bg-[#f8f4ec] px-3 py-3 text-sm text-[#2C1A0E] disabled:opacity-50"
+                      className="hidden"
                     />
-                    {weeklyDumpMediaUrls.length ? (
-                      <div className="rounded-[20px] bg-[#f8f4ec] p-3">
-                        <PostMediaPreview
-                          post={{
-                            id: "weekly-dump-preview",
-                            title: `${user.profile.fullName.split(" ")[0] || "your"}'s weekly food dump`,
-                            body: weeklyDumpCaption || formatProfileMeta(user.profile.city, user.profile.schoolName),
-                            type: "weekly-dump",
-                            cta: "sunday dump",
-                            createdAt: "preview",
-                            mediaKind: "carousel",
-                            mediaUrls: weeklyDumpMediaUrls,
-                            videoRatio: "4:5",
-                            authorRole: "student",
-                            authorName: user.profile.fullName,
-                            authorEmail: user.googleProfile?.email ?? "",
-                            schoolName: user.profile.schoolName,
-                            weekKey: currentSundayKey,
-                          }}
-                        />
-                      </div>
-                    ) : null}
                     <div className="flex items-center gap-3">
                       {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
                       <Button
