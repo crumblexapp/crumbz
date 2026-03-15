@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, type FormEvent, type ReactNode, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
@@ -27,6 +27,7 @@ const STORAGE_KEY = "crumbz-active-user-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
+const PLANS_KEY = "crumbz-plans-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -230,6 +231,11 @@ type AuthMode = "signup" | "login";
 type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dump";
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
+type StudentTab = "feed" | "favorites" | "plans" | "social" | "profile";
+type PlanStage = "chat" | "conflict" | "vibe" | "crumbz-pick" | "wildcard" | "locked";
+type PlanReaction = "fire" | "nah" | "maybe";
+type PlanChoice = "yes" | "no";
+type PlanVibe = "cheap" | "worth" | "surprise";
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -281,6 +287,34 @@ type AppPost = {
   authorEmail: string;
   schoolName: string;
   weekKey: string;
+};
+
+type AppPlanSpot = {
+  id: string;
+  postId?: string;
+  name: string;
+  photoUrl: string;
+  likedByCount: number;
+  reason: string;
+  location: string;
+  distanceFromCampus: string;
+  source: "feed" | "crumbz-pick" | "wildcard";
+  reactions: Record<string, PlanReaction>;
+  finalVotes: Record<string, PlanChoice>;
+};
+
+type AppPlan = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  title: string;
+  participantEmails: string[];
+  stage: PlanStage;
+  spots: AppPlanSpot[];
+  vibeVotes: Record<string, PlanVibe>;
+  selectedVibe?: PlanVibe;
+  lockedSpotId?: string;
+  reminderEnabled: boolean;
 };
 
 const defaultPostFields = {
@@ -528,6 +562,11 @@ function readInteractions() {
   );
 }
 
+function readPlans() {
+  const saved = readJson<AppPlan[]>(PLANS_KEY, []);
+  return Array.isArray(saved) ? saved : [];
+}
+
 function matchesAcceptedType(file: File, acceptedTypes: string[]) {
   const fileType = file.type.toLowerCase();
   const fileName = file.name.toLowerCase();
@@ -558,7 +597,7 @@ function formatProfileMeta(cityName: string, schoolName: string) {
   return cityName || schoolName || "";
 }
 
-function renderStudentTabIcon(tabKey: "feed" | "favorites" | "rewards" | "social" | "profile", className: string) {
+function renderStudentTabIcon(tabKey: StudentTab, className: string) {
   switch (tabKey) {
     case "feed":
       return (
@@ -573,14 +612,14 @@ function renderStudentTabIcon(tabKey: "feed" | "favorites" | "rewards" | "social
           <path d="M11.27 20.12a1.1 1.1 0 0 0 1.46 0c4.17-3.77 6.77-6.12 8-8.2a5.08 5.08 0 0 0-8.08-6 5.08 5.08 0 0 0-8.08 6c1.23 2.08 3.83 4.43 8 8.2Z" />
         </svg>
       );
-    case "rewards":
+    case "plans":
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
-          <path d="M4 9.25h16v4.5H4z" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M12 9.25v10.5" strokeLinecap="round" />
-          <path d="M7.5 13.75V20h9v-6.25" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M8.25 7.75c0-1.24.9-2.25 2-2.25 1.78 0 1.75 3.75 1.75 3.75H10.5c-1.24 0-2.25-.67-2.25-1.5Z" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M15.75 7.75c0-1.24-.9-2.25-2-2.25C11.97 5.5 12 9.25 12 9.25h1.5c1.24 0 2.25-.67 2.25-1.5Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 6.75h14" strokeLinecap="round" />
+          <path d="M5 12h10" strokeLinecap="round" />
+          <path d="M5 17.25h8" strokeLinecap="round" />
+          <path d="M17.5 10.5a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5Z" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m18.75 14.25 2.25 2.25" strokeLinecap="round" />
         </svg>
       );
     case "social":
@@ -602,6 +641,30 @@ function renderStudentTabIcon(tabKey: "feed" | "favorites" | "rewards" | "social
   }
 }
 
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % 1000003;
+  }
+
+  return Math.abs(hash);
+}
+
+function pickFromHash<T>(value: string, options: T[]) {
+  return options[hashString(value) % options.length];
+}
+
+function mergePlansPreferLocal(localPlans: AppPlan[], serverPlans: AppPlan[]) {
+  const nextById = new Map(serverPlans.map((plan) => [plan.id, plan]));
+
+  for (const plan of localPlans) {
+    nextById.set(plan.id, plan);
+  }
+
+  return Array.from(nextById.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
 function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
@@ -610,12 +673,14 @@ function hasAnySharedState(payload: {
   accounts?: unknown;
   posts?: unknown;
   interactions?: unknown;
+  plans?: unknown;
   announcements?: unknown;
 }) {
   return Boolean(
     (Array.isArray(payload.accounts) && payload.accounts.length) ||
       (Array.isArray(payload.posts) && payload.posts.length) ||
       (payload.interactions && typeof payload.interactions === "object" && Object.keys(payload.interactions as object).length) ||
+      (Array.isArray(payload.plans) && payload.plans.length) ||
       (Array.isArray(payload.announcements) && payload.announcements.length),
   );
 }
@@ -933,15 +998,19 @@ export default function Page() {
   const [accounts, setAccounts] = useState<StoredUser[]>([]);
   const [posts, setPosts] = useState<AppPost[]>([...defaultPosts]);
   const [interactions, setInteractions] = useState<InteractionsMap>({});
+  const [plans, setPlans] = useState<AppPlan[]>([]);
   const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [city, setCity] = useState<string | null>(null);
   const [isStudent, setIsStudent] = useState<boolean | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
-  const [studentTab, setStudentTab] = useState<"feed" | "favorites" | "rewards" | "social" | "profile">("feed");
+  const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [selectedPlanFriendEmails, setSelectedPlanFriendEmails] = useState<string[]>([]);
+  const [shareTargetPlanId, setShareTargetPlanId] = useState<string | null>(null);
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
@@ -1004,7 +1073,6 @@ export default function Page() {
   const communityEmpty = isNonStudent
     ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
     : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
-  const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
@@ -1082,6 +1150,10 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
+  const selectedPlan =
+    plans.find((plan) => plan.id === selectedPlanId) ??
+    plans.find((plan) => plan.participantEmails.includes(user.googleProfile?.email ?? "")) ??
+    null;
   const citySpotlightName = liveProfile.city || "Lodz";
   const citySnapshot = {
     mostPostedSpot: friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
@@ -1089,11 +1161,14 @@ export default function Page() {
     hottestNeighbourhood: liveProfile.city || "Lodz",
     hiddenGem: favoritePlaces[0]?.name ?? "new hidden gem loading",
   };
-  const crumbTrailItems = [
-    `best cheap eats near ${liveProfile.schoolName || "UL"}`,
-    "late night spots that are actually good",
-    "hidden bars nobody's talking about",
-  ];
+  const activeLockedPlan =
+    plans.find(
+      (plan) =>
+        plan.stage === "locked" &&
+        plan.participantEmails.includes(user.googleProfile?.email ?? "") &&
+        Boolean(plan.lockedSpotId),
+    ) ?? null;
+  const activeLockedPlanSpot = activeLockedPlan?.spots.find((spot) => spot.id === activeLockedPlan.lockedSpotId) ?? null;
   const friendFoodMoments = [
     ...friendWeeklyDumps.slice(0, 3).map((post) => ({
       id: post.id,
@@ -1184,6 +1259,252 @@ export default function Page() {
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
   const notificationCount = notificationItems.length;
+  const currentUserEmail = user.googleProfile?.email ?? "";
+  const planProfiles = [liveAccount ?? user, ...friendAccounts];
+
+  const getPlanParticipants = (plan: AppPlan) =>
+    plan.participantEmails.map((email) => {
+      const matched = planProfiles.find((account) => account.googleProfile?.email === email);
+
+      return {
+        email,
+        fullName: matched?.profile.fullName ?? (email === currentUserEmail ? user.profile.fullName : email.split("@")[0]),
+        username: matched?.profile.username ?? email.split("@")[0],
+        picture: matched?.googleProfile?.picture,
+      };
+    });
+
+  const getReactionForFriend = (planId: string, spotName: string, friendEmail: string): PlanReaction =>
+    pickFromHash(`${planId}-${spotName}-${friendEmail}-reaction`, ["fire", "fire", "maybe", "nah"]);
+
+  const getVibeVoteForFriend = (planId: string, friendEmail: string): PlanVibe =>
+    pickFromHash(`${planId}-${friendEmail}-vibe`, ["cheap", "worth", "surprise"]);
+
+  const getFinalVoteForFriend = (planId: string, spotId: string, friendEmail: string): PlanChoice =>
+    pickFromHash(`${planId}-${spotId}-${friendEmail}-final`, ["yes", "yes", "no"]);
+
+  const updatePlan = (planId: string, updater: (plan: AppPlan) => AppPlan) => {
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPlans((current) => current.map((plan) => (plan.id === planId ? updater(plan) : plan)));
+  };
+
+  const buildPlanSpotFromPost = (planId: string, post: AppPost): AppPlanSpot => {
+    const matchedPlace =
+      favoritePlaces.find((place) => place.name.toLowerCase() === post.title.toLowerCase()) ??
+      foodSpotCounts.find((place) => place.name.toLowerCase() === post.title.toLowerCase()) ??
+      getFallbackFavoritePlaces(liveProfile.city)[hashString(post.id) % Math.max(getFallbackFavoritePlaces(liveProfile.city).length, 1)];
+    const likedByCount = Math.max(getInteractionBucket(interactions, post.id).likes.length, (hashString(post.id) % 42) + 8);
+
+    return {
+      id: `plan-spot-${planId}-${post.id}`,
+      postId: post.id,
+      name: post.title,
+      photoUrl: post.mediaUrls[0] ?? "",
+      likedByCount,
+      reason: `${likedByCount} crumbz users liked this spot lately`,
+      location: matchedPlace?.address ?? liveProfile.city ?? "city center",
+      distanceFromCampus: `${(hashString(`${post.id}-distance`) % 24) + 4} min from campus`,
+      source: "feed",
+      reactions: Object.fromEntries(
+        friendAccounts
+          .map((account) => account.googleProfile?.email ?? "")
+          .filter(Boolean)
+          .map((email) => [email, getReactionForFriend(planId, post.title, email)]),
+      ),
+      finalVotes: {},
+    };
+  };
+
+  const createCrumbzSpot = useEffectEvent((plan: AppPlan, source: "crumbz-pick" | "wildcard"): AppPlanSpot => {
+    const rankedPlaces = [...favoritePlaces, ...foodSpotCounts].filter((place, index, list) =>
+      list.findIndex((item) => item.name === place.name) === index,
+    );
+    const fallbackPlaces = getFallbackFavoritePlaces(liveProfile.city);
+    const pool = rankedPlaces.length ? rankedPlaces : fallbackPlaces;
+    const selected =
+      pool[hashString(`${plan.id}-${source}-${plan.selectedVibe ?? "cheap"}`) % Math.max(pool.length, 1)] ??
+      {
+        id: `${source}-fallback`,
+        name: source === "wildcard" ? "late night noodle basement" : "campus pasta club",
+        address: liveProfile.city || "city center",
+      };
+
+    const likedByCount = Math.max(
+      accounts.filter((account) => account.profile.favoritePlaceIds?.includes(selected.id)).length,
+      (hashString(`${plan.id}-${selected.name}`) % 38) + 7,
+    );
+    const vibeReason =
+      plan.selectedVibe === "cheap"
+        ? `${likedByCount} students liked this spot this week`
+        : plan.selectedVibe === "worth"
+          ? "the crumbz team ate here on tuesday and couldn't stop thinking about it"
+          : "this one keeps popping up when nobody can decide";
+
+    return {
+      id: `${source}-${plan.id}`,
+      name: selected.name,
+      photoUrl: "",
+      likedByCount,
+      reason:
+        source === "wildcard"
+          ? "nobody talks about this place and that's actually criminal"
+          : vibeReason,
+      location: selected.address ?? liveProfile.city ?? "city center",
+      distanceFromCampus: `${(hashString(`${selected.name}-${source}`) % 18) + 6} min from campus`,
+      source,
+      reactions: {},
+      finalVotes: {},
+    };
+  });
+
+  const shouldOfferCrumbzFix = (plan: AppPlan) =>
+    plan.spots.length >= 2 &&
+    plan.spots.every((spot) => spot.reactions[currentUserEmail]) &&
+    !plan.spots.some((spot) => plan.participantEmails.every((email) => spot.reactions[email] === "fire"));
+
+  const lockPlanWithSpot = (plan: AppPlan, spotId: string) => ({
+    ...plan,
+    stage: "locked" as const,
+    lockedSpotId: spotId,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const startPlan = () => {
+    if (!selectedPlanFriendEmails.length || !currentUserEmail) {
+      setError("pick at least one friend first so we know who this plan is for.");
+      return;
+    }
+
+    const nextPlan: AppPlan = {
+      id: `plan-${Date.now()}`,
+      createdAt: formatNow(),
+      updatedAt: new Date().toISOString(),
+      title: `plans with ${selectedPlanFriendEmails.length === 1 ? "1 friend" : `${selectedPlanFriendEmails.length} friends`}`,
+      participantEmails: [currentUserEmail, ...selectedPlanFriendEmails],
+      stage: "chat",
+      spots: [],
+      vibeVotes: {},
+      reminderEnabled: false,
+    };
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPlans((current) => [nextPlan, ...current]);
+    setSelectedPlanId(nextPlan.id);
+    setSelectedPlanFriendEmails([]);
+    setStudentTab("plans");
+    setError("");
+  };
+
+  const addPostToPlan = (planId: string, postId: string) => {
+    const post = posts.find((item) => item.id === postId) ?? fallbackFeedPosts.find((item) => item.id === postId);
+    if (!post) return;
+
+    updatePlan(planId, (plan) => {
+      if (plan.spots.some((spot) => spot.postId === postId)) {
+        return { ...plan, updatedAt: new Date().toISOString() };
+      }
+
+      return {
+        ...plan,
+        stage: "chat",
+        updatedAt: new Date().toISOString(),
+        spots: [...plan.spots, buildPlanSpotFromPost(planId, post)],
+      };
+    });
+
+    setShareTargetPlanId(null);
+    setSelectedPlanId(planId);
+    setStudentTab("plans");
+  };
+
+  const reactToPlanSpot = (planId: string, spotId: string, reaction: PlanReaction) => {
+    if (!currentUserEmail) return;
+
+    updatePlan(planId, (plan) => {
+      const nextSpots = plan.spots.map((spot) =>
+        spot.id === spotId
+          ? {
+              ...spot,
+              reactions: {
+                ...spot.reactions,
+                [currentUserEmail]: reaction,
+              },
+            }
+          : spot,
+      );
+      const unanimousFireSpot = nextSpots.find((spot) => plan.participantEmails.every((email) => spot.reactions[email] === "fire"));
+
+      if (unanimousFireSpot) {
+        return lockPlanWithSpot({ ...plan, spots: nextSpots }, unanimousFireSpot.id);
+      }
+
+      return {
+        ...plan,
+        spots: nextSpots,
+        stage: shouldOfferCrumbzFix({ ...plan, spots: nextSpots }) ? "conflict" : "chat",
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const beginVibeVote = (planId: string) => {
+    updatePlan(planId, (plan) => ({
+      ...plan,
+      stage: "vibe",
+      vibeVotes: {},
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const castVibeVote = (planId: string, vibe: PlanVibe) => {
+    if (!currentUserEmail) return;
+
+    updatePlan(planId, (plan) => ({
+      ...plan,
+      stage: "vibe",
+      vibeVotes: {
+        ...plan.vibeVotes,
+        [currentUserEmail]: vibe,
+      },
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const castPlanFinalVote = (planId: string, spotId: string, vote: PlanChoice) => {
+    if (!currentUserEmail) return;
+
+    updatePlan(planId, (plan) => {
+      const nextSpots = plan.spots.map((spot) =>
+        spot.id === spotId
+          ? {
+              ...spot,
+              finalVotes: {
+                ...spot.finalVotes,
+                [currentUserEmail]: vote,
+              },
+            }
+          : spot,
+      );
+
+      return {
+        ...plan,
+        spots: nextSpots,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const togglePlanReminder = (planId: string) => {
+    updatePlan(planId, (plan) => ({
+      ...plan,
+      reminderEnabled: !plan.reminderEnabled,
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+  const selectedPlanParticipants = selectedPlan ? getPlanParticipants(selectedPlan) : [];
+  const selectedPlanLockedSpot = selectedPlan?.spots.find((spot) => spot.id === selectedPlan.lockedSpotId) ?? null;
+  const selectedPlanCrumbzSpot = selectedPlan?.spots.find((spot) => spot.source === "crumbz-pick") ?? null;
+  const selectedPlanWildcardSpot = selectedPlan?.spots.find((spot) => spot.source === "wildcard") ?? null;
 
   const renderFeedCard = (post: AppPost) => {
     const bucket = getInteractionBucket(interactions, post.id);
@@ -1325,10 +1646,12 @@ export default function Page() {
   const syncSharedState = ({
     nextPosts,
     nextInteractions,
+    nextPlans,
     nextAnnouncements,
   }: {
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
+    nextPlans?: AppPlan[];
     nextAnnouncements?: AppAnnouncement[];
   }) => {
     void fetch("/api/state", {
@@ -1340,6 +1663,7 @@ export default function Page() {
       body: JSON.stringify({
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
+        ...(nextPlans ? { plans: nextPlans } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
       }),
     }).catch(() => undefined);
@@ -1350,6 +1674,7 @@ export default function Page() {
     const nextAccounts = readAccounts();
     const nextPosts = readPosts();
     const nextInteractions = readInteractions();
+    const nextPlans = readPlans();
 
     cachedUserSnapshot = nextUser;
     window.dispatchEvent(new Event("crumbz-user-change"));
@@ -1363,6 +1688,7 @@ export default function Page() {
         setAccounts(nextAccounts);
         setPosts(mergedPosts);
         setInteractions(nextInteractions);
+        setPlans(nextPlans);
         setAnnouncements([]);
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
         hasLoadedDataRef.current = true;
@@ -1382,11 +1708,13 @@ export default function Page() {
             syncSharedState({
               nextPosts,
               nextInteractions: nextInteractions,
+              nextPlans,
             });
           } else {
             setAccounts((payload.accounts ?? []) as StoredUser[]);
             setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
             setInteractions((payload.interactions ?? {}) as InteractionsMap);
+            setPlans(mergePlansPreferLocal(nextPlans, (payload.plans ?? []) as AppPlan[]));
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           }
         });
@@ -1551,6 +1879,118 @@ export default function Page() {
   }, [interactions]);
 
   useEffect(() => {
+    if (!hasLoadedDataRef.current || typeof window === "undefined") return;
+    window.localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+  }, [plans]);
+
+  useEffect(() => {
+    const activePlan = selectedPlanId ? plans.find((plan) => plan.id === selectedPlanId) : null;
+    if (!activePlan || activePlan.stage !== "vibe" || !activePlan.vibeVotes[currentUserEmail]) return;
+
+    const missingFriend = activePlan.participantEmails.find((email) => email !== currentUserEmail && !activePlan.vibeVotes[email]);
+    if (missingFriend) {
+      const timeout = window.setTimeout(() => {
+        updatePlan(activePlan.id, (plan) => ({
+          ...plan,
+          vibeVotes: {
+            ...plan.vibeVotes,
+            [missingFriend]: getVibeVoteForFriend(plan.id, missingFriend),
+          },
+          updatedAt: new Date().toISOString(),
+        }));
+      }, 900);
+
+      return () => window.clearTimeout(timeout);
+    }
+
+    const timeout = window.setTimeout(() => {
+      updatePlan(activePlan.id, (plan) => {
+        const voteCounts = plan.participantEmails.reduce<Record<PlanVibe, number>>(
+          (counts, email) => {
+            const vote = plan.vibeVotes[email] ?? "cheap";
+            counts[vote] += 1;
+            return counts;
+          },
+          { cheap: 0, worth: 0, surprise: 0 },
+        );
+        const selectedVibe = (Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "cheap") as PlanVibe;
+        const crumbzSpot = createCrumbzSpot({ ...plan, selectedVibe }, "crumbz-pick");
+
+        return {
+          ...plan,
+          stage: "crumbz-pick",
+          selectedVibe,
+          updatedAt: new Date().toISOString(),
+          spots: [...plan.spots.filter((spot) => spot.source !== "crumbz-pick" && spot.source !== "wildcard"), crumbzSpot],
+        };
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentUserEmail, plans, selectedPlanId]);
+
+  useEffect(() => {
+    const activePlan = selectedPlanId ? plans.find((plan) => plan.id === selectedPlanId) : null;
+    if (!activePlan || (activePlan.stage !== "crumbz-pick" && activePlan.stage !== "wildcard")) return;
+
+    const targetSpot = [...activePlan.spots].reverse().find((spot) => spot.source === activePlan.stage);
+    if (!targetSpot || !targetSpot.finalVotes[currentUserEmail]) return;
+
+    const missingFriend = activePlan.participantEmails.find((email) => email !== currentUserEmail && !targetSpot.finalVotes[email]);
+    if (missingFriend) {
+      const timeout = window.setTimeout(() => {
+        updatePlan(activePlan.id, (plan) => ({
+          ...plan,
+          spots: plan.spots.map((spot) =>
+            spot.id === targetSpot.id
+              ? {
+                  ...spot,
+                  finalVotes: {
+                    ...spot.finalVotes,
+                    [missingFriend]: getFinalVoteForFriend(plan.id, spot.id, missingFriend),
+                  },
+                }
+              : spot,
+          ),
+          updatedAt: new Date().toISOString(),
+        }));
+      }, 900);
+
+      return () => window.clearTimeout(timeout);
+    }
+
+    const timeout = window.setTimeout(() => {
+      updatePlan(activePlan.id, (plan) => {
+        const currentSpot = plan.spots.find((spot) => spot.id === targetSpot.id);
+        if (!currentSpot) return plan;
+
+        const yesVotes = Object.values(currentSpot.finalVotes).filter((vote) => vote === "yes").length;
+        const noVotes = Object.values(currentSpot.finalVotes).filter((vote) => vote === "no").length;
+
+        if (plan.stage === "crumbz-pick") {
+          if (noVotes === 0) {
+            return lockPlanWithSpot(plan, currentSpot.id);
+          }
+
+          const wildcardSpot = createCrumbzSpot(plan, "wildcard");
+          return {
+            ...plan,
+            stage: "wildcard",
+            updatedAt: new Date().toISOString(),
+            spots: [...plan.spots.filter((spot) => spot.source !== "wildcard"), wildcardSpot],
+          };
+        }
+
+        const crumbzSpot = plan.spots.find((spot) => spot.source === "crumbz-pick");
+        const winningSpotId = yesVotes >= noVotes ? currentSpot.id : crumbzSpot?.id ?? currentSpot.id;
+        return lockPlanWithSpot(plan, winningSpotId);
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentUserEmail, plans, selectedPlanId]);
+
+  useEffect(() => {
     if (!hasLoadedDataRef.current || posts.length > 0) return;
 
     setInteractions((current) => {
@@ -1576,11 +2016,12 @@ export default function Page() {
       syncSharedState({
         nextPosts: posts,
         nextInteractions: interactions,
+        nextPlans: plans,
       });
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [posts, interactions]);
+  }, [plans, posts, interactions]);
 
   useEffect(() => {
     if (!user.signedIn) return;
@@ -1601,6 +2042,7 @@ export default function Page() {
             syncSharedState({
               nextPosts: localPosts,
               nextInteractions: localInteractions,
+              nextPlans: readPlans(),
               nextAnnouncements: announcements,
             });
             return;
@@ -1614,6 +2056,8 @@ export default function Page() {
           setInteractions((current) =>
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
           );
+          const serverPlans = (payload.plans ?? []) as AppPlan[];
+          setPlans((current) => (shouldPreserveLocalPosts ? mergePlansPreferLocal(current, serverPlans) : serverPlans));
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
@@ -2374,6 +2818,11 @@ export default function Page() {
   const sharePost = async (postId: string) => {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
+
+    if (shareTargetPlanId) {
+      addPostToPlan(shareTargetPlanId, postId);
+      return;
+    }
 
     const post = posts.find((item) => item.id === postId) ?? fallbackFeedPosts.find((item) => item.id === postId);
     if (!post || typeof window === "undefined") return;
@@ -3354,12 +3803,12 @@ export default function Page() {
                 </p>
                 <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">your saved spots and map overlap.</p>
               </>
-            ) : studentTab === "rewards" ? (
+            ) : studentTab === "plans" ? (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  rewards
+                  plans
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">perks, drops, and what unlocks next.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">figure out where to eat. together.</p>
               </>
             ) : studentTab === "social" ? (
               <>
@@ -3439,6 +3888,69 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
+              {shareTargetPlanId ? (
+                <Card className="rounded-[30px] border-0 bg-[#2C1A0E] text-white shadow-[0_18px_50px_rgba(44,26,14,0.24)]">
+                  <CardBody className="gap-3 p-5">
+                    <p className="text-xs uppercase tracking-[0.24em] text-[#dfff67]">plans share mode</p>
+                    <p className="font-[family-name:var(--font-space-grotesk)] text-2xl leading-none">
+                      tap any share button and it drops straight into your plan chat.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        radius="full"
+                        className="bg-[#dfff67] text-[#2C1A0E]"
+                        onPress={() => {
+                          setStudentTab("plans");
+                          setSelectedPlanId(shareTargetPlanId);
+                        }}
+                      >
+                        back to plan
+                      </Button>
+                      <Button radius="full" variant="flat" className="bg-white/10 text-white" onPress={() => setShareTargetPlanId(null)}>
+                        cancel
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {activeLockedPlan && activeLockedPlanSpot ? (
+                <Card className="overflow-hidden rounded-[30px] border-0 bg-[linear-gradient(135deg,_#ff8e3c_0%,_#f5a623_45%,_#ffe7a8_100%)] shadow-[0_24px_60px_rgba(245,166,35,0.24)]">
+                  <CardBody className="gap-4 p-5 text-[#2C1A0E]">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-white/80">tonight&apos;s plan 🍊</p>
+                        <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none">
+                          {activeLockedPlanSpot.name}
+                        </p>
+                        <p className="mt-3 text-sm">{activeLockedPlanSpot.location} • 7:30 pm</p>
+                      </div>
+                      <Chip className="bg-white text-[#F5A623]">plan locked</Chip>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        radius="full"
+                        className={activeLockedPlan.reminderEnabled ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
+                        onPress={() => togglePlanReminder(activeLockedPlan.id)}
+                      >
+                        {activeLockedPlan.reminderEnabled ? "reminder set" : "remind me 1 hour before"}
+                      </Button>
+                      <Button
+                        radius="full"
+                        variant="flat"
+                        className="bg-white/70 text-[#2C1A0E]"
+                        onPress={() => {
+                          setStudentTab("plans");
+                          setSelectedPlanId(activeLockedPlan.id);
+                        }}
+                      >
+                        open plan
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              ) : null}
+
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]">
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -3578,23 +4090,49 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        the crumb trail
+                        plans
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">your curated path through the best food spots in {citySpotlightName} right now.</p>
+                      <p className="mt-2 text-base text-[#6c7289]">figure out where to eat. together.</p>
                     </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">weekly trail</Chip>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{plans.length ? `${plans.length} plans` : "start here"}</Chip>
                   </div>
                   <div className="grid gap-3">
-                    {crumbTrailItems.map((item, index) => (
-                      <div key={item} className="rounded-[22px] bg-[#FFF0D0] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">trail {index + 1}</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{item}</p>
-                      </div>
-                    ))}
+                    {selectedPlan?.spots.length ? (
+                      selectedPlan.spots.slice(0, 3).map((spot, index) => (
+                        <div key={spot.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">spot {index + 1}</p>
+                          <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{spot.name}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">step 1</p>
+                          <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">pick your people</p>
+                        </div>
+                        <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">step 2</p>
+                          <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">share spots from the feed</p>
+                        </div>
+                        <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">step 3</p>
+                          <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">lock the plan and go eat</p>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <p className="text-sm text-[#6c7289]">
-                    updated weekly by the crumbz team so students can follow the city like a series.
-                  </p>
+                  <Button
+                    radius="full"
+                    className="bg-[#F5A623] text-white"
+                    onPress={() => {
+                      setStudentTab("plans");
+                      if (selectedPlan) {
+                        setSelectedPlanId(selectedPlan.id);
+                      }
+                    }}
+                  >
+                    open plans
+                  </Button>
                 </CardBody>
               </Card>
 
@@ -3688,15 +4226,307 @@ export default function Page() {
           </section>
         ) : null}
 
-        {studentTab === "rewards" ? (
+        {studentTab === "plans" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-              <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">rewards</p>
-                <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{rewardsTitle}</h2>
-                <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
+            <Card className="rounded-[32px] border-0 bg-[linear-gradient(135deg,_#ff8e3c_0%,_#f5a623_46%,_#fff1c1_100%)] shadow-[0_24px_60px_rgba(245,166,35,0.24)]">
+              <CardBody className="gap-4 p-5 text-[#2C1A0E]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-white/80">plans</p>
+                    <h2 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2.5rem] leading-none">plans</h2>
+                    <p className="mt-3 max-w-[16rem] text-base leading-7">figure out where to eat. together.</p>
+                  </div>
+                  <div className="rounded-[22px] bg-white/40 px-4 py-3 text-4xl">🍊</div>
+                </div>
+                <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={startPlan}>
+                  start a plan
+                </Button>
+                {!friendAccounts.length ? (
+                  <p className="text-sm">add at least one friend in social first and your people will show up here.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">who are you eating with?</p>
+                    {friendAccounts.map((friend) => {
+                      const email = friend.googleProfile?.email ?? "";
+                      const selected = selectedPlanFriendEmails.includes(email);
+
+                      return (
+                        <button
+                          key={email}
+                          type="button"
+                          onClick={() =>
+                            setSelectedPlanFriendEmails((current) =>
+                              selected ? current.filter((item) => item !== email) : [...current, email],
+                            )
+                          }
+                          className={`flex items-center justify-between rounded-[22px] px-4 py-3 text-left transition-colors ${
+                            selected ? "bg-[#2C1A0E] text-white" : "bg-white/70 text-[#2C1A0E]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar src={friend.googleProfile?.picture} name={friend.profile.fullName} className="h-11 w-11 bg-white text-[#2C1A0E]" />
+                            <div>
+                              <p className="font-semibold">{friend.profile.fullName}</p>
+                              <p className={`text-sm ${selected ? "text-white/80" : "text-[#6c7289]"}`}>@{friend.profile.username}</p>
+                            </div>
+                          </div>
+                          <span className="text-sm">{selected ? "in" : "tap to add"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {error ? <p className="text-sm text-[#7b1e00]">{error}</p> : null}
               </CardBody>
             </Card>
+
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <CardBody className="gap-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your plans</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">active + past</h3>
+                  </div>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{plans.length}</Chip>
+                </div>
+                {plans.length ? (
+                  plans.map((plan) => {
+                    const participants = getPlanParticipants(plan);
+                    const planSpot = plan.spots.find((spot) => spot.id === plan.lockedSpotId) ?? plan.spots[plan.spots.length - 1] ?? null;
+
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => setSelectedPlanId(plan.id)}
+                        className={`rounded-[24px] border px-4 py-4 text-left transition-colors ${
+                          selectedPlanId === plan.id ? "border-[#F5A623] bg-[#FFF7E8]" : "border-[#FFF0D0] bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">{plan.stage === "locked" ? "locked" : plan.stage}</p>
+                            <p className="mt-1 text-lg font-semibold text-[#2C1A0E]">{planSpot?.name ?? "new plan"}</p>
+                          </div>
+                          <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{participants.length} people</Chip>
+                        </div>
+                        <p className="mt-2 text-sm text-[#6c7289]">{participants.map((participant) => participant.fullName.split(" ")[0]).join(", ")}</p>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-[#2C1A0E]">start your first plan and it’ll land here.</p>
+                )}
+              </CardBody>
+            </Card>
+
+            {selectedPlan ? (
+              <Card className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_24px_60px_rgba(44,26,14,0.08)]">
+                <CardBody className="gap-5 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#F5A623]">plan chat</p>
+                      <h3 className="mt-1 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-none text-[#2C1A0E]">
+                        what are you all feeling? drop a spot 👇
+                      </h3>
+                    </div>
+                    <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedPlan.stage}</Chip>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {selectedPlanParticipants.map((participant) => (
+                      <Chip key={participant.email} className="bg-[#FFF7E8] text-[#2C1A0E]">
+                        {participant.fullName}
+                      </Chip>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      radius="full"
+                      className="bg-[#F5A623] text-white"
+                      onPress={() => {
+                        setShareTargetPlanId(selectedPlan.id);
+                        setStudentTab("feed");
+                      }}
+                    >
+                      share from feed
+                    </Button>
+                    <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => setShareTargetPlanId(null)}>
+                      clear share mode
+                    </Button>
+                  </div>
+
+                  {selectedPlan.spots.length ? (
+                    <div className="grid gap-4">
+                      {selectedPlan.spots
+                        .filter((spot) => spot.source === "feed")
+                        .map((spot) => (
+                          <div key={spot.id} className="rounded-[24px] bg-[#FFF7E8] p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-lg font-semibold text-[#2C1A0E]">{spot.name}</p>
+                                <p className="mt-1 text-sm text-[#6c7289]">{spot.likedByCount} crumbz users liked this</p>
+                              </div>
+                              <Chip className="bg-white text-[#2C1A0E]">{spot.location}</Chip>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {[
+                                { label: "🔥 yes", value: "fire" as const },
+                                { label: "👎 nah", value: "nah" as const },
+                                { label: "🤔 maybe", value: "maybe" as const },
+                              ].map((option) => (
+                                <Button
+                                  key={option.value}
+                                  radius="full"
+                                  className={
+                                    spot.reactions[currentUserEmail] === option.value
+                                      ? "bg-[#2C1A0E] text-white"
+                                      : "bg-white text-[#2C1A0E]"
+                                  }
+                                  onPress={() => reactToPlanSpot(selectedPlan.id, spot.id, option.value)}
+                                >
+                                  {option.label}
+                                </Button>
+                              ))}
+                            </div>
+                            <div className="mt-3 grid gap-2">
+                              {selectedPlanParticipants.map((participant) => (
+                                <div key={participant.email} className="flex items-center justify-between rounded-[18px] bg-white px-3 py-2 text-sm text-[#2C1A0E]">
+                                  <span>{participant.fullName}</span>
+                                  <span>
+                                    {spot.reactions[participant.email] === "fire"
+                                      ? "🔥 yes"
+                                      : spot.reactions[participant.email] === "nah"
+                                        ? "👎 nah"
+                                        : spot.reactions[participant.email] === "maybe"
+                                          ? "🤔 maybe"
+                                          : "waiting"}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-[22px] bg-[#FFF7E8] p-4 text-sm text-[#2C1A0E]">
+                      start with a friend, then jump to the feed and tap share on any spot you want in the chat.
+                    </p>
+                  )}
+
+                  {selectedPlan.stage === "conflict" ? (
+                    <div className="rounded-[24px] bg-[#2C1A0E] p-5 text-white">
+                      <p className="text-sm uppercase tracking-[0.18em] text-[#dfff67]">the conflict</p>
+                      <p className="mt-2 text-lg">looks like you can&apos;t agree 👀 want crumbz to sort this out?</p>
+                      <Button radius="full" className="mt-4 bg-[#dfff67] text-[#2C1A0E]" onPress={() => beginVibeVote(selectedPlan.id)}>
+                        yes, fix this
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {selectedPlan.stage === "vibe" ? (
+                    <div className="rounded-[24px] bg-[#FFF7E8] p-5">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">what&apos;s the vibe tonight?</p>
+                      <div className="mt-4 grid gap-3">
+                        {[
+                          { id: "cheap" as const, label: "🍕 something filling and cheap" },
+                          { id: "worth" as const, label: "🌙 something worth going out for" },
+                          { id: "surprise" as const, label: "🎲 just surprise us" },
+                        ].map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => castVibeVote(selectedPlan.id, option.id)}
+                            className={`rounded-[22px] px-4 py-4 text-left ${
+                              selectedPlan.vibeVotes[currentUserEmail] === option.id ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{option.label}</span>
+                              <span>{Object.values(selectedPlan.vibeVotes).filter((vote) => vote === option.id).length}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedPlan.stage === "crumbz-pick" && selectedPlanCrumbzSpot ? (
+                    <div className="rounded-[24px] bg-[linear-gradient(135deg,_#2C1A0E_0%,_#43301f_100%)] p-5 text-white">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#dfff67]">the crumbz pick 🍊</p>
+                      <p className="mt-2 text-2xl font-semibold">{selectedPlanCrumbzSpot.name}</p>
+                      <p className="mt-3 text-sm text-white/80">{selectedPlanCrumbzSpot.reason}</p>
+                      <p className="mt-2 text-sm text-white/70">{selectedPlanCrumbzSpot.location} • {selectedPlanCrumbzSpot.distanceFromCampus}</p>
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          radius="full"
+                          className={selectedPlanCrumbzSpot.finalVotes[currentUserEmail] === "yes" ? "bg-[#dfff67] text-[#2C1A0E]" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => castPlanFinalVote(selectedPlan.id, selectedPlanCrumbzSpot.id, "yes")}
+                        >
+                          everyone in? 👇
+                        </Button>
+                        <Button
+                          radius="full"
+                          className={selectedPlanCrumbzSpot.finalVotes[currentUserEmail] === "no" ? "bg-[#ff8e7a] text-[#2C1A0E]" : "bg-white/15 text-white"}
+                          onPress={() => castPlanFinalVote(selectedPlan.id, selectedPlanCrumbzSpot.id, "no")}
+                        >
+                          not feeling it
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedPlan.stage === "wildcard" && selectedPlanWildcardSpot ? (
+                    <div className="rounded-[24px] bg-[#FFF0D0] p-5">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">okay forget everything we just said. 🎲</p>
+                      <p className="mt-2 text-2xl font-semibold text-[#2C1A0E]">{selectedPlanWildcardSpot.name}</p>
+                      <p className="mt-3 text-sm text-[#2C1A0E]">{selectedPlanWildcardSpot.reason}</p>
+                      <p className="mt-2 text-sm text-[#6c7289]">trust us on this one 🍊</p>
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          radius="full"
+                          className={selectedPlanWildcardSpot.finalVotes[currentUserEmail] === "yes" ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => castPlanFinalVote(selectedPlan.id, selectedPlanWildcardSpot.id, "yes")}
+                        >
+                          yes
+                        </Button>
+                        <Button
+                          radius="full"
+                          className={selectedPlanWildcardSpot.finalVotes[currentUserEmail] === "no" ? "bg-[#ff8e7a] text-[#2C1A0E]" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => castPlanFinalVote(selectedPlan.id, selectedPlanWildcardSpot.id, "no")}
+                        >
+                          no
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {selectedPlan.stage === "locked" && selectedPlanLockedSpot ? (
+                    <div className="rounded-[24px] bg-[linear-gradient(135deg,_#ff8e3c_0%,_#f5a623_46%,_#fff1c1_100%)] p-5 text-[#2C1A0E]">
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/80">plan locked. go eat. 🍊</p>
+                      <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none">{selectedPlanLockedSpot.name}</p>
+                      <p className="mt-3 text-sm">{selectedPlanLockedSpot.location} • tonight 7:30 pm</p>
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          radius="full"
+                          className={selectedPlan.reminderEnabled ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => togglePlanReminder(selectedPlan.id)}
+                        >
+                          {selectedPlan.reminderEnabled ? "reminder set" : "remind me 1 hour before"}
+                        </Button>
+                        <Button radius="full" variant="flat" className="bg-white/70 text-[#2C1A0E]" onPress={() => setStudentTab("feed")}>
+                          back to feed
+                        </Button>
+                      </div>
+                      <div className="mt-4 rounded-[20px] bg-white/70 p-4 text-sm">
+                        how was {selectedPlanLockedSpot.name}? add it to your sunday dump 📸
+                      </div>
+                    </div>
+                  ) : null}
+                </CardBody>
+              </Card>
+            ) : null}
           </section>
         ) : null}
 
@@ -3830,7 +4660,7 @@ export default function Page() {
             {[
               { label: "Feed", key: "feed" },
               { label: "Favorites", key: "favorites" },
-              { label: "Rewards", key: "rewards" },
+              { label: "Plans", key: "plans" },
               { label: "Social", key: "social" },
               { label: "Profile", key: "profile" },
             ].map((item) => (
@@ -3840,10 +4670,10 @@ export default function Page() {
                 className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
                   studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
                 }`}
-                onClick={() => setStudentTab(item.key as "feed" | "favorites" | "rewards" | "social" | "profile")}
+                onClick={() => setStudentTab(item.key as StudentTab)}
               >
                 <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
-                  {renderStudentTabIcon(item.key as "feed" | "favorites" | "rewards" | "social" | "profile", "h-6 w-6")}
+                  {renderStudentTabIcon(item.key as StudentTab, "h-6 w-6")}
                 </span>
                 <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
                   {item.label}

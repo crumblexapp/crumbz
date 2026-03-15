@@ -7,6 +7,7 @@ export const revalidate = 0;
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const STATE_ROW_ID = "crumbz-app-state";
 const MEDIA_BUCKET = "crumbz-media";
+const PLANS_META_KEY = "__plans";
 
 type StoredUser = {
   signedIn: boolean;
@@ -27,14 +28,6 @@ type StoredUser = {
     favoritePlaceIds: string[];
   };
 };
-
-type PostInteraction = {
-  comments: Array<{ authorEmail: string } & Record<string, unknown>>;
-  shares: Array<{ authorEmail: string } & Record<string, unknown>>;
-  likes: Array<{ authorEmail: string } & Record<string, unknown>>;
-};
-
-type InteractionsMap = Record<string, PostInteraction>;
 
 function normalizeAccount(account: StoredUser) {
   return {
@@ -113,6 +106,29 @@ async function writeSharedState(payload: {
       announcements: payload.announcements,
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
+}
+
+function splitPlansFromInteractions(rawInteractions: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+  const plans = Array.isArray(interactions[PLANS_META_KEY]) ? interactions[PLANS_META_KEY] : [];
+  delete interactions[PLANS_META_KEY];
+
+  return { interactions, plans };
+}
+
+function mergePlansIntoInteractions(rawInteractions: unknown, rawPlans: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+
+  return {
+    ...interactions,
+    [PLANS_META_KEY]: Array.isArray(rawPlans) ? rawPlans : [],
+  };
 }
 
 function getMediaPath(url: string) {
@@ -382,28 +398,43 @@ export async function POST(request: Request) {
     const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
     const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
     const nextPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() !== targetEmail);
-    const currentInteractions =
-      sharedState?.interactions && typeof sharedState.interactions === "object" && !Array.isArray(sharedState.interactions)
-        ? (sharedState.interactions as InteractionsMap)
-        : {};
+    const { interactions: currentInteractions, plans } = splitPlansFromInteractions(sharedState?.interactions);
 
     const nextInteractions = Object.fromEntries(
       Object.entries(currentInteractions)
         .filter(([postId]) => !deletedPostIds.has(postId))
-        .map(([postId, bucket]) => [
-          postId,
-          {
-            ...bucket,
-            comments: (bucket.comments ?? []).filter((comment) => String(comment.authorEmail ?? "").toLowerCase() !== targetEmail),
-            shares: (bucket.shares ?? []).filter((share) => String(share.authorEmail ?? "").toLowerCase() !== targetEmail),
-            likes: (bucket.likes ?? []).filter((like) => String(like.authorEmail ?? "").toLowerCase() !== targetEmail),
-          },
-        ]),
+        .map(([postId, bucket]) => {
+          const typedBucket = bucket as {
+            comments?: Array<{ authorEmail?: string } & Record<string, unknown>>;
+            shares?: Array<{ authorEmail?: string } & Record<string, unknown>>;
+            likes?: Array<{ authorEmail?: string } & Record<string, unknown>>;
+          };
+
+          return [
+            postId,
+            {
+              ...typedBucket,
+              comments: (typedBucket.comments ?? []).filter((comment) => String(comment.authorEmail ?? "").toLowerCase() !== targetEmail),
+              shares: (typedBucket.shares ?? []).filter((share) => String(share.authorEmail ?? "").toLowerCase() !== targetEmail),
+              likes: (typedBucket.likes ?? []).filter((like) => String(like.authorEmail ?? "").toLowerCase() !== targetEmail),
+            },
+          ];
+        }),
     );
 
     await writeSharedState({
       posts: nextPosts,
-      interactions: nextInteractions,
+      interactions: mergePlansIntoInteractions(
+        nextInteractions,
+        Array.isArray(plans)
+          ? plans.filter((plan) => {
+              const participantEmails = Array.isArray((plan as { participantEmails?: unknown[] }).participantEmails)
+                ? ((plan as { participantEmails?: string[] }).participantEmails ?? [])
+                : [];
+              return !participantEmails.some((email) => String(email).toLowerCase() === targetEmail);
+            })
+          : [],
+      ),
       announcements: sharedState?.announcements ?? [],
     }).catch(() => undefined);
 
