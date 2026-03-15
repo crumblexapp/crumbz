@@ -144,10 +144,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  const nextRow: Record<string, unknown> = {
+    id: STATE_ROW_ID,
+    updated_at: updates.updated_at,
+    accounts: stateData?.accounts ?? [],
+    posts: "posts" in updates ? updates.posts : stateData?.posts ?? [],
+  };
+
+  if (supportsAnnouncements) {
+    nextRow.interactions = "interactions" in updates ? updates.interactions : stateData?.interactions ?? {};
+    nextRow.announcements = "announcements" in updates ? updates.announcements : stateData?.announcements ?? [];
+  } else {
+    nextRow.interactions = "interactions" in updates ? updates.interactions : fallbackMeta.interactions;
+  }
+
   const { error } = await supabaseServer
     .from("app_state")
-    .update(updates)
-    .eq("id", STATE_ROW_ID);
+    .upsert(nextRow, { onConflict: "id" });
 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });

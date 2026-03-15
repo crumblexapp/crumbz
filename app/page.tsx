@@ -1978,7 +1978,7 @@ export default function Page() {
     }
 
     if (!activeWeeklyDumpMediaUrls.length) {
-      setWeeklyDumpNotice("add up to 10 food photos first.");
+      setWeeklyDumpNotice("add up to 7 food photos first.");
       return;
     }
 
