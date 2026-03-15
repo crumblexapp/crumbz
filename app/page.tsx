@@ -989,9 +989,13 @@ export default function Page() {
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
   const currentSundayKey = getSundayKey(today);
-  const hasSubmittedWeeklyDumpThisWeek = studentWeeklyDumps.some(
-    (post) => post.authorEmail === user.googleProfile?.email && post.weekKey === currentSundayKey,
-  );
+  const currentUserWeeklyDump =
+    studentWeeklyDumps.find(
+      (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "") && post.weekKey === currentSundayKey,
+    ) ?? null;
+  const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
+  const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
+  const hasSubmittedWeeklyDumpThisWeek = Boolean(currentUserWeeklyDump);
   const totalComments = Object.values(interactions).reduce((sum, item) => sum + item.comments.length, 0);
   const totalShares = Object.values(interactions).reduce((sum, item) => sum + item.shares.length, 0);
   const totalLikes = Object.values(interactions).reduce((sum, item) => sum + item.likes.length, 0);
@@ -1096,6 +1100,9 @@ export default function Page() {
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
     const hasLiked = bucket.likes.some((like) => like.authorEmail === user.googleProfile?.email);
     const isStudentPost = post.authorRole === "student";
+    const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
+    const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
+    const showPostBody = Boolean(post.body.trim()) && (!isStudentPost || post.body.trim() !== profileMeta);
 
     return (
       <Card
@@ -1118,14 +1125,13 @@ export default function Page() {
             <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
               {isStudentPost ? `weekly food dump • ${post.createdAt}` : `${post.type} • ${post.createdAt}`}
             </p>
-            {isStudentPost ? <p className="mt-1 text-xs text-[#2C1A0E]">{post.schoolName}</p> : null}
           </div>
           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
             <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p>
+            {showPostBody ? <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p> : null}
           </div>
 
           {post.mediaKind !== "none" ? (
@@ -1946,7 +1952,7 @@ export default function Page() {
       return;
     }
 
-    if (!weeklyDumpMediaUrls.length) {
+    if (!activeWeeklyDumpMediaUrls.length) {
       setWeeklyDumpNotice("add up to 10 food photos first.");
       return;
     }
@@ -1957,12 +1963,12 @@ export default function Page() {
     const nextPost: AppPost = {
       id: `weekly-dump-${authorEmail}-${currentSundayKey}`,
       title: `${firstName}'s weekly food dump`,
-      body: caption || formatProfileMeta(user.profile.city, user.profile.schoolName),
+      body: caption,
       cta: "sunday dump",
       type: "weekly-dump",
       createdAt: formatNow(),
       mediaKind: "carousel",
-      mediaUrls: weeklyDumpMediaUrls,
+      mediaUrls: activeWeeklyDumpMediaUrls,
       videoRatio: "4:5",
       authorRole: "student",
       authorName: user.profile.fullName,
@@ -2159,7 +2165,7 @@ export default function Page() {
       return;
     }
 
-    const remainingSlots = 7 - weeklyDumpMediaUrls.length;
+    const remainingSlots = 7 - activeWeeklyDumpMediaUrls.length;
     if (remainingSlots <= 0) {
       setWeeklyDumpNotice("your sunday drop is full. send it or swap photos next.");
       setWeeklyDumpInputKey((current) => current + 1);
@@ -2181,7 +2187,7 @@ export default function Page() {
         return;
       }
 
-      setWeeklyDumpMediaUrls((current) => [...current, ...uploadResults].slice(0, 7));
+      setWeeklyDumpMediaUrls((current) => [...(current.length ? current : currentUserWeeklyDump?.mediaUrls ?? []), ...uploadResults].slice(0, 7));
       setWeeklyDumpNotice("your weekly dump is loaded.");
       setWeeklyDumpInputKey((current) => current + 1);
     } finally {
@@ -2189,7 +2195,7 @@ export default function Page() {
     }
   };
 
-  const weeklyDumpTileCount = Math.max(4, weeklyDumpMediaUrls.length + (weeklyDumpMediaUrls.length < 7 ? 1 : 0));
+  const weeklyDumpTileCount = Math.max(4, activeWeeklyDumpMediaUrls.length + (activeWeeklyDumpMediaUrls.length < 7 ? 1 : 0));
 
   const addComment = (event: FormEvent<HTMLFormElement>, postId: string) => {
     event.preventDefault();
@@ -3222,22 +3228,22 @@ export default function Page() {
 
               <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
                 <CardBody className="gap-4 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
-                        sunday food drop
-                      </p>
-                      <p className="mt-3 text-lg text-[#73809a]">Add up to 7 photos from your week.</p>
-                    </div>
-                    <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{weeklyDumpMediaUrls.length}/7</Chip>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
+                          sunday food drop
+                        </p>
+                        <p className="mt-3 text-lg text-[#73809a]">Add up to 7 photos from your week.</p>
+                      </div>
+                    <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{activeWeeklyDumpMediaUrls.length}/7</Chip>
                   </div>
 
                   <form className="space-y-4" onSubmit={submitWeeklyDump}>
                     <div className="grid grid-cols-4 gap-3">
                       {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
-                        const showAddTile = weeklyDumpMediaUrls.length < 7 && index === 0;
-                        const imageIndex = weeklyDumpMediaUrls.length < 7 ? index - 1 : index;
-                        const imageUrl = weeklyDumpMediaUrls[imageIndex];
+                        const showAddTile = activeWeeklyDumpMediaUrls.length < 7 && index === 0;
+                        const imageIndex = activeWeeklyDumpMediaUrls.length < 7 ? index - 1 : index;
+                        const imageUrl = activeWeeklyDumpMediaUrls[imageIndex];
 
                         if (showAddTile) {
                           return (
@@ -3268,8 +3274,9 @@ export default function Page() {
                     </div>
                     <Textarea
                       placeholder="what hit this week?"
-                      value={weeklyDumpCaption}
+                      value={activeWeeklyDumpCaption}
                       onValueChange={setWeeklyDumpCaption}
+                      isReadOnly={hasSubmittedWeeklyDumpThisWeek}
                       classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
                     />
                     <input
@@ -3291,8 +3298,8 @@ export default function Page() {
                         radius="full"
                         size="lg"
                         isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
-                        className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
-                      >
+                      className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                    >
                         →
                       </Button>
                     </div>
