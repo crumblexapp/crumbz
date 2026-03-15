@@ -2738,8 +2738,8 @@ export default function Page() {
                 <div className="mt-4 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "signups", value: totalSignups },
-                      { label: "posts live", value: posts.length },
+                      { label: "posts live", value: adminPosts.length },
+                      { label: "push live", value: announcements.length },
                       { label: "likes", value: totalLikes },
                       { label: "shares", value: totalShares },
                     ].map((item) => (
@@ -2794,11 +2794,354 @@ export default function Page() {
 
                   <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">overview stats</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">food spot data</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">which places are getting saved the most from day one.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{foodSpotCounts.length} tracked</Chip>
+                      </div>
+                      <div className="grid gap-2">
+                        {foodSpotCounts.length ? (
+                          foodSpotCounts.map((place) => (
+                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
+                              <div>
+                                <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
+                                <p className="text-[#2C1A0E]">{place.address}</p>
+                              </div>
+                              <Chip className="bg-white text-[#2C1A0E]">{place.saves} saves</Chip>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">no food spots saved yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">recent activity</p>
+                      {recentActivity.length ? (
+                        recentActivity.map((item, index) => (
+                          <div key={`${item.kind}-${item.postId}-${item.createdAt}-${index}`} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                            <p className="text-sm font-semibold text-[#2C1A0E]">{item.label}</p>
+                            <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.createdAt}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-[#2C1A0E]">no activity yet.</p>
+                      )}
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="post" title="post">
+                <div className="mt-4 space-y-4">
+                  <Tabs
+                    aria-label="post sections"
+                    classNames={{
+                      tabList: "w-full rounded-full bg-[#FFF7E8] p-1",
+                      cursor: "rounded-full bg-[#F5A623]",
+                      tab: "h-11 text-sm font-medium text-[#2C1A0E]",
+                      tabContent: "group-data-[selected=true]:text-white",
+                    }}
+                  >
+                    <Tab key="push-notifications" title={`push notifications (${announcements.length})`}>
+                      <div className="mt-4 space-y-4">
+                        <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                          <CardBody className="gap-3 p-5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">push notifications</p>
+                                <p className="mt-1 text-sm text-[#2C1A0E]">send one message to everyone and it shows up in their notifications drawer.</p>
+                              </div>
+                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{announcements.length} live</Chip>
+                            </div>
+                            <form className="grid gap-3" onSubmit={sendAnnouncement}>
+                              <Input
+                                label="headline"
+                                labelPlacement="outside"
+                                placeholder="new post dropped"
+                                value={announcementTitle}
+                                onValueChange={setAnnouncementTitle}
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              <Textarea
+                                label="message"
+                                labelPlacement="outside"
+                                placeholder="come back and check this out"
+                                value={announcementBody}
+                                onValueChange={setAnnouncementBody}
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+                                push to all users
+                              </Button>
+                            </form>
+                            {latestAnnouncement ? (
+                              <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#2C1A0E]">{latestAnnouncement.title}</p>
+                                <p className="mt-1 text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
+                                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{latestAnnouncement.createdAt}</p>
+                              </div>
+                            ) : null}
+                          </CardBody>
+                        </Card>
+                      </div>
+                    </Tab>
+
+                    <Tab key="published-posts" title={`posts (${adminPosts.length})`}>
+                      <div className="mt-4 space-y-4">
+                        <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                          <CardBody className="p-5">
+                            <form className="grid gap-4" onSubmit={createPost}>
+                              {editingPostId ? (
+                                <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
+                                  <span className="text-[#2C1A0E]">editing an existing post</span>
+                                  <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingPost}>
+                                    cancel
+                                  </Button>
+                                </div>
+                              ) : null}
+                              <Select
+                                label="post type"
+                                labelPlacement="outside"
+                                radius="lg"
+                                selectedKeys={[composer.type]}
+                                onSelectionChange={(keys) => {
+                                  const selected = Array.from(keys)[0];
+                                  setComposer((current) => ({
+                                    ...current,
+                                    type: (typeof selected === "string" ? selected : "chapter") as PostType,
+                                  }));
+                                }}
+                                classNames={{
+                                  trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
+                                }}
+                              >
+                                {["chapter", "story", "discount", "ad", "collab"].map((type) => (
+                                  <SelectItem key={type}>{type}</SelectItem>
+                                ))}
+                              </Select>
+                              <Select
+                                label="media type"
+                                labelPlacement="outside"
+                                radius="lg"
+                                selectedKeys={[composer.mediaKind]}
+                                onSelectionChange={(keys) => {
+                                  const selected = Array.from(keys)[0];
+                                  setComposer((current) => ({
+                                    ...current,
+                                    mediaKind: (typeof selected === "string" ? selected : "none") as MediaKind,
+                                    mediaUrls: typeof selected === "string" && selected !== "none" ? current.mediaUrls : [],
+                                  }));
+                                  setComposerMediaInputKey((current) => current + 1);
+                                }}
+                                classNames={{
+                                  trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
+                                }}
+                              >
+                                {["none", "photo", "video", "carousel"].map((type) => (
+                                  <SelectItem key={type}>{type}</SelectItem>
+                                ))}
+                              </Select>
+                              {composer.mediaKind === "video" ? (
+                                <Select
+                                  label="video ratio"
+                                  labelPlacement="outside"
+                                  radius="lg"
+                                  selectedKeys={[composer.videoRatio]}
+                                  onSelectionChange={(keys) => {
+                                    const selected = Array.from(keys)[0];
+                                    setComposer((current) => ({
+                                      ...current,
+                                      videoRatio: (typeof selected === "string" ? selected : "9:16") as VideoRatio,
+                                    }));
+                                  }}
+                                  classNames={{
+                                    trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
+                                  }}
+                                >
+                                  {["9:16", "4:5", "1:1", "16:9"].map((ratio) => (
+                                    <SelectItem key={ratio}>{ratio}</SelectItem>
+                                  ))}
+                                </Select>
+                              ) : null}
+                              <Input
+                                label="title"
+                                labelPlacement="outside"
+                                placeholder="new chapter just dropped"
+                                value={composer.title}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, title: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              <Textarea
+                                label="body"
+                                labelPlacement="outside"
+                                placeholder="tell students what’s happening"
+                                value={composer.body}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, body: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              <Input
+                                label="cta label"
+                                labelPlacement="outside"
+                                placeholder="student offer live"
+                                value={composer.cta}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, cta: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              {composer.mediaKind !== "none" ? (
+                                <div className="grid gap-3">
+                                  <label className="text-sm font-medium text-[#2C1A0E]">
+                                    {composer.mediaKind === "carousel" ? "photos for carousel" : `${composer.mediaKind} file`}
+                                  </label>
+                                  <input
+                                    key={composerMediaInputKey}
+                                    type="file"
+                                    accept={
+                                      composer.mediaKind === "video"
+                                        ? ".mp4,.mov,video/mp4,video/quicktime"
+                                        : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                                    }
+                                    multiple={composer.mediaKind === "carousel"}
+                                    onChange={(event) => {
+                                      void handleComposerFiles(event.target.files);
+                                    }}
+                                    className="rounded-[18px] border border-[#FFF0D0] bg-[#FFF0D0] px-3 py-3 text-sm text-[#2C1A0E]"
+                                  />
+                                  {composer.mediaUrls.length ? (
+                                    <div className="flex gap-2">
+                                      <Button
+                                        type="button"
+                                        radius="full"
+                                        className="bg-white text-[#2C1A0E]"
+                                        onPress={() => setComposer((current) => ({ ...current, mediaUrls: [] }))}
+                                      >
+                                        remove media
+                                      </Button>
+                                      <p className="self-center text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                        pick a new file to replace it
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                  {composer.mediaUrls.length ? (
+                                    <div className="rounded-[20px] bg-[#FFF0D0] p-3">
+                                      <PostMediaPreview
+                                        post={{
+                                          id: "preview",
+                                          title: composer.title || "preview",
+                                          body: composer.body,
+                                          type: composer.type,
+                                          cta: composer.cta,
+                                          createdAt: "preview",
+                                          mediaKind: composer.mediaKind,
+                                          mediaUrls: composer.mediaUrls,
+                                          videoRatio: composer.videoRatio,
+                                          authorRole: "admin",
+                                          authorName: "crumbz",
+                                          authorEmail: ADMIN_EMAIL,
+                                          schoolName: "",
+                                          weekKey: "",
+                                        }}
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                              {storageNotice ? <p className="text-sm text-[#F5A623]">{storageNotice}</p> : null}
+                              <Button
+                                type="submit"
+                                radius="full"
+                                size="lg"
+                                isDisabled={isUploadingMedia}
+                                className="bg-[#F5A623] text-white disabled:opacity-60"
+                              >
+                                {isUploadingMedia ? "uploading media..." : editingPostId ? "save changes" : "publish post"}
+                              </Button>
+                            </form>
+                          </CardBody>
+                        </Card>
+
+                        <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                          <CardBody className="gap-3 p-5">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">all posts</p>
+                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminPosts.length} total</Chip>
+                            </div>
+                            {adminPosts.length ? (
+                              adminPosts.map((post) => (
+                                <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                        {post.type} • {post.createdAt}
+                                      </p>
+                                    </div>
+                                    <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
+                                  </div>
+                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.mediaKind !== "none" ? (
+                                    <div className="mt-3">
+                                      {post.mediaUrls.length ? (
+                                        <PostMediaPreview post={post} />
+                                      ) : (
+                                        <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
+                                          media is missing on this saved post. open edit and upload it again once.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 flex gap-2">
+                                    <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onPress={() => startEditingPost(post)}>
+                                      edit
+                                    </Button>
+                                    <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
+                                      delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-[#2C1A0E]">no posts yet.</p>
+                            )}
+                          </CardBody>
+                        </Card>
+                      </div>
+                    </Tab>
+                  </Tabs>
+                </div>
+              </Tab>
+
+              <Tab key="community" title="community">
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "signups", value: totalSignups },
+                      { label: "student posts", value: studentWeeklyDumps.length },
+                      { label: "comments", value: totalComments },
+                      { label: "unique sharers", value: uniqueSharers },
+                    ].map((item) => (
+                      <Card key={item.label} className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                        <CardBody className="gap-1 p-4">
+                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">community stats</p>
                       <div className="flex flex-wrap gap-2">
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{totalComments} comments</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{totalLikes} likes</Chip>
                         <Chip className="bg-[#FFF0D0] text-[#F5A623]">{uniqueCommenters} unique commenters</Chip>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{uniqueSharers} unique sharers</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{sortedCityBreakdown.length} cities</Chip>
                       </div>
                     </CardBody>
                   </Card>
@@ -2841,33 +3184,6 @@ export default function Page() {
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">food spot data</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">which places are getting saved the most from day one.</p>
-                        </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{foodSpotCounts.length} tracked</Chip>
-                      </div>
-                      <div className="grid gap-2">
-                        {foodSpotCounts.length ? (
-                          foodSpotCounts.map((place) => (
-                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
-                              <div>
-                                <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
-                                <p className="text-[#2C1A0E]">{place.address}</p>
-                              </div>
-                              <Chip className="bg-white text-[#2C1A0E]">{place.saves} saves</Chip>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-[#2C1A0E]">no food spots saved yet.</p>
-                        )}
-                      </div>
-                    </CardBody>
-                  </Card>
-
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">city breakdown</p>
                           <p className="mt-1 text-sm text-[#2C1A0E]">see where users are stacking up so you know where to focus next.</p>
                         </div>
@@ -2884,248 +3200,6 @@ export default function Page() {
                     </CardBody>
                   </Card>
 
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">recent activity</p>
-                      {recentActivity.length ? (
-                        recentActivity.map((item, index) => (
-                          <div key={`${item.kind}-${item.postId}-${item.createdAt}-${index}`} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
-                            <p className="text-sm font-semibold text-[#2C1A0E]">{item.label}</p>
-                            <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.createdAt}</p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-[#2C1A0E]">no activity yet.</p>
-                      )}
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-
-              <Tab key="post" title="post">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="p-5">
-                      <form className="grid gap-4" onSubmit={createPost}>
-                      {editingPostId ? (
-                        <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
-                          <span className="text-[#2C1A0E]">editing an existing post</span>
-                          <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingPost}>
-                            cancel
-                          </Button>
-                        </div>
-                      ) : null}
-                      <Select
-                        label="post type"
-                        labelPlacement="outside"
-                        radius="lg"
-                        selectedKeys={[composer.type]}
-                        onSelectionChange={(keys) => {
-                          const selected = Array.from(keys)[0];
-                          setComposer((current) => ({
-                            ...current,
-                            type: (typeof selected === "string" ? selected : "chapter") as PostType,
-                          }));
-                        }}
-                        classNames={{
-                          trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
-                        }}
-                      >
-                        {["chapter", "story", "discount", "ad", "collab"].map((type) => (
-                          <SelectItem key={type}>{type}</SelectItem>
-                        ))}
-                      </Select>
-                      <Select
-                        label="media type"
-                        labelPlacement="outside"
-                        radius="lg"
-                        selectedKeys={[composer.mediaKind]}
-                        onSelectionChange={(keys) => {
-                          const selected = Array.from(keys)[0];
-                          setComposer((current) => ({
-                            ...current,
-                            mediaKind: (typeof selected === "string" ? selected : "none") as MediaKind,
-                            mediaUrls: typeof selected === "string" && selected !== "none" ? current.mediaUrls : [],
-                          }));
-                          setComposerMediaInputKey((current) => current + 1);
-                        }}
-                        classNames={{
-                          trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
-                        }}
-                      >
-                        {["none", "photo", "video", "carousel"].map((type) => (
-                          <SelectItem key={type}>{type}</SelectItem>
-                        ))}
-                      </Select>
-                      {composer.mediaKind === "video" ? (
-                        <Select
-                          label="video ratio"
-                          labelPlacement="outside"
-                          radius="lg"
-                          selectedKeys={[composer.videoRatio]}
-                          onSelectionChange={(keys) => {
-                            const selected = Array.from(keys)[0];
-                            setComposer((current) => ({
-                              ...current,
-                              videoRatio: (typeof selected === "string" ? selected : "9:16") as VideoRatio,
-                            }));
-                          }}
-                          classNames={{
-                            trigger: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]",
-                          }}
-                        >
-                          {["9:16", "4:5", "1:1", "16:9"].map((ratio) => (
-                            <SelectItem key={ratio}>{ratio}</SelectItem>
-                          ))}
-                        </Select>
-                      ) : null}
-                      <Input
-                        label="title"
-                        labelPlacement="outside"
-                        placeholder="new chapter just dropped"
-                        value={composer.title}
-                        onValueChange={(value) => setComposer((current) => ({ ...current, title: value }))}
-                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                      />
-                      <Textarea
-                        label="body"
-                        labelPlacement="outside"
-                        placeholder="tell students what’s happening"
-                        value={composer.body}
-                        onValueChange={(value) => setComposer((current) => ({ ...current, body: value }))}
-                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                      />
-                      <Input
-                        label="cta label"
-                        labelPlacement="outside"
-                        placeholder="student offer live"
-                        value={composer.cta}
-                        onValueChange={(value) => setComposer((current) => ({ ...current, cta: value }))}
-                        classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                      />
-                      {composer.mediaKind !== "none" ? (
-                        <div className="grid gap-3">
-                          <label className="text-sm font-medium text-[#2C1A0E]">
-                            {composer.mediaKind === "carousel" ? "photos for carousel" : `${composer.mediaKind} file`}
-                          </label>
-                          <input
-                            key={composerMediaInputKey}
-                            type="file"
-                            accept={
-                              composer.mediaKind === "video"
-                                ? ".mp4,.mov,video/mp4,video/quicktime"
-                                : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                            }
-                            multiple={composer.mediaKind === "carousel"}
-                            onChange={(event) => {
-                              void handleComposerFiles(event.target.files);
-                            }}
-                            className="rounded-[18px] border border-[#FFF0D0] bg-[#FFF0D0] px-3 py-3 text-sm text-[#2C1A0E]"
-                          />
-                          {composer.mediaUrls.length ? (
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                radius="full"
-                                className="bg-white text-[#2C1A0E]"
-                                onPress={() => setComposer((current) => ({ ...current, mediaUrls: [] }))}
-                              >
-                                remove media
-                              </Button>
-                              <p className="self-center text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                                pick a new file to replace it
-                              </p>
-                            </div>
-                          ) : null}
-                          {composer.mediaUrls.length ? (
-                            <div className="rounded-[20px] bg-[#FFF0D0] p-3">
-                              <PostMediaPreview
-                                post={{
-                                  id: "preview",
-                                  title: composer.title || "preview",
-                                  body: composer.body,
-                                  type: composer.type,
-                                  cta: composer.cta,
-                                  createdAt: "preview",
-                                  mediaKind: composer.mediaKind,
-                                  mediaUrls: composer.mediaUrls,
-                                  videoRatio: composer.videoRatio,
-                                  authorRole: "admin",
-                                  authorName: "crumbz",
-                                  authorEmail: ADMIN_EMAIL,
-                                  schoolName: "",
-                                  weekKey: "",
-                                }}
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {storageNotice ? <p className="text-sm text-[#F5A623]">{storageNotice}</p> : null}
-                      <Button
-                        type="submit"
-                        radius="full"
-                        size="lg"
-                        isDisabled={isUploadingMedia}
-                        className="bg-[#F5A623] text-white disabled:opacity-60"
-                      >
-                        {isUploadingMedia ? "uploading media..." : editingPostId ? "save changes" : "publish post"}
-                      </Button>
-                      </form>
-                    </CardBody>
-                  </Card>
-
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">all posts</p>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{posts.length} total</Chip>
-                      </div>
-                      {posts.length ? (
-                        posts.map((post) => (
-                          <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
-                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                                  {post.type} • {post.createdAt}
-                                </p>
-                              </div>
-                              <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
-                            </div>
-                            <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
-                            {post.mediaKind !== "none" ? (
-                              <div className="mt-3">
-                                {post.mediaUrls.length ? (
-                                  <PostMediaPreview post={post} />
-                                ) : (
-                                  <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
-                                    media is missing on this saved post. open edit and upload it again once.
-                                  </div>
-                                )}
-                              </div>
-                            ) : null}
-                            <div className="mt-3 flex gap-2">
-                              <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onPress={() => startEditingPost(post)}>
-                                edit
-                              </Button>
-                              <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
-                                delete
-                              </Button>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-[#2C1A0E]">no posts yet.</p>
-                      )}
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-
-              <Tab key="community" title="community">
-                <div className="mt-4 space-y-4">
                   {posts.map((post) => {
                     const bucket = getInteractionBucket(interactions, post.id);
                     return (
