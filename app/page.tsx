@@ -488,6 +488,13 @@ function mergePostsPreferLocal(localPosts: AppPost[], serverPosts: AppPost[]) {
   });
 }
 
+function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, serverInteractions: InteractionsMap) {
+  return {
+    ...serverInteractions,
+    ...localInteractions,
+  };
+}
+
 function readInteractions() {
   const saved = readJson<InteractionsMap>(INTERACTIONS_KEY, {});
 
@@ -1534,7 +1541,10 @@ export default function Page() {
           const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
           const shouldPreserveLocalPosts = Date.now() - lastSharedStateMutationAtRef.current < 5000;
           setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
-          setInteractions((payload.interactions ?? {}) as InteractionsMap);
+          const serverInteractions = (payload.interactions ?? {}) as InteractionsMap;
+          setInteractions((current) =>
+            shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
+          );
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
@@ -2325,8 +2335,7 @@ export default function Page() {
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       const alreadyLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === authorEmail);
-
-      return {
+      const nextInteractions = {
         ...current,
         [postId]: {
           ...bucket,
@@ -2342,6 +2351,13 @@ export default function Page() {
               ],
         },
       };
+
+      syncSharedState({
+        nextPosts: posts,
+        nextInteractions,
+      });
+
+      return nextInteractions;
     });
   };
 
