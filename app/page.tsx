@@ -668,7 +668,7 @@ function formatNow() {
 }
 
 async function mutateAccountState<TUser = StoredUser>(payload: {
-  action: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites";
+  action: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
   account?: StoredUser;
   currentEmail?: string;
   targetEmail?: string;
@@ -2057,6 +2057,38 @@ export default function Page() {
     if (editingPostId === postId) {
       cancelEditingPost();
     }
+  };
+
+  const deleteUserFromAdmin = (targetEmail: string) => {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("delete this user and wipe their posts, likes, comments, shares, and friend links?");
+      if (!confirmed) return;
+    }
+
+    void mutateAccountState({
+      action: "delete_account",
+      targetEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        setPosts((current) => current.filter((post) => post.authorEmail.toLowerCase() !== targetEmail.toLowerCase()));
+        setInteractions((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([postId, bucket]) => [
+              postId,
+              {
+                ...bucket,
+                comments: bucket.comments.filter((comment) => comment.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
+                shares: bucket.shares.filter((share) => share.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
+                likes: bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
+              },
+            ]).filter(([postId]) => current[postId] && !posts.some((post) => post.id === postId && post.authorEmail.toLowerCase() === targetEmail.toLowerCase())),
+          ),
+        );
+      })
+      .catch(() => {
+        setError("that delete didn’t stick. try again.");
+      });
   };
 
   const uploadMediaFiles = async (

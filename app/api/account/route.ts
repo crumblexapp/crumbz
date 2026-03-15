@@ -5,6 +5,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
+const STATE_ROW_ID = "crumbz-app-state";
+const MEDIA_BUCKET = "crumbz-media";
 
 type StoredUser = {
   signedIn: boolean;
@@ -25,6 +27,14 @@ type StoredUser = {
     favoritePlaceIds: string[];
   };
 };
+
+type PostInteraction = {
+  comments: Array<{ authorEmail: string } & Record<string, unknown>>;
+  shares: Array<{ authorEmail: string } & Record<string, unknown>>;
+  likes: Array<{ authorEmail: string } & Record<string, unknown>>;
+};
+
+type InteractionsMap = Record<string, PostInteraction>;
 
 function normalizeAccount(account: StoredUser) {
   return {
@@ -81,10 +91,42 @@ async function writeAccounts(accounts: StoredUser[]) {
     .single();
 }
 
+async function readSharedState() {
+  return supabaseServer
+    .from("app_state")
+    .select("posts, interactions, announcements")
+    .eq("id", STATE_ROW_ID)
+    .maybeSingle();
+}
+
+async function writeSharedState(payload: {
+  posts: unknown;
+  interactions: unknown;
+  announcements: unknown;
+}) {
+  return supabaseServer
+    .from("app_state")
+    .upsert({
+      id: STATE_ROW_ID,
+      posts: payload.posts,
+      interactions: payload.interactions,
+      announcements: payload.announcements,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+}
+
+function getMediaPath(url: string) {
+  const marker = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+
+  return url.slice(index + marker.length);
+}
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as
     | {
-        action?: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites";
+        action?: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
         account?: StoredUser;
         currentEmail?: string;
         targetEmail?: string;
@@ -301,6 +343,79 @@ export async function POST(request: Request) {
       nextUser = next;
       return next;
     });
+  }
+
+  if (action === "delete_account") {
+    const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    if (!targetEmail) {
+      return NextResponse.json({ ok: false, message: "missing target email" }, { status: 400 });
+    }
+
+    const existingAccount = accounts.find((account) => getEmail(account) === targetEmail);
+    if (!existingAccount) {
+      return NextResponse.json({ ok: false, message: "account not found" }, { status: 404 });
+    }
+
+    nextAccounts = accounts
+      .filter((account) => getEmail(account) !== targetEmail)
+      .map((account) =>
+        normalizeAccount({
+          ...account,
+          profile: {
+            ...account.profile,
+            friends: account.profile.friends.filter((item) => item !== targetEmail),
+            incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== targetEmail),
+            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== targetEmail),
+          },
+        }),
+      );
+
+    const { data: sharedState, error: sharedStateError } = await readSharedState();
+    if (sharedStateError) {
+      return NextResponse.json({ ok: false, message: sharedStateError.message }, { status: 500 });
+    }
+
+    const posts = Array.isArray(sharedState?.posts) ? (sharedState.posts as Array<Record<string, unknown>>) : [];
+    const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
+    const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
+    const nextPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() !== targetEmail);
+    const currentInteractions =
+      sharedState?.interactions && typeof sharedState.interactions === "object" && !Array.isArray(sharedState.interactions)
+        ? (sharedState.interactions as InteractionsMap)
+        : {};
+
+    const nextInteractions = Object.fromEntries(
+      Object.entries(currentInteractions)
+        .filter(([postId]) => !deletedPostIds.has(postId))
+        .map(([postId, bucket]) => [
+          postId,
+          {
+            ...bucket,
+            comments: (bucket.comments ?? []).filter((comment) => String(comment.authorEmail ?? "").toLowerCase() !== targetEmail),
+            shares: (bucket.shares ?? []).filter((share) => String(share.authorEmail ?? "").toLowerCase() !== targetEmail),
+            likes: (bucket.likes ?? []).filter((like) => String(like.authorEmail ?? "").toLowerCase() !== targetEmail),
+          },
+        ]),
+    );
+
+    const mediaPaths = deletedPosts
+      .flatMap((post) => (Array.isArray(post.mediaUrls) ? post.mediaUrls : []))
+      .map((url) => (typeof url === "string" ? getMediaPath(url) : null))
+      .filter((path): path is string => Boolean(path));
+
+    if (mediaPaths.length) {
+      await supabaseServer.storage.from(MEDIA_BUCKET).remove(mediaPaths);
+    }
+
+    const { error: sharedWriteError } = await writeSharedState({
+      posts: nextPosts,
+      interactions: nextInteractions,
+      announcements: sharedState?.announcements ?? [],
+    });
+
+    if (sharedWriteError) {
+      return NextResponse.json({ ok: false, message: sharedWriteError.message }, { status: 500 });
+    }
   }
 
   const { data: savedData, error: writeError } = await writeAccounts(nextAccounts);
