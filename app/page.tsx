@@ -989,13 +989,16 @@ export default function Page() {
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
   const currentSundayKey = getSundayKey(today);
+  const authoredWeeklyDumps = studentWeeklyDumps.filter(
+    (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
+  );
   const currentUserWeeklyDump =
-    studentWeeklyDumps.find(
-      (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "") && post.weekKey === currentSundayKey,
-    ) ?? null;
+    authoredWeeklyDumps.find((post) => post.weekKey === currentSundayKey) ??
+    authoredWeeklyDumps.find((post) => post.id === `weekly-dump-${user.googleProfile?.email?.toLowerCase() ?? ""}-${currentSundayKey}`) ??
+    authoredWeeklyDumps[0] ??
+    null;
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
-  const hasSubmittedWeeklyDumpThisWeek = Boolean(currentUserWeeklyDump);
   const totalComments = Object.values(interactions).reduce((sum, item) => sum + item.comments.length, 0);
   const totalShares = Object.values(interactions).reduce((sum, item) => sum + item.shares.length, 0);
   const totalLikes = Object.values(interactions).reduce((sum, item) => sum + item.likes.length, 0);
@@ -1942,11 +1945,6 @@ export default function Page() {
       return;
     }
 
-    if (hasSubmittedWeeklyDumpThisWeek) {
-      setWeeklyDumpNotice("you already dropped this sunday’s food dump.");
-      return;
-    }
-
     if (isUploadingWeeklyDump) {
       setWeeklyDumpNotice("your photos are still uploading. wait a sec, then submit.");
       return;
@@ -1961,12 +1959,12 @@ export default function Page() {
     const caption = weeklyDumpCaption.trim();
 
     const nextPost: AppPost = {
-      id: `weekly-dump-${authorEmail}-${currentSundayKey}`,
+      id: currentUserWeeklyDump?.id ?? `weekly-dump-${authorEmail}-${currentSundayKey}`,
       title: `${firstName}'s weekly food dump`,
       body: caption,
       cta: "sunday dump",
       type: "weekly-dump",
-      createdAt: formatNow(),
+      createdAt: currentUserWeeklyDump?.createdAt ?? formatNow(),
       mediaKind: "carousel",
       mediaUrls: activeWeeklyDumpMediaUrls,
       videoRatio: "4:5",
@@ -1980,7 +1978,7 @@ export default function Page() {
     setPosts((current) => [nextPost, ...current.filter((post) => post.id !== nextPost.id)]);
     setWeeklyDumpCaption("");
     setWeeklyDumpMediaUrls([]);
-    setWeeklyDumpNotice("your weekly dump is live.");
+    setWeeklyDumpNotice(currentUserWeeklyDump ? "your sunday drop is updated." : "your weekly dump is live.");
     setWeeklyDumpInputKey((current) => current + 1);
   };
 
@@ -3251,7 +3249,7 @@ export default function Page() {
                               key="weekly-dump-add-tile"
                               type="button"
                               aria-label="add sunday dump photos"
-                              disabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
+                              disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
                               onClick={() => weeklyDumpInputRef.current?.click()}
                               className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
                             >
@@ -3276,7 +3274,6 @@ export default function Page() {
                       placeholder="what hit this week?"
                       value={activeWeeklyDumpCaption}
                       onValueChange={setWeeklyDumpCaption}
-                      isReadOnly={hasSubmittedWeeklyDumpThisWeek}
                       classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
                     />
                     <input
@@ -3285,7 +3282,7 @@ export default function Page() {
                       type="file"
                       accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
                       multiple
-                      disabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek}
+                      disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7}
                       onChange={(event) => {
                         void handleWeeklyDumpFiles(event.target.files);
                       }}
@@ -3297,7 +3294,7 @@ export default function Page() {
                         type="submit"
                         radius="full"
                         size="lg"
-                        isDisabled={!canSubmitWeeklyDumpToday || hasSubmittedWeeklyDumpThisWeek || isUploadingWeeklyDump}
+                        isDisabled={!canSubmitWeeklyDumpToday || isUploadingWeeklyDump}
                       className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
                     >
                         →
