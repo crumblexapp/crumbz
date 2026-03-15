@@ -950,7 +950,7 @@ export default function Page() {
   const accountsRef = useRef(accounts);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
-  const lastLocalPostsMutationAtRef = useRef(0);
+  const lastSharedStateMutationAtRef = useRef(0);
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const liveAccount =
@@ -1492,6 +1492,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!hasLoadedDataRef.current) return;
+    if (Date.now() - lastSharedStateMutationAtRef.current > 5000) return;
 
     const timeout = window.setTimeout(() => {
       syncSharedState({
@@ -1529,7 +1530,7 @@ export default function Page() {
 
           setAccounts((payload.accounts ?? []) as StoredUser[]);
           const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
-          const shouldPreserveLocalPosts = Date.now() - lastLocalPostsMutationAtRef.current < 5000;
+          const shouldPreserveLocalPosts = Date.now() - lastSharedStateMutationAtRef.current < 5000;
           setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
           setInteractions((payload.interactions ?? {}) as InteractionsMap);
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
@@ -1895,6 +1896,7 @@ export default function Page() {
       ...announcements,
     ].slice(0, 12);
 
+    lastSharedStateMutationAtRef.current = Date.now();
     setAnnouncements(nextAnnouncements);
     syncSharedState({ nextAnnouncements });
     setAnnouncementTitle("");
@@ -1952,7 +1954,7 @@ export default function Page() {
       weekKey: "",
     };
 
-    lastLocalPostsMutationAtRef.current = Date.now();
+    lastSharedStateMutationAtRef.current = Date.now();
     setPosts((current) =>
       editingPostId
         ? current.map((post) => (post.id === editingPostId ? nextPost : post))
@@ -2002,7 +2004,7 @@ export default function Page() {
       weekKey: currentSundayKey,
     };
 
-    lastLocalPostsMutationAtRef.current = Date.now();
+    lastSharedStateMutationAtRef.current = Date.now();
     setPosts((current) => [nextPost, ...current.filter((post) => post.id !== nextPost.id)]);
     syncSharedState({
       nextPosts: [nextPost, ...posts.filter((post) => post.id !== nextPost.id)],
@@ -2032,7 +2034,7 @@ export default function Page() {
   };
 
   const deletePost = (postId: string) => {
-    lastLocalPostsMutationAtRef.current = Date.now();
+    lastSharedStateMutationAtRef.current = Date.now();
     setPosts((current) => current.filter((post) => post.id !== postId));
     setInteractions((current) => {
       const next = { ...current };
@@ -2234,6 +2236,7 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email;
     if (!draft || !authorEmail) return;
 
+    lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
@@ -2290,6 +2293,7 @@ export default function Page() {
       return;
     }
 
+    lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
@@ -2315,6 +2319,7 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
 
+    lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       const alreadyLiked = bucket.likes.some((like) => like.authorEmail === authorEmail);
@@ -2339,6 +2344,7 @@ export default function Page() {
   };
 
   const toggleCommentHidden = (postId: string, commentId: string) => {
+    lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
@@ -2354,6 +2360,7 @@ export default function Page() {
   };
 
   const deleteComment = (postId: string, commentId: string) => {
+    lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
