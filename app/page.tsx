@@ -892,11 +892,13 @@ function PostActionIcon({
       type="button"
       aria-label={label}
       onClick={onPress}
-      className={`flex h-11 w-11 items-center justify-center rounded-full border ${
-        active ? "border-[#FFD000] bg-[#FFD000] text-[#2C1A0E]" : "border-[#FFF0D0] bg-white text-[#2C1A0E]"
+      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border transition-colors ${
+        active
+          ? "border-[#F5A623] bg-[#F5A623] text-white"
+          : "border-[#F3DFC1] bg-white text-[#2C1A0E] hover:border-[#F5A623]/60"
       }`}
     >
-      <span className="flex items-center justify-center">{children}</span>
+      <span className="pointer-events-none flex items-center justify-center">{children}</span>
     </button>
   );
 }
@@ -1216,10 +1218,10 @@ export default function Page() {
             </PostActionIcon>
           </div>
 
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{bucket.likes.length} likes</span>
-            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{visibleComments.length} comments</span>
-            <span className="rounded-full bg-[#FFF0D0] px-3 py-2">{bucket.shares.length} shares</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.likes.length} likes</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{visibleComments.length} comments</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.shares.length} shares</span>
           </div>
 
           <div className="space-y-3">
@@ -2268,7 +2270,7 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
 
-    const post = displayPosts.find((item) => item.id === postId);
+    const post = posts.find((item) => item.id === postId) ?? fallbackFeedPosts.find((item) => item.id === postId);
     if (!post || typeof window === "undefined") return;
 
     const shareUrl = `${window.location.origin}/?post=${encodeURIComponent(postId)}`;
