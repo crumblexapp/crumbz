@@ -1034,19 +1034,18 @@ export default function Page() {
   const uniqueSharers = new Set(
     Object.values(interactions).flatMap((item) => item.shares.map((share) => share.authorEmail)),
   ).size;
-  const friendableAccounts = accounts.filter((account) => {
+  const normalizedFriendQuery = friendQuery.trim().replace(/^@+/, "").toLowerCase();
+  const exactFriendMatch = accounts.find((account) => {
     const email = account.googleProfile?.email ?? "";
-    const query = friendQuery.trim().toLowerCase();
-    if (!query || email === user.googleProfile?.email) return false;
+    const username = account.profile.username?.trim().toLowerCase() ?? "";
+    if (!normalizedFriendQuery || !username) return false;
     if (email.toLowerCase() === ADMIN_EMAIL) return false;
-    if (liveProfile.friends.includes(email)) return false;
-    if (liveProfile.outgoingFriendRequests.includes(email)) return false;
-    if (liveProfile.incomingFriendRequests.includes(email)) return false;
+    if (email.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) return false;
+    if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (liveProfile.incomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
 
-    return (
-      email.toLowerCase().includes(query) ||
-      account.profile.username.toLowerCase().includes(query)
-    );
+    return username === normalizedFriendQuery;
   });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
   const favoriteCityCenter = cityCenters[normalizeCityKey(liveProfile.city)] ?? [52.2297, 21.0122];
@@ -3523,30 +3522,28 @@ export default function Page() {
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">social</p>
                   <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">add your friends</h2>
-                  <p className="text-sm text-[#2C1A0E]">search by email or username and add them to your crumbz circle.</p>
+                  <p className="text-sm text-[#2C1A0E]">search by exact username only to add someone to your crumbz circle.</p>
                 </div>
                 <Input
                   radius="full"
-                  placeholder="search email or username"
+                  placeholder="type exact username"
                   value={friendQuery}
                   onValueChange={setFriendQuery}
                   classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
                 />
                 {friendQuery ? (
-                  friendableAccounts.length ? (
-                    friendableAccounts.map((account) => (
-                      <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#2C1A0E]">{account.profile.fullName}</p>
-                          <p className="text-sm text-[#2C1A0E]">@{account.profile.username} • {account.googleProfile?.email}</p>
-                        </div>
-                        <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => addFriend(account.googleProfile?.email ?? "")}>
-                          send request
-                        </Button>
+                  exactFriendMatch ? (
+                    <div className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{exactFriendMatch.profile.fullName}</p>
+                        <p className="text-sm text-[#2C1A0E]">@{exactFriendMatch.profile.username}</p>
                       </div>
-                    ))
+                      <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => addFriend(exactFriendMatch.googleProfile?.email ?? "")}>
+                        send request
+                      </Button>
+                    </div>
                   ) : (
-                    <p className="text-sm text-[#2C1A0E]">no matching account yet.</p>
+                    <p className="text-sm text-[#2C1A0E]">no exact username match yet.</p>
                   )
                 ) : null}
 
