@@ -1367,11 +1367,25 @@ export default function Page() {
   }, [accounts]);
 
   useEffect(() => {
-    const currentEmail = user.googleProfile?.email;
+    const currentEmail = user.googleProfile?.email?.toLowerCase();
     if (!currentEmail || !accounts.length) return;
 
-    const freshAccount = accounts.find((account) => account.googleProfile?.email === currentEmail);
-    if (!freshAccount) return;
+    const freshAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail);
+    if (!freshAccount) {
+      if (!user.signedIn) return;
+
+      persistUser(defaultUser);
+      setFullName(null);
+      setUsername(null);
+      setCity(null);
+      setIsStudent(null);
+      setSchoolName(null);
+      setAuthMode("login");
+      setShowWelcomeScreen(false);
+      setStudentTab("feed");
+      setError("that account was removed. sign up or log in with another google account.");
+      return;
+    }
 
     const currentSerialized = JSON.stringify(user);
     const freshSerialized = JSON.stringify(freshAccount);
