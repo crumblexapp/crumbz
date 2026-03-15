@@ -1127,7 +1127,8 @@ export default function Page() {
   const renderFeedCard = (post: AppPost) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
-    const hasLiked = bucket.likes.some((like) => like.authorEmail === user.googleProfile?.email);
+    const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+    const hasLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail);
     const isStudentPost = post.authorRole === "student";
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
@@ -2318,20 +2319,20 @@ export default function Page() {
   };
 
   const toggleLike = (postId: string) => {
-    const authorEmail = user.googleProfile?.email;
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
-      const alreadyLiked = bucket.likes.some((like) => like.authorEmail === authorEmail);
+      const alreadyLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === authorEmail);
 
       return {
         ...current,
         [postId]: {
           ...bucket,
           likes: alreadyLiked
-            ? bucket.likes.filter((like) => like.authorEmail !== authorEmail)
+            ? bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail)
             : [
                 ...bucket.likes,
                 {
