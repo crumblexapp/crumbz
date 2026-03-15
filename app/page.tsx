@@ -1661,6 +1661,34 @@ export default function Page() {
   };
 
   const signOut = () => {
+    const currentEmail = user.googleProfile?.email?.toLowerCase();
+    const signedOutAccount = currentEmail
+      ? accountsRef.current.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail) ?? null
+      : null;
+
+    if (signedOutAccount) {
+      const nextSignedOutAccount = {
+        ...signedOutAccount,
+        signedIn: false,
+      };
+
+      const nextAccounts = accountsRef.current.map((account) =>
+        account.googleProfile?.email?.toLowerCase() === currentEmail ? nextSignedOutAccount : account
+      );
+
+      setAccounts(nextAccounts);
+      void mutateAccountState({
+        action: "upsert_account",
+        account: nextSignedOutAccount,
+      })
+        .then((result) => {
+          if (result.accounts.length) {
+            setAccounts(result.accounts);
+          }
+        })
+        .catch(() => undefined);
+    }
+
     persistUser(defaultUser);
     setFullName(null);
     setUsername(null);
@@ -1668,8 +1696,9 @@ export default function Page() {
     setIsStudent(null);
     setSchoolName(null);
     setError("");
-    setAuthMode("signup");
-    setShowWelcomeScreen(true);
+    setAuthMode("login");
+    setShowWelcomeScreen(false);
+    setStudentTab("feed");
   };
 
   const addFriend = (friendEmail: string) => {
@@ -3470,11 +3499,18 @@ export default function Page() {
           <section className="mt-6 space-y-4">
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
-                <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{user.profile.fullName}</p>
-                <p className="text-sm text-[#2C1A0E]">@{user.profile.username}</p>
-                <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                <p className="text-sm text-[#2C1A0E]">{favoritePlaceIds.length} favorite food spots</p>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-3">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{user.profile.fullName}</p>
+                    <p className="text-sm text-[#2C1A0E]">@{user.profile.username}</p>
+                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                    <p className="text-sm text-[#2C1A0E]">{favoritePlaceIds.length} favorite food spots</p>
+                  </div>
+                  <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
+                    log out
+                  </Button>
+                </div>
               </CardBody>
             </Card>
           </section>
