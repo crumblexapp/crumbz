@@ -370,11 +370,14 @@ export async function POST(request: Request) {
         }),
       );
 
-    const { data: sharedState, error: sharedStateError } = await readSharedState();
-    if (sharedStateError) {
-      return NextResponse.json({ ok: false, message: sharedStateError.message }, { status: 500 });
+    const { data: savedData, error: writeError } = await writeAccounts(nextAccounts);
+    if (writeError) {
+      return NextResponse.json({ ok: false, message: writeError.message }, { status: 500 });
     }
 
+    const savedAccounts = Array.isArray(savedData?.accounts) ? (savedData.accounts as StoredUser[]).map(normalizeAccount) : nextAccounts;
+
+    const { data: sharedState } = await readSharedState().catch(() => ({ data: null }));
     const posts = Array.isArray(sharedState?.posts) ? (sharedState.posts as Array<Record<string, unknown>>) : [];
     const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
     const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
@@ -398,24 +401,26 @@ export async function POST(request: Request) {
         ]),
     );
 
+    await writeSharedState({
+      posts: nextPosts,
+      interactions: nextInteractions,
+      announcements: sharedState?.announcements ?? [],
+    }).catch(() => undefined);
+
     const mediaPaths = deletedPosts
       .flatMap((post) => (Array.isArray(post.mediaUrls) ? post.mediaUrls : []))
       .map((url) => (typeof url === "string" ? getMediaPath(url) : null))
       .filter((path): path is string => Boolean(path));
 
     if (mediaPaths.length) {
-      await supabaseServer.storage.from(MEDIA_BUCKET).remove(mediaPaths);
+      await supabaseServer.storage.from(MEDIA_BUCKET).remove(mediaPaths).catch(() => undefined);
     }
 
-    const { error: sharedWriteError } = await writeSharedState({
-      posts: nextPosts,
-      interactions: nextInteractions,
-      announcements: sharedState?.announcements ?? [],
+    return NextResponse.json({
+      ok: true,
+      accounts: savedAccounts,
+      user: null,
     });
-
-    if (sharedWriteError) {
-      return NextResponse.json({ ok: false, message: sharedWriteError.message }, { status: 500 });
-    }
   }
 
   const { data: savedData, error: writeError } = await writeAccounts(nextAccounts);
