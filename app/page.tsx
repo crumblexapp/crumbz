@@ -495,6 +495,24 @@ function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, server
   };
 }
 
+function removeUserFromInteractions(interactions: InteractionsMap, targetEmail: string, deletedPostIds: Set<string>) {
+  const normalizedTargetEmail = targetEmail.toLowerCase();
+
+  return Object.fromEntries(
+    Object.entries(interactions)
+      .filter(([postId]) => !deletedPostIds.has(postId))
+      .map(([postId, bucket]) => [
+        postId,
+        {
+          ...bucket,
+          comments: bucket.comments.filter((comment) => comment.authorEmail.toLowerCase() !== normalizedTargetEmail),
+          shares: bucket.shares.filter((share) => share.authorEmail.toLowerCase() !== normalizedTargetEmail),
+          likes: bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== normalizedTargetEmail),
+        },
+      ]),
+  );
+}
+
 function readInteractions() {
   const saved = readJson<InteractionsMap>(INTERACTIONS_KEY, {});
 
@@ -2070,21 +2088,13 @@ export default function Page() {
       targetEmail,
     })
       .then((result) => {
+        const deletedPostIds = new Set(
+          posts.filter((post) => post.authorEmail.toLowerCase() === targetEmail.toLowerCase()).map((post) => post.id),
+        );
+
         setAccounts(result.accounts);
         setPosts((current) => current.filter((post) => post.authorEmail.toLowerCase() !== targetEmail.toLowerCase()));
-        setInteractions((current) =>
-          Object.fromEntries(
-            Object.entries(current).map(([postId, bucket]) => [
-              postId,
-              {
-                ...bucket,
-                comments: bucket.comments.filter((comment) => comment.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
-                shares: bucket.shares.filter((share) => share.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
-                likes: bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== targetEmail.toLowerCase()),
-              },
-            ]).filter(([postId]) => current[postId] && !posts.some((post) => post.id === postId && post.authorEmail.toLowerCase() === targetEmail.toLowerCase())),
-          ),
-        );
+        setInteractions((current) => removeUserFromInteractions(current, targetEmail, deletedPostIds));
       })
       .catch(() => {
         setError("that delete didn’t stick. try again.");
@@ -2805,14 +2815,19 @@ export default function Page() {
                       <div className="grid gap-2">
                         {userManagementRows.length ? (
                           userManagementRows.map((account) => (
-                            <div key={account.googleProfile?.email} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
+                            <div key={account.googleProfile?.email} className="flex items-center justify-between gap-3 rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
                               <div>
                                 <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new user"}</p>
                                 <p className="text-[#2C1A0E]">
                                   @{account.profile.username || "pending"} • {formatProfileMeta(account.profile.city, account.profile.schoolName) || "profile not finished"}
                                 </p>
                               </div>
-                              <Chip className="bg-white text-[#2C1A0E]">{account.signedIn ? "active" : "saved"}</Chip>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Chip className="bg-white text-[#2C1A0E]">{account.signedIn ? "active" : "saved"}</Chip>
+                                <Button radius="full" color="danger" variant="flat" className="bg-white text-[#B3261E]" onPress={() => deleteUserFromAdmin(account.googleProfile?.email ?? "")}>
+                                  delete
+                                </Button>
+                              </div>
                             </div>
                           ))
                         ) : (
