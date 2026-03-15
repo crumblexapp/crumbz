@@ -465,6 +465,29 @@ function normalizePosts(posts: Partial<AppPost>[]) {
   })) as AppPost[];
 }
 
+function mergePostsPreferLocal(localPosts: AppPost[], serverPosts: AppPost[]) {
+  const merged = new Map<string, AppPost>();
+
+  serverPosts.forEach((post) => {
+    merged.set(post.id, post);
+  });
+
+  localPosts.forEach((post) => {
+    merged.set(post.id, post);
+  });
+
+  return Array.from(merged.values()).sort((a, b) => {
+    const aTime = Date.parse(a.createdAt);
+    const bTime = Date.parse(b.createdAt);
+
+    if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+      return b.createdAt.localeCompare(a.createdAt);
+    }
+
+    return bTime - aTime;
+  });
+}
+
 function readInteractions() {
   const saved = readJson<InteractionsMap>(INTERACTIONS_KEY, {});
 
@@ -927,6 +950,7 @@ export default function Page() {
   const accountsRef = useRef(accounts);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
+  const lastLocalPostsMutationAtRef = useRef(0);
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const liveAccount =
@@ -1297,7 +1321,7 @@ export default function Page() {
             });
           } else {
             setAccounts((payload.accounts ?? []) as StoredUser[]);
-            setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+            setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
             setInteractions((payload.interactions ?? {}) as InteractionsMap);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           }
@@ -1504,7 +1528,9 @@ export default function Page() {
           }
 
           setAccounts((payload.accounts ?? []) as StoredUser[]);
-          setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+          const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
+          const shouldPreserveLocalPosts = Date.now() - lastLocalPostsMutationAtRef.current < 5000;
+          setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
           setInteractions((payload.interactions ?? {}) as InteractionsMap);
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
@@ -1926,6 +1952,7 @@ export default function Page() {
       weekKey: "",
     };
 
+    lastLocalPostsMutationAtRef.current = Date.now();
     setPosts((current) =>
       editingPostId
         ? current.map((post) => (post.id === editingPostId ? nextPost : post))
@@ -1975,7 +2002,12 @@ export default function Page() {
       weekKey: currentSundayKey,
     };
 
+    lastLocalPostsMutationAtRef.current = Date.now();
     setPosts((current) => [nextPost, ...current.filter((post) => post.id !== nextPost.id)]);
+    syncSharedState({
+      nextPosts: [nextPost, ...posts.filter((post) => post.id !== nextPost.id)],
+      nextInteractions: interactions,
+    });
     setWeeklyDumpCaption("");
     setWeeklyDumpMediaUrls([]);
     setWeeklyDumpNotice(currentUserWeeklyDump ? "your sunday drop is updated." : "your weekly dump is live.");
@@ -2000,6 +2032,7 @@ export default function Page() {
   };
 
   const deletePost = (postId: string) => {
+    lastLocalPostsMutationAtRef.current = Date.now();
     setPosts((current) => current.filter((post) => post.id !== postId));
     setInteractions((current) => {
       const next = { ...current };
