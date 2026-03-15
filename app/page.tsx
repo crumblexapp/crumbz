@@ -303,6 +303,16 @@ type AppPlanSpot = {
   finalVotes: Record<string, PlanChoice>;
 };
 
+type AppPlanMessage = {
+  id: string;
+  authorEmail: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+  kind: "text" | "suggestion" | "system";
+  linkedSpotId?: string;
+};
+
 type AppPlan = {
   id: string;
   createdAt: string;
@@ -311,6 +321,7 @@ type AppPlan = {
   participantEmails: string[];
   stage: PlanStage;
   spots: AppPlanSpot[];
+  messages: AppPlanMessage[];
   vibeVotes: Record<string, PlanVibe>;
   selectedVibe?: PlanVibe;
   lockedSpotId?: string;
@@ -564,7 +575,9 @@ function readInteractions() {
 
 function readPlans() {
   const saved = readJson<AppPlan[]>(PLANS_KEY, []);
-  return Array.isArray(saved) ? saved : [];
+  if (!Array.isArray(saved)) return [];
+
+  return saved.map(normalizePlan);
 }
 
 function matchesAcceptedType(file: File, acceptedTypes: string[]) {
@@ -656,13 +669,61 @@ function pickFromHash<T>(value: string, options: T[]) {
 }
 
 function mergePlansPreferLocal(localPlans: AppPlan[], serverPlans: AppPlan[]) {
-  const nextById = new Map(serverPlans.map((plan) => [plan.id, plan]));
+  const nextById = new Map(serverPlans.map((plan) => [plan.id, normalizePlan(plan)]));
 
   for (const plan of localPlans) {
-    nextById.set(plan.id, plan);
+    nextById.set(plan.id, normalizePlan(plan));
   }
 
   return Array.from(nextById.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function normalizePlan(plan: AppPlan): AppPlan {
+  return {
+    ...plan,
+    messages: Array.isArray(plan.messages)
+      ? plan.messages
+      : [
+          {
+            id: `plan-message-${plan.id}`,
+            authorEmail: "system",
+            authorName: "plans",
+            text: "what are you all feeling? drop a spot 👇",
+            createdAt: plan.createdAt,
+            kind: "system",
+          },
+        ],
+  };
+}
+
+function createTypedPlanSpot(params: {
+  planId: string;
+  name: string;
+  rankedPlaces: Array<FavoritePlace & { saves?: number }>;
+  currentCity: string;
+  participantEmails: string[];
+  reactionForFriend: (friendEmail: string, spotName: string) => PlanReaction;
+}) {
+  const { planId, name, rankedPlaces, currentCity, participantEmails, reactionForFriend } = params;
+  const matchedPlace =
+    rankedPlaces.find((place) => place.name.toLowerCase() === name.trim().toLowerCase()) ??
+    rankedPlaces[hashString(`${planId}-${name}`) % Math.max(rankedPlaces.length, 1)] ??
+    null;
+  const spotName = name.trim() || matchedPlace?.name || "mystery spot";
+  const likedByCount = Math.max(matchedPlace?.saves ?? 0, (hashString(`${planId}-${spotName}`) % 34) + 6);
+
+  return {
+    id: `typed-spot-${planId}-${hashString(`${spotName}-${Date.now()}`)}`,
+    name: spotName,
+    photoUrl: "",
+    likedByCount,
+    reason: `${likedByCount} crumbz users saved this one`,
+    location: matchedPlace?.address ?? currentCity ?? "city center",
+    distanceFromCampus: `${(hashString(`${spotName}-distance`) % 18) + 5} min from campus`,
+    source: "feed" as const,
+    reactions: Object.fromEntries(participantEmails.map((email) => [email, reactionForFriend(email, spotName)])),
+    finalVotes: {},
+  };
 }
 
 function getFallbackFavoritePlaces(cityName: string) {
@@ -1008,6 +1069,7 @@ export default function Page() {
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
+  const [planMessageDraft, setPlanMessageDraft] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedPlanFriendEmails, setSelectedPlanFriendEmails] = useState<string[]>([]);
   const [shareTargetPlanId, setShareTargetPlanId] = useState<string | null>(null);
@@ -1315,6 +1377,18 @@ export default function Page() {
     };
   };
 
+  const buildTypedPlanSpot = (planId: string, name: string): AppPlanSpot =>
+    createTypedPlanSpot({
+      planId,
+      name,
+      rankedPlaces: [...favoritePlaces, ...foodSpotCounts, ...getFallbackFavoritePlaces(liveProfile.city)],
+      currentCity: liveProfile.city,
+      participantEmails: friendAccounts
+        .map((account) => account.googleProfile?.email ?? "")
+        .filter(Boolean),
+      reactionForFriend: (friendEmail, spotName) => getReactionForFriend(planId, spotName, friendEmail),
+    });
+
   const createCrumbzSpot = useEffectEvent((plan: AppPlan, source: "crumbz-pick" | "wildcard"): AppPlanSpot => {
     const rankedPlaces = [...favoritePlaces, ...foodSpotCounts].filter((place, index, list) =>
       list.findIndex((item) => item.name === place.name) === index,
@@ -1383,6 +1457,16 @@ export default function Page() {
       participantEmails: [currentUserEmail, ...selectedPlanFriendEmails],
       stage: "chat",
       spots: [],
+      messages: [
+        {
+          id: `plan-message-${Date.now()}`,
+          authorEmail: "system",
+          authorName: "plans",
+          text: "what are you all feeling? drop a spot 👇",
+          createdAt: formatNow(),
+          kind: "system",
+        },
+      ],
       vibeVotes: {},
       reminderEnabled: false,
     };
@@ -1404,11 +1488,25 @@ export default function Page() {
         return { ...plan, updatedAt: new Date().toISOString() };
       }
 
+      const nextSpot = buildPlanSpotFromPost(planId, post);
+
       return {
         ...plan,
         stage: "chat",
         updatedAt: new Date().toISOString(),
-        spots: [...plan.spots, buildPlanSpotFromPost(planId, post)],
+        spots: [...plan.spots, nextSpot],
+        messages: [
+          ...plan.messages,
+          {
+            id: `plan-message-${Date.now()}`,
+            authorEmail: currentUserEmail,
+            authorName: user.profile.fullName,
+            text: `dropped ${post.title}`,
+            createdAt: formatNow(),
+            kind: "suggestion",
+            linkedSpotId: nextSpot.id,
+          },
+        ],
       };
     });
 
@@ -1500,6 +1598,43 @@ export default function Page() {
       reminderEnabled: !plan.reminderEnabled,
       updatedAt: new Date().toISOString(),
     }));
+  };
+
+  const sendPlanMessage = (planId: string, kind: "text" | "suggestion" = "text") => {
+    const trimmed = planMessageDraft.trim();
+    if (!trimmed || !currentUserEmail) return;
+
+    updatePlan(planId, (plan) => {
+      const nextMessages = [...plan.messages];
+      const nextSpots = [...plan.spots];
+      let linkedSpotId: string | undefined;
+
+      if (kind === "suggestion") {
+        const nextSpot = buildTypedPlanSpot(planId, trimmed);
+        nextSpots.push(nextSpot);
+        linkedSpotId = nextSpot.id;
+      }
+
+      nextMessages.push({
+        id: `plan-message-${Date.now()}`,
+        authorEmail: currentUserEmail,
+        authorName: user.profile.fullName,
+        text: trimmed,
+        createdAt: formatNow(),
+        kind,
+        linkedSpotId,
+      });
+
+      return {
+        ...plan,
+        stage: "chat",
+        updatedAt: new Date().toISOString(),
+        spots: nextSpots,
+        messages: nextMessages,
+      };
+    });
+
+    setPlanMessageDraft("");
   };
   const selectedPlanParticipants = selectedPlan ? getPlanParticipants(selectedPlan) : [];
   const selectedPlanLockedSpot = selectedPlan?.spots.find((spot) => spot.id === selectedPlan.lockedSpotId) ?? null;
@@ -1931,6 +2066,60 @@ export default function Page() {
 
   useEffect(() => {
     const activePlan = selectedPlanId ? plans.find((plan) => plan.id === selectedPlanId) : null;
+    if (!activePlan || activePlan.stage !== "chat") return;
+
+    const missingFriendSuggestion = activePlan.participantEmails.find((email) => {
+      if (email === currentUserEmail) return false;
+      return !activePlan.messages.some((message) => message.authorEmail === email && message.kind === "suggestion");
+    });
+
+    if (!missingFriendSuggestion) return;
+
+    const timeout = window.setTimeout(() => {
+      const friend = friendAccounts.find((account) => account.googleProfile?.email === missingFriendSuggestion);
+      const suggestionPool = [
+        ...favoritePlaces,
+        ...foodSpotCounts,
+        ...getFallbackFavoritePlaces(liveProfile.city),
+      ];
+      const suggestedPlace =
+        suggestionPool[hashString(`${activePlan.id}-${missingFriendSuggestion}`) % Math.max(suggestionPool.length, 1)] ??
+        null;
+      const nextSpot = createTypedPlanSpot({
+        planId: activePlan.id,
+        name: suggestedPlace?.name ?? "late noodles",
+        rankedPlaces: suggestionPool,
+        currentCity: liveProfile.city,
+        participantEmails: friendAccounts
+          .map((account) => account.googleProfile?.email ?? "")
+          .filter(Boolean),
+        reactionForFriend: (friendEmail, spotName) => getReactionForFriend(activePlan.id, spotName, friendEmail),
+      });
+
+      updatePlan(activePlan.id, (plan) => ({
+        ...plan,
+        updatedAt: new Date().toISOString(),
+        spots: plan.spots.some((spot) => spot.name.toLowerCase() === nextSpot.name.toLowerCase()) ? plan.spots : [...plan.spots, nextSpot],
+        messages: [
+          ...plan.messages,
+          {
+            id: `plan-message-${Date.now()}-${missingFriendSuggestion}`,
+            authorEmail: missingFriendSuggestion,
+            authorName: friend?.profile.fullName ?? friend?.profile.username ?? "friend",
+            text: suggestedPlace?.name ?? "what about late noodles?",
+            createdAt: formatNow(),
+            kind: "suggestion",
+            linkedSpotId: nextSpot.id,
+          },
+        ],
+      }));
+    }, 950);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentUserEmail, favoritePlaces, foodSpotCounts, friendAccounts, liveProfile.city, plans, selectedPlanId]);
+
+  useEffect(() => {
+    const activePlan = selectedPlanId ? plans.find((plan) => plan.id === selectedPlanId) : null;
     if (!activePlan || (activePlan.stage !== "crumbz-pick" && activePlan.stage !== "wildcard")) return;
 
     const targetSpot = [...activePlan.spots].reverse().find((spot) => spot.source === activePlan.stage);
@@ -2057,7 +2246,7 @@ export default function Page() {
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
           );
           const serverPlans = (payload.plans ?? []) as AppPlan[];
-          setPlans((current) => (shouldPreserveLocalPosts ? mergePlansPreferLocal(current, serverPlans) : serverPlans));
+          setPlans((current) => (shouldPreserveLocalPosts ? mergePlansPreferLocal(current, serverPlans) : serverPlans.map(normalizePlan)));
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
@@ -4356,6 +4545,66 @@ export default function Page() {
                       clear share mode
                     </Button>
                   </div>
+
+                  <div className="grid gap-3 rounded-[24px] bg-[#fffaf1] p-4">
+                    {selectedPlan.messages.map((message) => {
+                      const isCurrentUser = message.authorEmail === currentUserEmail;
+                      const linkedSpot = message.linkedSpotId
+                        ? selectedPlan.spots.find((spot) => spot.id === message.linkedSpotId)
+                        : null;
+
+                      return (
+                        <div key={message.id} className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[85%] rounded-[22px] px-4 py-3 ${
+                              message.kind === "system"
+                                ? "bg-[#2C1A0E] text-white"
+                                : isCurrentUser
+                                  ? "bg-[#F5A623] text-white"
+                                  : "bg-white text-[#2C1A0E]"
+                            }`}
+                          >
+                            <p className={`text-xs uppercase tracking-[0.16em] ${message.kind === "system" || isCurrentUser ? "text-white/70" : "text-[#F5A623]"}`}>
+                              {message.authorName}
+                            </p>
+                            <p className="mt-1 text-base leading-6">{message.text}</p>
+                            {linkedSpot ? (
+                              <div className={`mt-3 rounded-[18px] px-3 py-3 text-sm ${message.kind === "system" || isCurrentUser ? "bg-white/15" : "bg-[#FFF7E8]"}`}>
+                                <p className="font-semibold">{linkedSpot.name}</p>
+                                <p className={`mt-1 ${message.kind === "system" || isCurrentUser ? "text-white/75" : "text-[#6c7289]"}`}>
+                                  {linkedSpot.location} • {linkedSpot.likedByCount} likes
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <form
+                    className="grid gap-3 rounded-[24px] bg-[#FFF7E8] p-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      sendPlanMessage(selectedPlan.id, "text");
+                    }}
+                  >
+                    <Input
+                      radius="full"
+                      placeholder="type to the group"
+                      value={planMessageDraft}
+                      onValueChange={setPlanMessageDraft}
+                      classNames={{ inputWrapper: "bg-white border border-white shadow-none" }}
+                    />
+                    <div className="flex gap-2">
+                      <Button radius="full" className="bg-[#2C1A0E] text-white" type="submit">
+                        send
+                      </Button>
+                      <Button radius="full" className="bg-[#F5A623] text-white" type="button" onPress={() => sendPlanMessage(selectedPlan.id, "suggestion")}>
+                        suggest spot
+                      </Button>
+                    </div>
+                  </form>
 
                   {selectedPlan.spots.length ? (
                     <div className="grid gap-4">
