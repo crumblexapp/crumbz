@@ -1037,6 +1037,9 @@ export default function Page() {
 
     return authorEmail === currentEmail || friendEmails.includes(authorEmail);
   });
+  const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
+    (post) => post.authorEmail.toLowerCase() !== (user.googleProfile?.email?.toLowerCase() ?? ""),
+  );
   const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
@@ -1079,6 +1082,39 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
+  const citySpotlightName = liveProfile.city || "Lodz";
+  const citySnapshot = {
+    mostPostedSpot: friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
+    mostLikedFood: foodSpotCounts[0]?.name ?? "most-liked food loading",
+    hottestNeighbourhood: liveProfile.city || "Lodz",
+    hiddenGem: favoritePlaces[0]?.name ?? "new hidden gem loading",
+  };
+  const crumbTrailItems = [
+    `best cheap eats near ${liveProfile.schoolName || "UL"}`,
+    "late night spots that are actually good",
+    "hidden bars nobody's talking about",
+  ];
+  const friendFoodMoments = [
+    ...friendWeeklyDumps.slice(0, 3).map((post) => ({
+      id: post.id,
+      title: `${post.authorName} posted a dump`,
+      detail: post.body || "new food photos this week",
+    })),
+    ...friendAccounts
+      .flatMap((account) =>
+        (account.profile.favoritePlaceIds ?? []).slice(0, 1).map((placeId) => {
+          const matchedPlace = allFoodSpots.find((place) => place.id === placeId);
+          return matchedPlace
+            ? {
+                id: `${account.googleProfile?.email}-like-${placeId}`,
+                title: `${account.profile.fullName} liked ${matchedPlace.name}`,
+                detail: matchedPlace.address,
+              }
+            : null;
+        }),
+      )
+      .filter((item): item is { id: string; title: string; detail: string } => Boolean(item)),
+  ].slice(0, 4);
   const storyRailItems = [
     {
       id: "crumbz",
@@ -3510,22 +3546,26 @@ export default function Page() {
                 <CardBody className="flex-row items-center justify-between gap-4 p-5">
                   <div className="max-w-[14rem]">
                     <p className="font-[family-name:var(--font-young-serif)] text-[2.3rem] leading-none text-[#2C1A0E]">
-                      your digest
+                      this week in {citySpotlightName}
                     </p>
                     <p className="mt-3 text-lg leading-7 text-[#4f526f]">
-                      your top picks and taste profile. updates sundays.
+                      a live snapshot of what&apos;s happening in the city this week.
                     </p>
-                    <Button radius="full" className="mt-4 h-12 bg-[#2C1A0E] px-8 text-white">
-                      open
-                    </Button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Chip className="bg-white text-[#2C1A0E]">most posted: {citySnapshot.mostPostedSpot}</Chip>
+                      <Chip className="bg-white text-[#2C1A0E]">most liked: {citySnapshot.mostLikedFood}</Chip>
+                    </div>
+                    <p className="mt-3 text-sm text-[#4f526f]">
+                      hottest neighbourhood: {citySnapshot.hottestNeighbourhood} • hidden gem: {citySnapshot.hiddenGem}
+                    </p>
                   </div>
                   <div className="relative h-40 w-32 shrink-0">
                     <div className="absolute right-4 top-0 h-20 w-20 rounded-full bg-[#f05c1c]" />
                     <div className="absolute left-2 top-4 rounded-full bg-[#dfff67] px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2C1A0E]">
-                      wild
+                      city
                     </div>
                     <div className="absolute bottom-0 right-0 flex h-24 w-16 items-center justify-center rounded-[16px] bg-[#ff7b2f] text-4xl">
-                      🌶️
+                      🗺️
                     </div>
                     <div className="absolute bottom-6 left-5 text-xl text-[#dfff67]">✦</div>
                     <div className="absolute bottom-2 left-1 text-base text-[#dfff67]">✦</div>
@@ -3538,32 +3578,49 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        plans & perks
+                        the crumb trail
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">perfect places and perks for the squad</p>
+                      <p className="mt-2 text-base text-[#6c7289]">your curated path through the best food spots in {citySpotlightName} right now.</p>
                     </div>
-                    <Button radius="full" variant="light" className="text-[#f05c1c]">
-                      see all
-                    </Button>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">weekly trail</Chip>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-[22px] bg-[#dff4ff] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#0EA5E9]">links</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">campus guides</p>
-                    </div>
-                    <div className="rounded-[22px] bg-[#e7ffd7] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#1FBF6B]">deals</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">new discounts</p>
-                    </div>
-                    <div className="rounded-[22px] bg-[#ffe2ec] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#FF3D6B]">likes</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">hot picks</p>
-                    </div>
-                    <div className="rounded-[22px] bg-[#efe4ff] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#7B4FFF]">premium</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">reward drops</p>
-                    </div>
+                  <div className="grid gap-3">
+                    {crumbTrailItems.map((item, index) => (
+                      <div key={item} className="rounded-[22px] bg-[#FFF0D0] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">trail {index + 1}</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{item}</p>
+                      </div>
+                    ))}
                   </div>
+                  <p className="text-sm text-[#6c7289]">
+                    updated weekly by the crumbz team so students can follow the city like a series.
+                  </p>
+                </CardBody>
+              </Card>
+
+              <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+                <CardBody className="gap-4 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        what your friends ate
+                      </p>
+                      <p className="mt-2 text-base text-[#6c7289]">your friends&apos; real food activity this week. no algorithm, no recommendations engine.</p>
+                    </div>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendFoodMoments.length} updates</Chip>
+                  </div>
+                  {friendFoodMoments.length ? (
+                    <div className="grid gap-3">
+                      {friendFoodMoments.map((item) => (
+                        <div key={item.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                          <p className="text-lg font-semibold text-[#2C1A0E]">{item.title}</p>
+                          <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[#6c7289]">once your friends post or like spots this week, they&apos;ll land here.</p>
+                  )}
                 </CardBody>
               </Card>
 
