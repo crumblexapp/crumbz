@@ -309,6 +309,7 @@ function getDefaultDare(): DareState {
 
   return {
     id: "dare-to-eat-weekly",
+    title: "late-night sleeper hit",
     prompt: "find the most underrated late-night bite in your city and prove it.",
     createdAt: formatNow(),
     releaseAt: releaseAt.toISOString(),
@@ -365,6 +366,7 @@ type DareSubmission = {
 
 type DareState = {
   id: string;
+  title: string;
   prompt: string;
   createdAt: string;
   releaseAt: string;
@@ -566,6 +568,7 @@ function normalizeDareState(dare: unknown): DareState {
   return {
     ...fallback,
     ...candidate,
+    title: typeof candidate.title === "string" ? candidate.title : fallback.title,
     prompt: typeof candidate.prompt === "string" ? candidate.prompt : fallback.prompt,
     createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : fallback.createdAt,
     releaseAt: typeof candidate.releaseAt === "string" ? candidate.releaseAt : fallback.releaseAt,
@@ -826,6 +829,21 @@ function formatNow() {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function toLocalDateTimeValue(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const timezoneOffset = parsed.getTimezoneOffset() * 60_000;
+  return new Date(parsed.getTime() - timezoneOffset).toISOString().slice(0, 16);
+}
+
+function fromLocalDateTimeValue(value: string, fallback: string) {
+  if (!value) return fallback;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
 }
 
 async function mutateAccountState<TUser = StoredUser>(payload: {
@@ -1104,8 +1122,11 @@ export default function Page() {
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
-  const [darePromptDraft, setDarePromptDraft] = useState("");
-  const [dareRewardDraft, setDareRewardDraft] = useState("");
+  const [dareTitleDraft, setDareTitleDraft] = useState(getDefaultDare().title);
+  const [darePromptDraft, setDarePromptDraft] = useState(getDefaultDare().prompt);
+  const [dareRewardDraft, setDareRewardDraft] = useState(getDefaultDare().reward);
+  const [dareReleaseAtDraft, setDareReleaseAtDraft] = useState(toLocalDateTimeValue(getDefaultDare().releaseAt));
+  const [dareClosesAtDraft, setDareClosesAtDraft] = useState(toLocalDateTimeValue(getDefaultDare().closesAt));
   const [dareLocationDraft, setDareLocationDraft] = useState("");
   const [dareCaptionDraft, setDareCaptionDraft] = useState("");
   const [dareProofPhotoUrl, setDareProofPhotoUrl] = useState("");
@@ -1140,6 +1161,7 @@ export default function Page() {
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
+  const lastDraftSyncedDareIdRef = useRef<string | null>(null);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
@@ -1217,6 +1239,27 @@ export default function Page() {
   const userManagementRows = [...accounts]
     .filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL)
     .sort((a, b) => (b.signedIn ? 1 : 0) - (a.signedIn ? 1 : 0));
+  const accountByEmail = new Map(
+    accounts
+      .filter((account) => account.googleProfile?.email)
+      .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", account] as const),
+  );
+  const resolveChallenger = (email: string, submission?: DareSubmission | null) => {
+    const account = accountByEmail.get(email.toLowerCase()) ?? null;
+    const fallbackName = submission?.authorName || email.split("@")[0] || "crumbz user";
+
+    return {
+      email,
+      name: account?.profile.fullName || account?.googleProfile?.name || fallbackName,
+      username: account?.profile.username || "",
+      meta: formatProfileMeta(account?.profile.city ?? "", account?.profile.schoolName ?? ""),
+      picture: account?.googleProfile?.picture,
+      submission: submission ?? null,
+    };
+  };
+  const reminderChallengers = dare.reminderEmails.map((email) => resolveChallenger(email));
+  const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
+  const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => post.authorRole !== "student");
   const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
@@ -1590,6 +1633,17 @@ export default function Page() {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    if (lastDraftSyncedDareIdRef.current === dare.id) return;
+
+    setDareTitleDraft(dare.title);
+    setDarePromptDraft(dare.prompt);
+    setDareRewardDraft(dare.reward);
+    setDareReleaseAtDraft(toLocalDateTimeValue(dare.releaseAt));
+    setDareClosesAtDraft(toLocalDateTimeValue(dare.closesAt));
+    lastDraftSyncedDareIdRef.current = dare.id;
+  }, [dare.closesAt, dare.id, dare.prompt, dare.releaseAt, dare.reward, dare.title]);
 
   useEffect(() => {
     accountsRef.current = accounts;
@@ -2188,22 +2242,33 @@ export default function Page() {
   const launchWeeklyDare = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const trimmedTitle = dareTitleDraft.trim();
     const trimmedPrompt = darePromptDraft.trim();
     const trimmedReward = dareRewardDraft.trim();
-    if (!trimmedPrompt) return;
+    const nextReleaseAt = fromLocalDateTimeValue(dareReleaseAtDraft, getDefaultDare().releaseAt);
+    const nextClosesAt = fromLocalDateTimeValue(dareClosesAtDraft, getDefaultDare().closesAt);
+
+    if (!trimmedTitle || !trimmedPrompt) return;
+    if (new Date(nextClosesAt).getTime() <= new Date(nextReleaseAt).getTime()) {
+      setAdminActionNotice("close time needs to be after the drop time.");
+      return;
+    }
 
     const nextDare = {
       ...getDefaultDare(),
       id: `dare-${Date.now()}`,
+      title: trimmedTitle,
       prompt: trimmedPrompt,
       reward: trimmedReward || "winner gets a special partner discount drop on tuesday.",
       createdAt: formatNow(),
+      releaseAt: nextReleaseAt,
+      closesAt: nextClosesAt,
     };
     const nextAnnouncements = [
       {
         id: `announcement-dare-${Date.now()}`,
-        title: "this week's dare just dropped",
-        body: "do you have what it takes? 🎯",
+        title: `${trimmedTitle} is live`,
+        body: trimmedPrompt,
         createdAt: formatNow(),
       },
       ...announcements,
@@ -2213,9 +2278,7 @@ export default function Page() {
     setDare(nextDare);
     setAnnouncements(nextAnnouncements);
     syncSharedState({ nextAnnouncements, nextDare });
-    setDarePromptDraft("");
-    setDareRewardDraft("");
-    setAdminActionNotice("new dare is live. users can accept it and post proof now.");
+    setAdminActionNotice("new dare design is live. challengers can set reminders, jump in, and submit proof now.");
   };
 
   const acceptDare = () => {
@@ -3196,13 +3259,21 @@ export default function Page() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">dare to eat</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">drop the weekly challenge, then pick the winner on tuesday.</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">design the full challenge here, then track every challenger in the new tab.</p>
                         </div>
                         <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                       </div>
                       <form className="grid gap-3" onSubmit={launchWeeklyDare}>
+                        <Input
+                          label="dare title"
+                          labelPlacement="outside"
+                          placeholder="late-night sleeper hit"
+                          value={dareTitleDraft}
+                          onValueChange={setDareTitleDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
                         <Textarea
-                          label="this week's dare"
+                          label="challenge prompt"
                           labelPlacement="outside"
                           placeholder="find the best thing nobody orders and prove it"
                           value={darePromptDraft}
@@ -3217,13 +3288,32 @@ export default function Page() {
                           onValueChange={setDareRewardDraft}
                           classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                         />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Input
+                            type="datetime-local"
+                            label="drops at"
+                            labelPlacement="outside"
+                            value={dareReleaseAtDraft}
+                            onValueChange={setDareReleaseAtDraft}
+                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                          />
+                          <Input
+                            type="datetime-local"
+                            label="proof closes at"
+                            labelPlacement="outside"
+                            value={dareClosesAtDraft}
+                            onValueChange={setDareClosesAtDraft}
+                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                          />
+                        </div>
                         <Button type="submit" radius="full" className="bg-[#2C1A0E] text-white">
-                          launch dare
+                          publish dare design
                         </Button>
                       </form>
                       <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
-                        <p className="text-sm font-semibold text-[#2C1A0E]">{dare.prompt}</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.acceptedEmails.length} accepted • closes {dareSubmissionsCloseText}</p>
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{dare.title}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.prompt}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.acceptedEmails.length} accepted • {dare.reminderEmails.length} reminded • closes {dareSubmissionsCloseText}</p>
                         <p className="mt-1 text-sm text-[#2C1A0E]">{dare.reward}</p>
                       </div>
                       <div className="flex gap-2">
@@ -3296,6 +3386,154 @@ export default function Page() {
                       ) : (
                         <p className="text-sm text-[#2C1A0E]">no activity yet.</p>
                       )}
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="challengers" title="challengers">
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: "remind me", value: reminderChallengers.length },
+                      { label: "i'm in", value: acceptedChallengers.length },
+                      { label: "proofs", value: proofChallengers.length },
+                    ].map((item) => (
+                      <Card key={item.label} className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                        <CardBody className="gap-1 p-4">
+                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">current dare</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">the challenger lists below are tied to this live setup.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.title}</Chip>
+                      </div>
+                      <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{dare.prompt}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">drops {dareReleaseText} • closes {dareSubmissionsCloseText}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.reward}</p>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">remind me list</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">everyone waiting for the drop notification.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{reminderChallengers.length}</Chip>
+                      </div>
+                      <div className="grid gap-2">
+                        {reminderChallengers.length ? (
+                          reminderChallengers.map((challenger) => (
+                            <div key={challenger.email} className="flex items-center justify-between gap-3 rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar src={challenger.picture} name={challenger.name} className="h-10 w-10" />
+                                <div>
+                                  <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
+                                  <p className="text-sm text-[#2C1A0E]">
+                                    {challenger.username ? `@${challenger.username}` : challenger.email}
+                                    {challenger.meta ? ` • ${challenger.meta}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <Chip className="bg-white text-[#2C1A0E]">remind me</Chip>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">nobody has tapped remind me yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">i&apos;m in list</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">these are the people who accepted the challenge.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{acceptedChallengers.length}</Chip>
+                      </div>
+                      <div className="grid gap-2">
+                        {acceptedChallengers.length ? (
+                          acceptedChallengers.map((challenger) => (
+                            <div key={challenger.email} className="flex items-center justify-between gap-3 rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                              <div className="flex items-center gap-3">
+                                <Avatar src={challenger.picture} name={challenger.name} className="h-10 w-10" />
+                                <div>
+                                  <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
+                                  <p className="text-sm text-[#2C1A0E]">
+                                    {challenger.username ? `@${challenger.username}` : challenger.email}
+                                    {challenger.meta ? ` • ${challenger.meta}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <Chip className="bg-white text-[#2C1A0E]">i&apos;m in</Chip>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">no one has accepted this dare yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">proof submissions</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">every challenger who submitted proof, with the actual proof attached.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{proofChallengers.length}</Chip>
+                      </div>
+                      <div className="grid gap-3">
+                        {proofChallengers.length ? (
+                          proofChallengers.map((challenger) => (
+                            <div key={challenger.submission?.id ?? challenger.email} className="rounded-[20px] bg-[#FFF0D0] p-4">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <Avatar src={challenger.picture} name={challenger.name} className="h-10 w-10" />
+                                  <div>
+                                    <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
+                                    <p className="text-sm text-[#2C1A0E]">
+                                      {challenger.username ? `@${challenger.username}` : challenger.email}
+                                      {challenger.meta ? ` • ${challenger.meta}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Chip className="bg-white text-[#2C1A0E]">{challenger.submission?.createdAt ?? "submitted"}</Chip>
+                              </div>
+                              {challenger.submission?.photoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={challenger.submission.photoUrl}
+                                  alt={challenger.submission.caption || challenger.name}
+                                  className="mt-3 h-52 w-full rounded-[18px] object-cover"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                              <p className="mt-3 text-sm font-semibold text-[#2C1A0E]">{challenger.submission?.locationTag || "no location tag"}</p>
+                              <p className="mt-1 text-sm text-[#2C1A0E]">{challenger.submission?.caption || "no caption"}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">no proof submissions yet.</p>
+                        )}
+                      </div>
                     </CardBody>
                   </Card>
                 </div>
@@ -3849,10 +4087,10 @@ export default function Page() {
                     <div>
                       <p className="text-xs uppercase tracking-[0.24em] text-[#ffd88b]">🎯 dare to eat</p>
                       <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-[1.02] text-white">
-                        {isPreDareWindow ? "a new food challenge drops every wednesday at midday." : dare.prompt}
+                        {isPreDareWindow ? "a new food challenge drops every wednesday at midday." : dare.title}
                       </h3>
                       <p className="mt-3 text-sm text-white/78">
-                        {isPreDareWindow ? `next dare drops ${dareReleaseText}` : `submissions close ${dareSubmissionsCloseText}`}
+                        {isPreDareWindow ? `next dare drops ${dareReleaseText}` : dare.prompt}
                       </p>
                     </div>
                     {isDareLiveWindow ? (
@@ -3884,7 +4122,7 @@ export default function Page() {
                   <p className="text-sm text-white/72">
                     {isPreDareWindow
                       ? "we’ll drop the challenge on wednesday, then everyone has until sunday midnight to post proof. tuesday the winner gets the spotlight and the reward."
-                      : "post your proof with a photo, location tag, and one line caption. finalists go to instagram. tuesday we crown the winner."}
+                      : `post your proof with a photo, location tag, and one line caption. ${dare.reward}`}
                   </p>
                 </CardBody>
               </Card>
@@ -4053,9 +4291,9 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        dare to eat
+                        {dare.title}
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">wednesday dare drop. sunday proof cutoff. tuesday winner takes the reward.</p>
+                      <p className="mt-2 text-base text-[#6c7289]">{dare.prompt}</p>
                     </div>
                     <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                   </div>
