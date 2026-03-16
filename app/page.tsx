@@ -28,6 +28,7 @@ const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
+const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -602,6 +603,10 @@ function readDare() {
   return normalizeDareState(readJson<DareState>(DARE_KEY, getDefaultDare()));
 }
 
+function readSeenNotifications() {
+  return readJson<string[]>(SEEN_NOTIFICATIONS_KEY, []);
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -1109,6 +1114,8 @@ export default function Page() {
   const [dare, setDare] = useState<DareState>(getDefaultDare());
   const [dareHydrated, setDareHydrated] = useState(false);
   const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
+  const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
+  const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [city, setCity] = useState<string | null>(null);
@@ -1211,6 +1218,9 @@ export default function Page() {
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 6);
   const latestAnnouncement = announcements[0] ?? null;
+  const selectedAnnouncement =
+    announcements.find((announcement) => announcement.id === selectedAnnouncementId) ??
+    latestAnnouncement;
   const now = new Date();
   const dareReleaseDate = new Date(dare.releaseAt);
   const dareCloseDate = new Date(dare.closesAt);
@@ -1424,7 +1434,8 @@ export default function Page() {
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
-  const notificationCount = notificationItems.length;
+  const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
+  const notificationCount = unreadNotificationItems.length;
 
   const renderFeedCard = (post: AppPost) => {
     const bucket = getInteractionBucket(interactions, post.id);
@@ -1611,6 +1622,7 @@ export default function Page() {
         setDare(nextDare);
         setDareHydrated(true);
         setAnnouncements([]);
+        setSeenNotificationIds(readSeenNotifications());
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
         hasLoadedDataRef.current = true;
       });
@@ -1815,6 +1827,11 @@ export default function Page() {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     window.localStorage.setItem(DARE_KEY, JSON.stringify(dare));
   }, [dare]);
+
+  useEffect(() => {
+    if (!hasLoadedDataRef.current || typeof window === "undefined") return;
+    window.localStorage.setItem(SEEN_NOTIFICATIONS_KEY, JSON.stringify(seenNotificationIds));
+  }, [seenNotificationIds]);
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || posts.length > 0) return;
@@ -2399,6 +2416,31 @@ export default function Page() {
       winnerSubmissionId: submissionId,
     }));
     setAdminActionNotice("winner locked. this submission now shows at the top of everyone’s feed.");
+  };
+
+  const markNotificationSeen = (notificationId: string) => {
+    setSeenNotificationIds((current) => (current.includes(notificationId) ? current : [...current, notificationId]));
+  };
+
+  const openAnnouncementNotification = (notificationId: string, announcementId: string) => {
+    markNotificationSeen(notificationId);
+    setSelectedAnnouncementId(announcementId);
+    setStudentTab("feed");
+    setNotificationsOpen(false);
+    window.setTimeout(() => {
+      const target = document.getElementById(`announcement-${announcementId}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  };
+
+  const openPostNotification = (notificationId: string, postId: string) => {
+    markNotificationSeen(notificationId);
+    setStudentTab("feed");
+    setNotificationsOpen(false);
+    window.setTimeout(() => {
+      const target = document.getElementById(`post-${postId}`);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
   };
 
   const resetComposer = () => {
@@ -4167,16 +4209,19 @@ export default function Page() {
                 </Card>
               ) : null}
 
-              <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]">
+              <Card
+                id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
+                className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
+              >
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
                       <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
-                        {latestAnnouncement?.title || "Upcoming Food Mob"}
+                        {selectedAnnouncement?.title || "Upcoming Food Mob"}
                       </h3>
                       <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
-                        {latestAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
+                        {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
                       </p>
                     </div>
                     <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
@@ -4670,8 +4715,8 @@ export default function Page() {
             </div>
 
             <div className="mt-6 space-y-3">
-              {notificationItems.length ? (
-                notificationItems.map((item) => (
+              {unreadNotificationItems.length ? (
+                unreadNotificationItems.map((item) => (
                   <div key={item.id} className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4">
                     <div className="flex items-start gap-3">
                       <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#F5A623] text-white" />
@@ -4685,6 +4730,7 @@ export default function Page() {
                               className="bg-[#F5A623] text-white"
                               onPress={() => {
                                 acceptFriendRequest(item.email);
+                                markNotificationSeen(item.id);
                                 setStudentTab("social");
                                 setNotificationsOpen(false);
                               }}
@@ -4697,6 +4743,7 @@ export default function Page() {
                               className="bg-white text-[#2C1A0E]"
                               onPress={() => {
                                 declineFriendRequest(item.email);
+                                markNotificationSeen(item.id);
                                 setNotificationsOpen(false);
                               }}
                             >
@@ -4708,10 +4755,7 @@ export default function Page() {
                             <Button
                               radius="full"
                               className="bg-[#F5A623] text-white"
-                              onPress={() => {
-                                setStudentTab("feed");
-                                setNotificationsOpen(false);
-                              }}
+                              onPress={() => openAnnouncementNotification(item.id, item.id)}
                             >
                               view update
                             </Button>
@@ -4721,14 +4765,7 @@ export default function Page() {
                             <Button
                               radius="full"
                               className="bg-[#F5A623] text-white"
-                              onPress={() => {
-                                setStudentTab("feed");
-                                setNotificationsOpen(false);
-                                window.setTimeout(() => {
-                                  const target = document.getElementById(`post-${item.postId}`);
-                                  target?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                }, 120);
-                              }}
+                              onPress={() => openPostNotification(item.id, item.postId)}
                             >
                               open post
                             </Button>
