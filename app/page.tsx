@@ -1143,6 +1143,7 @@ export default function Page() {
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
   const [googleReady, setGoogleReady] = useState(false);
+  const [googleInitError, setGoogleInitError] = useState(false);
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -2015,11 +2016,17 @@ export default function Page() {
       });
 
       setGoogleReady(true);
+      setGoogleInitError(false);
     };
+
+    // if google never arrives, surface a retry after a short delay
+    const failSafeTimer = window.setTimeout(() => {
+      if (!googleReady) setGoogleInitError(true);
+    }, 4000);
 
     if (existingScript) {
       setupGoogle();
-      return;
+      return () => window.clearTimeout(failSafeTimer);
     }
 
     const script = document.createElement("script");
@@ -2029,7 +2036,8 @@ export default function Page() {
     script.dataset.googleIdentity = "true";
     script.onload = setupGoogle;
     document.body.appendChild(script);
-  }, [authMode]);
+    return () => window.clearTimeout(failSafeTimer);
+  }, [authMode, googleReady]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !user.signedIn || isAdmin) return;
@@ -3039,18 +3047,33 @@ export default function Page() {
                 </div>
 
                 {GOOGLE_CLIENT_ID ? (
-                  <div className="flex justify-center">
+                  <div className="flex flex-col items-center gap-3">
                     <div ref={googleButtonRef} className="min-h-11" />
+                    {!googleReady ? (
+                      <p className="text-center text-sm text-[#2C1A0E]">loading google sign-in…</p>
+                    ) : null}
+                    {googleInitError ? (
+                      <Button
+                        radius="full"
+                        className="bg-[#F5A623] text-white"
+                        onPress={() => {
+                          setGoogleReady(false);
+                          setGoogleInitError(false);
+                          const script = document.querySelector('script[data-google-identity=\"true\"]') as HTMLScriptElement | null;
+                          if (script?.onload) {
+                            script.onload(new Event("load"));
+                          }
+                        }}
+                      >
+                        retry google sign-in
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-[24px] border border-dashed border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm leading-6 text-[#2C1A0E]">
                     add `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and the real google button will appear here.
                   </div>
                 )}
-
-                {GOOGLE_CLIENT_ID && !googleReady ? (
-                  <p className="text-center text-sm text-[#2C1A0E]">loading google sign-in…</p>
-                ) : null}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
               </CardBody>
