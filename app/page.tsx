@@ -4358,17 +4358,41 @@ export default function Page() {
                     <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                   </div>
                   <div className="grid gap-3">
-                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
+                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_right,_rgba(255,190,92,0.26),_transparent_34%),linear-gradient(135deg,_#fff4d8_0%,_#fff0cb_52%,_#ffe8ac_100%)] p-4">
+                      <div className="absolute right-4 top-4 h-16 w-16 rounded-full bg-[#ffb23f]/18" />
+                      <div className="absolute bottom-4 right-16 text-[1.1rem] text-[#ffb23f]">✦</div>
+                      <div className="absolute bottom-7 right-8 text-[0.9rem] text-[#ffb23f]">✦</div>
+                      <div className="relative flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
+                          📣
+                        </div>
+                      </div>
+                      <p className="relative mt-2 max-w-[14rem] text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
                     </div>
-                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
+                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_left,_rgba(255,156,109,0.2),_transparent_30%),linear-gradient(135deg,_#fff1d7_0%,_#ffeabf_55%,_#ffe2a7_100%)] p-4">
+                      <div className="absolute -right-3 bottom-0 h-20 w-20 rounded-full bg-[#ff7b2f]/14" />
+                      <div className="absolute right-14 top-4 rounded-full bg-white/90 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#ff7b2f]">
+                        proof
+                      </div>
+                      <div className="relative flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
+                          📸
+                        </div>
+                      </div>
+                      <p className="relative mt-2 max-w-[15rem] text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
                     </div>
-                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
-                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
+                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_right,_rgba(255,214,102,0.24),_transparent_32%),linear-gradient(135deg,_#fff3dc_0%,_#ffefcf_48%,_#ffe6b6_100%)] p-4">
+                      <div className="absolute right-5 top-5 h-14 w-14 rounded-[18px] bg-[#fff3a6]/55" />
+                      <div className="absolute right-9 top-9 text-[1rem] text-[#f5a623]">✦</div>
+                      <div className="relative flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
+                          🏆
+                        </div>
+                      </div>
+                      <p className="relative mt-2 max-w-[15rem] text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
                     </div>
                   </div>
                 </CardBody>
