@@ -3412,15 +3412,63 @@ export default function Page() {
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">current dare</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">the challenger lists below are tied to this live setup.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">design the dare</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">whatever admin puts here is what students will see when wednesday hits.</p>
                         </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.title}</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{isPreDareWindow ? "scheduled" : "live"}</Chip>
                       </div>
+                      <form className="grid gap-3" onSubmit={launchWeeklyDare}>
+                        <Input
+                          label="dare title"
+                          labelPlacement="outside"
+                          placeholder="late-night sleeper hit"
+                          value={dareTitleDraft}
+                          onValueChange={setDareTitleDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
+                        <Textarea
+                          label="dare copy"
+                          labelPlacement="outside"
+                          placeholder="find the most underrated late-night bite in your city and prove it."
+                          value={darePromptDraft}
+                          onValueChange={setDarePromptDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
+                        <Input
+                          label="reward"
+                          labelPlacement="outside"
+                          placeholder="free coffee + pastry drop"
+                          value={dareRewardDraft}
+                          onValueChange={setDareRewardDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Input
+                            type="datetime-local"
+                            label="show on"
+                            labelPlacement="outside"
+                            value={dareReleaseAtDraft}
+                            onValueChange={setDareReleaseAtDraft}
+                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                          />
+                          <Input
+                            type="datetime-local"
+                            label="proof closes"
+                            labelPlacement="outside"
+                            value={dareClosesAtDraft}
+                            onValueChange={setDareClosesAtDraft}
+                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                          />
+                        </div>
+                        <Button type="submit" radius="full" className="bg-[#2C1A0E] text-white">
+                          save dare
+                        </Button>
+                      </form>
                       <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
-                        <p className="text-sm font-semibold text-[#2C1A0E]">{dare.prompt}</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">drops {dareReleaseText} • closes {dareSubmissionsCloseText}</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.reward}</p>
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{dareTitleDraft || "untitled dare"}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{darePromptDraft || "the dare copy preview shows here."}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">shows {dareReleaseText} • closes {dareSubmissionsCloseText}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dareRewardDraft || "reward preview goes here."}</p>
                       </div>
                     </CardBody>
                   </Card>
