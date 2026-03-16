@@ -174,6 +174,13 @@ export default function FavoritesMap({
   }, [effectiveCenter]);
 
   useEffect(() => {
+    if (!mapRef.current || !displayedPlaces.length) return;
+    const first = displayedPlaces[0];
+    mapRef.current.setCenter({ lat: first.lat, lng: first.lon });
+    setSelectedPlaceId((current) => current ?? first.id);
+  }, [displayedPlaces]);
+
+  useEffect(() => {
     if (!mapReady || !mapRef.current || !placesServiceRef.current) return;
 
     const query = searchQuery.trim();
