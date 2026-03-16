@@ -298,16 +298,23 @@ const defaultPostFields = {
 
 function getDefaultDare(): DareState {
   const now = new Date();
-  const nextSunday = new Date(now);
-  nextSunday.setDate(now.getDate() + ((7 - now.getDay()) % 7 || 7));
+  const releaseAt = new Date(now);
+  const daysUntilWednesday = (3 - now.getDay() + 7) % 7;
+  releaseAt.setDate(now.getDate() + (daysUntilWednesday === 0 && now.getHours() >= 12 ? 7 : daysUntilWednesday));
+  releaseAt.setHours(12, 0, 0, 0);
+  const nextSunday = new Date(releaseAt);
+  const daysUntilSunday = (7 - releaseAt.getDay()) % 7;
+  nextSunday.setDate(releaseAt.getDate() + daysUntilSunday);
   nextSunday.setHours(23, 59, 0, 0);
 
   return {
     id: "dare-to-eat-weekly",
     prompt: "find the most underrated late-night bite in your city and prove it.",
     createdAt: formatNow(),
+    releaseAt: releaseAt.toISOString(),
     closesAt: nextSunday.toISOString(),
     acceptedEmails: [],
+    reminderEmails: [],
     submissions: [],
     instagramPostedAt: null,
     winnerSubmissionId: null,
@@ -360,8 +367,10 @@ type DareState = {
   id: string;
   prompt: string;
   createdAt: string;
+  releaseAt: string;
   closesAt: string;
   acceptedEmails: string[];
+  reminderEmails: string[];
   submissions: DareSubmission[];
   instagramPostedAt: string | null;
   winnerSubmissionId: string | null;
@@ -559,10 +568,14 @@ function normalizeDareState(dare: unknown): DareState {
     ...candidate,
     prompt: typeof candidate.prompt === "string" ? candidate.prompt : fallback.prompt,
     createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : fallback.createdAt,
+    releaseAt: typeof candidate.releaseAt === "string" ? candidate.releaseAt : fallback.releaseAt,
     closesAt: typeof candidate.closesAt === "string" ? candidate.closesAt : fallback.closesAt,
     acceptedEmails: Array.isArray(candidate.acceptedEmails)
       ? candidate.acceptedEmails.filter((item): item is string => typeof item === "string")
       : fallback.acceptedEmails,
+    reminderEmails: Array.isArray(candidate.reminderEmails)
+      ? candidate.reminderEmails.filter((item): item is string => typeof item === "string")
+      : fallback.reminderEmails,
     submissions: Array.isArray(candidate.submissions)
       ? candidate.submissions
           .filter((item): item is DareSubmission => Boolean(item && typeof item === "object"))
@@ -1076,6 +1089,7 @@ export default function Page() {
   const [posts, setPosts] = useState<AppPost[]>([...defaultPosts]);
   const [interactions, setInteractions] = useState<InteractionsMap>({});
   const [dare, setDare] = useState<DareState>(getDefaultDare());
+  const [dareHydrated, setDareHydrated] = useState(false);
   const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -1175,6 +1189,18 @@ export default function Page() {
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 6);
   const latestAnnouncement = announcements[0] ?? null;
+  const now = new Date();
+  const dareReleaseDate = new Date(dare.releaseAt);
+  const dareCloseDate = new Date(dare.closesAt);
+  const isDareLiveWindow = now >= dareReleaseDate && now <= dareCloseDate;
+  const isPreDareWindow = now < dareReleaseDate;
+  const dareReleaseText = dareReleaseDate.toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const dareSubmissionsCloseText = new Date(dare.closesAt).toLocaleString("en-GB", {
     weekday: "short",
     day: "numeric",
@@ -1183,6 +1209,7 @@ export default function Page() {
     minute: "2-digit",
   });
   const currentUserAcceptedDare = Boolean(user.googleProfile?.email && dare.acceptedEmails.includes(user.googleProfile.email));
+  const currentUserDareReminder = Boolean(user.googleProfile?.email && dare.reminderEmails.includes(user.googleProfile.email));
   const currentUserDareSubmission =
     dare.submissions.find((submission) => submission.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) ?? null;
   const winningDareSubmission =
@@ -1525,6 +1552,7 @@ export default function Page() {
         setPosts(mergedPosts);
         setInteractions(nextInteractions);
         setDare(nextDare);
+        setDareHydrated(true);
         setAnnouncements([]);
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
         hasLoadedDataRef.current = true;
@@ -1551,6 +1579,7 @@ export default function Page() {
             setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
             setInteractions(normalizeInteractions(payload.interactions));
             setDare(normalizeDareState(payload.dare));
+            setDareHydrated(true);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           }
         });
@@ -2191,7 +2220,7 @@ export default function Page() {
 
   const acceptDare = () => {
     const userEmail = user.googleProfile?.email;
-    if (!userEmail || dare.acceptedEmails.includes(userEmail)) return;
+    if (!userEmail || dare.acceptedEmails.includes(userEmail) || !isDareLiveWindow) return;
 
     lastSharedStateMutationAtRef.current = Date.now();
     setDare((current) => ({
@@ -2199,6 +2228,18 @@ export default function Page() {
       acceptedEmails: [...current.acceptedEmails, userEmail],
     }));
     setDareNotice("you’re in. now go get proof before sunday midnight.");
+  };
+
+  const remindMeForDare = () => {
+    const userEmail = user.googleProfile?.email;
+    if (!userEmail || dare.reminderEmails.includes(userEmail)) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare((current) => ({
+      ...current,
+      reminderEmails: [...current.reminderEmails, userEmail],
+    }));
+    setDareNotice("nice. we’ll nudge you when the dare drops on wednesday.");
   };
 
   const handleDareProofFile = async (files: FileList | null) => {
@@ -2228,6 +2269,11 @@ export default function Page() {
 
     const userEmail = user.googleProfile?.email;
     if (!userEmail) return;
+
+    if (!isDareLiveWindow) {
+      setDareNotice("the dare isn't live yet. hit remind me and we’ll hold your spot.");
+      return;
+    }
 
     if (!currentUserAcceptedDare) {
       setDareNotice("accept the dare first, then drop your proof.");
@@ -3803,24 +3849,42 @@ export default function Page() {
                     <div>
                       <p className="text-xs uppercase tracking-[0.24em] text-[#ffd88b]">🎯 dare to eat</p>
                       <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-[1.02] text-white">
-                        {dare.prompt}
+                        {isPreDareWindow ? "a new food challenge drops every wednesday at midday." : dare.prompt}
                       </h3>
-                      <p className="mt-3 text-sm text-white/78">submissions close {dareSubmissionsCloseText}</p>
+                      <p className="mt-3 text-sm text-white/78">
+                        {isPreDareWindow ? `next dare drops ${dareReleaseText}` : `submissions close ${dareSubmissionsCloseText}`}
+                      </p>
                     </div>
-                    <Chip className="bg-white text-[#5a2d14]">{dare.acceptedEmails.length} in</Chip>
+                    {isDareLiveWindow ? (
+                      dareHydrated ? <Chip className="bg-white text-[#5a2d14]">{dare.acceptedEmails.length} in</Chip> : <div className="h-11 w-20 rounded-full bg-white/20" />
+                    ) : (
+                      <Chip className="bg-white text-[#5a2d14]">{dare.reminderEmails.length} reminded</Chip>
+                    )}
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      radius="full"
-                      className={currentUserAcceptedDare ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
-                      onPress={acceptDare}
-                    >
-                      {currentUserAcceptedDare ? "accepted 🎯" : "accept the dare 🎯"}
-                    </Button>
+                    {isPreDareWindow ? (
+                      <Button
+                        radius="full"
+                        className={currentUserDareReminder ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
+                        onPress={remindMeForDare}
+                      >
+                        {currentUserDareReminder ? "reminder set" : "remind me"}
+                      </Button>
+                    ) : (
+                      <Button
+                        radius="full"
+                        className={currentUserAcceptedDare ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
+                        onPress={acceptDare}
+                      >
+                        {currentUserAcceptedDare ? "accepted 🎯" : "are you in? 🎯"}
+                      </Button>
+                    )}
                     {winningDareSubmission ? <Chip className="bg-white/15 text-white">winner announced tuesday</Chip> : null}
                   </div>
                   <p className="text-sm text-white/72">
-                    post your proof with a photo, location tag, and one line caption. finalists go to instagram. tuesday we crown the winner.
+                    {isPreDareWindow
+                      ? "we’ll drop the challenge on wednesday, then everyone has until sunday midnight to post proof. tuesday the winner gets the spotlight and the reward."
+                      : "post your proof with a photo, location tag, and one line caption. finalists go to instagram. tuesday we crown the winner."}
                   </p>
                 </CardBody>
               </Card>
@@ -3995,7 +4059,7 @@ export default function Page() {
                     </div>
                     <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                   </div>
-                  {currentUserAcceptedDare ? (
+                  {isDareLiveWindow && currentUserAcceptedDare ? (
                     <form className="grid gap-3" onSubmit={submitDareProof}>
                       <Input
                         radius="full"
