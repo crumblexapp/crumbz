@@ -1720,6 +1720,7 @@ export default function Page() {
     }
 
     const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
     const loadPlaces = async () => {
       setFavoritePlacesLoading(true);
       setFavoritePlacesError("");
@@ -1786,12 +1787,16 @@ export default function Page() {
         setFavoritePlacesError("live map spots are loading from the fallback list right now.");
       } finally {
         setFavoritePlacesLoading(false);
+        window.clearTimeout(timeoutId);
       }
     };
 
     void loadPlaces();
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
   }, [isAdmin, user.profile.city, user.signedIn]);
 
   useEffect(() => {
