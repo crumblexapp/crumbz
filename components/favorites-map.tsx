@@ -52,7 +52,12 @@ const EXCLUDED_PLACE_TYPES = new Set(["liquor_store", "supermarket", "convenienc
 const SEARCH_RADIUS_METERS = 15000;
 
 function normalizeCityKey(cityName: string) {
-  return cityName.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return cityName
+    .trim()
+    .replace(/[łŁ]/g, "l")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePlace | null {

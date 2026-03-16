@@ -699,7 +699,12 @@ function formatPlaceKind(kind: string) {
 }
 
 function normalizeCityKey(cityName: string) {
-  return cityName.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return cityName
+    .trim()
+    .replace(/[łŁ]/g, "l")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function formatProfileMeta(cityName: string, schoolName: string) {
