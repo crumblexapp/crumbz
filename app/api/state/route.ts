@@ -7,6 +7,7 @@ export const revalidate = 0;
 const STATE_ROW_ID = "crumbz-app-state";
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const ANNOUNCEMENTS_META_KEY = "__announcements";
+const DARE_META_KEY = "__dare";
 
 function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
   const interactions =
@@ -15,12 +16,14 @@ function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
       : {};
 
   const announcements = Array.isArray(interactions[ANNOUNCEMENTS_META_KEY]) ? interactions[ANNOUNCEMENTS_META_KEY] : [];
+  const dare = interactions[DARE_META_KEY] && typeof interactions[DARE_META_KEY] === "object" ? interactions[DARE_META_KEY] : null;
   delete interactions[ANNOUNCEMENTS_META_KEY];
+  delete interactions[DARE_META_KEY];
 
-  return { interactions, announcements };
+  return { interactions, announcements, dare };
 }
 
-function mergeInteractionsAndAnnouncements(rawInteractions: unknown, rawAnnouncements: unknown) {
+function mergeInteractionsAndAnnouncements(rawInteractions: unknown, rawAnnouncements: unknown, rawDare: unknown) {
   const interactions =
     rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
       ? { ...(rawInteractions as Record<string, unknown>) }
@@ -29,6 +32,7 @@ function mergeInteractionsAndAnnouncements(rawInteractions: unknown, rawAnnounce
   return {
     ...interactions,
     [ANNOUNCEMENTS_META_KEY]: Array.isArray(rawAnnouncements) ? rawAnnouncements : [],
+    [DARE_META_KEY]: rawDare && typeof rawDare === "object" ? rawDare : {},
   };
 }
 
@@ -86,6 +90,7 @@ export async function GET() {
     accounts: accountState?.accounts ?? stateData?.accounts ?? [],
     posts: stateData?.posts ?? [],
     interactions: fallbackMeta.interactions,
+    dare: fallbackMeta.dare ?? {},
     announcements: supportsAnnouncements ? stateData?.announcements ?? [] : fallbackMeta.announcements,
   }, {
     headers: {
@@ -100,6 +105,7 @@ export async function POST(request: Request) {
         accounts?: unknown;
         posts?: unknown;
         interactions?: unknown;
+        dare?: unknown;
         announcements?: unknown;
       }
     | null;
@@ -129,10 +135,11 @@ export async function POST(request: Request) {
       updates.announcements = body?.announcements ?? [];
     }
 
-    if ("interactions" in (body ?? {})) {
+    if ("interactions" in (body ?? {}) || "dare" in (body ?? {})) {
       updates.interactions = mergeInteractionsAndAnnouncements(
         "interactions" in (body ?? {}) ? body?.interactions ?? {} : stateData?.interactions ?? {},
         "announcements" in (body ?? {}) ? body?.announcements ?? stateData?.announcements ?? [] : stateData?.announcements ?? [],
+        "dare" in (body ?? {}) ? body?.dare ?? fallbackMeta.dare : fallbackMeta.dare,
       );
     }
   } else {
@@ -140,9 +147,10 @@ export async function POST(request: Request) {
       "interactions" in (body ?? {}) ? body?.interactions ?? {} : fallbackMeta.interactions;
     const nextAnnouncements =
       "announcements" in (body ?? {}) ? body?.announcements ?? [] : fallbackMeta.announcements;
+    const nextDare = "dare" in (body ?? {}) ? body?.dare ?? {} : fallbackMeta.dare;
 
-    if ("interactions" in (body ?? {}) || "announcements" in (body ?? {})) {
-      updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements);
+    if ("interactions" in (body ?? {}) || "announcements" in (body ?? {}) || "dare" in (body ?? {})) {
+      updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements, nextDare);
     }
   }
 

@@ -27,6 +27,7 @@ const STORAGE_KEY = "crumbz-active-user-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
+const DARE_KEY = "crumbz-dare-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
@@ -295,6 +296,25 @@ const defaultPostFields = {
   weekKey: "",
 };
 
+function getDefaultDare(): DareState {
+  const now = new Date();
+  const nextSunday = new Date(now);
+  nextSunday.setDate(now.getDate() + ((7 - now.getDay()) % 7 || 7));
+  nextSunday.setHours(23, 59, 0, 0);
+
+  return {
+    id: "dare-to-eat-weekly",
+    prompt: "find the most underrated late-night bite in your city and prove it.",
+    createdAt: formatNow(),
+    closesAt: nextSunday.toISOString(),
+    acceptedEmails: [],
+    submissions: [],
+    instagramPostedAt: null,
+    winnerSubmissionId: null,
+    reward: "winner gets a special partner discount drop on tuesday.",
+  };
+}
+
 type PostComment = {
   id: string;
   authorEmail: string;
@@ -324,6 +344,28 @@ type AppAnnouncement = {
   title: string;
   body: string;
   createdAt: string;
+};
+
+type DareSubmission = {
+  id: string;
+  authorEmail: string;
+  authorName: string;
+  photoUrl: string;
+  locationTag: string;
+  caption: string;
+  createdAt: string;
+};
+
+type DareState = {
+  id: string;
+  prompt: string;
+  createdAt: string;
+  closesAt: string;
+  acceptedEmails: string[];
+  submissions: DareSubmission[];
+  instagramPostedAt: string | null;
+  winnerSubmissionId: string | null;
+  reward: string;
 };
 
 type PostInteraction = {
@@ -508,6 +550,42 @@ function readInteractions() {
   return normalizeInteractions(readJson<InteractionsMap>(INTERACTIONS_KEY, {}));
 }
 
+function normalizeDareState(dare: unknown): DareState {
+  const candidate = dare && typeof dare === "object" ? (dare as Partial<DareState>) : {};
+  const fallback = getDefaultDare();
+
+  return {
+    ...fallback,
+    ...candidate,
+    prompt: typeof candidate.prompt === "string" ? candidate.prompt : fallback.prompt,
+    createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : fallback.createdAt,
+    closesAt: typeof candidate.closesAt === "string" ? candidate.closesAt : fallback.closesAt,
+    acceptedEmails: Array.isArray(candidate.acceptedEmails)
+      ? candidate.acceptedEmails.filter((item): item is string => typeof item === "string")
+      : fallback.acceptedEmails,
+    submissions: Array.isArray(candidate.submissions)
+      ? candidate.submissions
+          .filter((item): item is DareSubmission => Boolean(item && typeof item === "object"))
+          .map((item) => ({
+            id: typeof item.id === "string" ? item.id : `dare-sub-${Date.now()}`,
+            authorEmail: typeof item.authorEmail === "string" ? item.authorEmail : "",
+            authorName: typeof item.authorName === "string" ? item.authorName : "crumbz user",
+            photoUrl: typeof item.photoUrl === "string" ? item.photoUrl : "",
+            locationTag: typeof item.locationTag === "string" ? item.locationTag : "",
+            caption: typeof item.caption === "string" ? item.caption : "",
+            createdAt: typeof item.createdAt === "string" ? item.createdAt : fallback.createdAt,
+          }))
+      : fallback.submissions,
+    instagramPostedAt: typeof candidate.instagramPostedAt === "string" ? candidate.instagramPostedAt : null,
+    winnerSubmissionId: typeof candidate.winnerSubmissionId === "string" ? candidate.winnerSubmissionId : null,
+    reward: typeof candidate.reward === "string" ? candidate.reward : fallback.reward,
+  };
+}
+
+function readDare() {
+  return normalizeDareState(readJson<DareState>(DARE_KEY, getDefaultDare()));
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -660,12 +738,14 @@ function hasAnySharedState(payload: {
   accounts?: unknown;
   posts?: unknown;
   interactions?: unknown;
+  dare?: unknown;
   announcements?: unknown;
 }) {
   return Boolean(
     (Array.isArray(payload.accounts) && payload.accounts.length) ||
       (Array.isArray(payload.posts) && payload.posts.length) ||
       (payload.interactions && typeof payload.interactions === "object" && Object.keys(payload.interactions as object).length) ||
+      (payload.dare && typeof payload.dare === "object") ||
       (Array.isArray(payload.announcements) && payload.announcements.length),
   );
 }
@@ -995,6 +1075,7 @@ export default function Page() {
   const [accounts, setAccounts] = useState<StoredUser[]>([]);
   const [posts, setPosts] = useState<AppPost[]>([...defaultPosts]);
   const [interactions, setInteractions] = useState<InteractionsMap>({});
+  const [dare, setDare] = useState<DareState>(getDefaultDare());
   const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -1009,6 +1090,13 @@ export default function Page() {
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
+  const [darePromptDraft, setDarePromptDraft] = useState("");
+  const [dareRewardDraft, setDareRewardDraft] = useState("");
+  const [dareLocationDraft, setDareLocationDraft] = useState("");
+  const [dareCaptionDraft, setDareCaptionDraft] = useState("");
+  const [dareProofPhotoUrl, setDareProofPhotoUrl] = useState("");
+  const [dareNotice, setDareNotice] = useState("");
+  const [isUploadingDareProof, setIsUploadingDareProof] = useState(false);
   const [adminActionNotice, setAdminActionNotice] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
@@ -1087,6 +1175,18 @@ export default function Page() {
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 6);
   const latestAnnouncement = announcements[0] ?? null;
+  const dareSubmissionsCloseText = new Date(dare.closesAt).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const currentUserAcceptedDare = Boolean(user.googleProfile?.email && dare.acceptedEmails.includes(user.googleProfile.email));
+  const currentUserDareSubmission =
+    dare.submissions.find((submission) => submission.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) ?? null;
+  const winningDareSubmission =
+    dare.winnerSubmissionId ? dare.submissions.find((submission) => submission.id === dare.winnerSubmissionId) ?? null : null;
   const userManagementRows = [...accounts]
     .filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL)
     .sort((a, b) => (b.signedIn ? 1 : 0) - (a.signedIn ? 1 : 0));
@@ -1151,11 +1251,6 @@ export default function Page() {
     hottestNeighbourhood: liveProfile.city || "Lodz",
     hiddenGem: favoritePlaces[0]?.name ?? "new hidden gem loading",
   };
-  const crumbTrailItems = [
-    `best cheap eats near ${liveProfile.schoolName || "UL"}`,
-    "late night spots that are actually good",
-    "hidden bars nobody's talking about",
-  ];
   const friendFoodMoments = [
     ...friendWeeklyDumps.slice(0, 3).map((post) => ({
       id: post.id,
@@ -1387,10 +1482,12 @@ export default function Page() {
   const syncSharedState = ({
     nextPosts,
     nextInteractions,
+    nextDare,
     nextAnnouncements,
   }: {
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
+    nextDare?: DareState;
     nextAnnouncements?: AppAnnouncement[];
   }) => {
     void fetch("/api/state", {
@@ -1402,6 +1499,7 @@ export default function Page() {
       body: JSON.stringify({
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
+        ...(nextDare ? { dare: nextDare } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
       }),
     }).catch(() => undefined);
@@ -1412,6 +1510,7 @@ export default function Page() {
     const nextAccounts = readAccounts();
     const nextPosts = readPosts();
     const nextInteractions = readInteractions();
+    const nextDare = readDare();
 
     cachedUserSnapshot = nextUser;
     window.dispatchEvent(new Event("crumbz-user-change"));
@@ -1425,6 +1524,7 @@ export default function Page() {
         setAccounts(nextAccounts);
         setPosts(mergedPosts);
         setInteractions(nextInteractions);
+        setDare(nextDare);
         setAnnouncements([]);
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
         hasLoadedDataRef.current = true;
@@ -1444,11 +1544,13 @@ export default function Page() {
             syncSharedState({
               nextPosts,
               nextInteractions: nextInteractions,
+              nextDare,
             });
           } else {
             setAccounts(normalizeAccounts(payload.accounts));
             setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
             setInteractions(normalizeInteractions(payload.interactions));
+            setDare(normalizeDareState(payload.dare));
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           }
         });
@@ -1613,6 +1715,11 @@ export default function Page() {
   }, [interactions]);
 
   useEffect(() => {
+    if (!hasLoadedDataRef.current || typeof window === "undefined") return;
+    window.localStorage.setItem(DARE_KEY, JSON.stringify(dare));
+  }, [dare]);
+
+  useEffect(() => {
     if (!hasLoadedDataRef.current || posts.length > 0) return;
 
     setInteractions((current) => {
@@ -1638,11 +1745,12 @@ export default function Page() {
       syncSharedState({
         nextPosts: posts,
         nextInteractions: interactions,
+        nextDare: dare,
       });
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [posts, interactions]);
+  }, [dare, posts, interactions]);
 
   useEffect(() => {
     if (!user.signedIn) return;
@@ -1663,6 +1771,7 @@ export default function Page() {
             syncSharedState({
               nextPosts: localPosts,
               nextInteractions: localInteractions,
+              nextDare: readDare(),
               nextAnnouncements: announcements,
             });
             return;
@@ -1676,6 +1785,7 @@ export default function Page() {
           setInteractions((current) =>
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
           );
+          setDare(normalizeDareState(payload.dare));
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
         })
         .catch(() => undefined);
@@ -2044,6 +2154,128 @@ export default function Page() {
     syncSharedState({ nextAnnouncements });
     setAnnouncementTitle("");
     setAnnouncementBody("");
+  };
+
+  const launchWeeklyDare = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedPrompt = darePromptDraft.trim();
+    const trimmedReward = dareRewardDraft.trim();
+    if (!trimmedPrompt) return;
+
+    const nextDare = {
+      ...getDefaultDare(),
+      id: `dare-${Date.now()}`,
+      prompt: trimmedPrompt,
+      reward: trimmedReward || "winner gets a special partner discount drop on tuesday.",
+      createdAt: formatNow(),
+    };
+    const nextAnnouncements = [
+      {
+        id: `announcement-dare-${Date.now()}`,
+        title: "this week's dare just dropped",
+        body: "do you have what it takes? 🎯",
+        createdAt: formatNow(),
+      },
+      ...announcements,
+    ].slice(0, 12);
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare(nextDare);
+    setAnnouncements(nextAnnouncements);
+    syncSharedState({ nextAnnouncements, nextDare });
+    setDarePromptDraft("");
+    setDareRewardDraft("");
+    setAdminActionNotice("new dare is live. users can accept it and post proof now.");
+  };
+
+  const acceptDare = () => {
+    const userEmail = user.googleProfile?.email;
+    if (!userEmail || dare.acceptedEmails.includes(userEmail)) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare((current) => ({
+      ...current,
+      acceptedEmails: [...current.acceptedEmails, userEmail],
+    }));
+    setDareNotice("you’re in. now go get proof before sunday midnight.");
+  };
+
+  const handleDareProofFile = async (files: FileList | null) => {
+    if (!files?.length) return;
+
+    setIsUploadingDareProof(true);
+    setDareNotice("uploading your dare proof...");
+
+    try {
+      const uploadResults = await uploadMediaFiles(files, {
+        mediaKind: "photo",
+        maxFiles: 1,
+        setNotice: setDareNotice,
+      });
+
+      if (!uploadResults?.length) return;
+
+      setDareProofPhotoUrl(uploadResults[0]);
+      setDareNotice("proof photo locked in.");
+    } finally {
+      setIsUploadingDareProof(false);
+    }
+  };
+
+  const submitDareProof = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const userEmail = user.googleProfile?.email;
+    if (!userEmail) return;
+
+    if (!currentUserAcceptedDare) {
+      setDareNotice("accept the dare first, then drop your proof.");
+      return;
+    }
+
+    if (!dareProofPhotoUrl || !dareLocationDraft.trim()) {
+      setDareNotice("add a photo and location tag so your dare counts.");
+      return;
+    }
+
+    const nextSubmission: DareSubmission = {
+      id: `dare-submission-${Date.now()}`,
+      authorEmail: userEmail,
+      authorName: user.profile.fullName || user.profile.username || "crumbz user",
+      photoUrl: dareProofPhotoUrl,
+      locationTag: dareLocationDraft.trim(),
+      caption: dareCaptionDraft.trim(),
+      createdAt: formatNow(),
+    };
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare((current) => ({
+      ...current,
+      submissions: [nextSubmission, ...current.submissions.filter((submission) => submission.authorEmail.toLowerCase() !== userEmail.toLowerCase())],
+    }));
+    setDareLocationDraft("");
+    setDareCaptionDraft("");
+    setDareProofPhotoUrl("");
+    setDareNotice("proof submitted. if crumbz posts finalists on instagram, you’re in the mix.");
+  };
+
+  const postDareToInstagram = () => {
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare((current) => ({
+      ...current,
+      instagramPostedAt: formatNow(),
+    }));
+    setAdminActionNotice("instagram voting stage is marked live.");
+  };
+
+  const chooseDareWinner = (submissionId: string) => {
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare((current) => ({
+      ...current,
+      winnerSubmissionId: submissionId,
+    }));
+    setAdminActionNotice("winner locked. this submission now shows at the top of everyone’s feed.");
   };
 
   const resetComposer = () => {
@@ -2855,7 +3087,7 @@ export default function Page() {
                     {[
                       { label: "posts live", value: adminPosts.length },
                       { label: "push live", value: announcements.length },
-                      { label: "likes", value: totalLikes },
+                      { label: "dare proofs", value: dare.submissions.length },
                       { label: "shares", value: totalShares },
                     ].map((item) => (
                       <Card key={item.label} className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
@@ -2910,6 +3142,70 @@ export default function Page() {
                           <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{latestAnnouncement.createdAt}</p>
                         </div>
                       ) : null}
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">dare to eat</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">drop the weekly challenge, then pick the winner on tuesday.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
+                      </div>
+                      <form className="grid gap-3" onSubmit={launchWeeklyDare}>
+                        <Textarea
+                          label="this week's dare"
+                          labelPlacement="outside"
+                          placeholder="find the best thing nobody orders and prove it"
+                          value={darePromptDraft}
+                          onValueChange={setDarePromptDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
+                        <Input
+                          label="winner reward"
+                          labelPlacement="outside"
+                          placeholder="free coffee + pastry drop"
+                          value={dareRewardDraft}
+                          onValueChange={setDareRewardDraft}
+                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                        />
+                        <Button type="submit" radius="full" className="bg-[#2C1A0E] text-white">
+                          launch dare
+                        </Button>
+                      </form>
+                      <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                        <p className="text-sm font-semibold text-[#2C1A0E]">{dare.prompt}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.acceptedEmails.length} accepted • closes {dareSubmissionsCloseText}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{dare.reward}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button radius="full" className="bg-[#F5A623] text-white" onPress={postDareToInstagram}>
+                          mark instagram voting live
+                        </Button>
+                        {winningDareSubmission ? <Chip className="bg-white text-[#2C1A0E]">winner picked</Chip> : null}
+                      </div>
+                      <div className="grid gap-2">
+                        {dare.submissions.length ? (
+                          dare.submissions.map((submission) => (
+                            <div key={submission.id} className="rounded-[18px] bg-white p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-[#2C1A0E]">{submission.authorName}</p>
+                                  <p className="text-sm text-[#2C1A0E]">{submission.locationTag}</p>
+                                </div>
+                                <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => chooseDareWinner(submission.id)}>
+                                  pick winner
+                                </Button>
+                              </div>
+                              <p className="mt-2 text-sm text-[#2C1A0E]">{submission.caption || "no caption"}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">no dare proofs yet.</p>
+                        )}
+                      </div>
                     </CardBody>
                   </Card>
 
@@ -3501,6 +3797,59 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
+              <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.14),_transparent_28%),linear-gradient(135deg,_#2d1a10_0%,_#5a2d14_52%,_#f5a623_100%)] text-white shadow-[0_24px_60px_rgba(90,45,20,0.24)]">
+                <CardBody className="gap-4 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.24em] text-[#ffd88b]">🎯 dare to eat</p>
+                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-[1.02] text-white">
+                        {dare.prompt}
+                      </h3>
+                      <p className="mt-3 text-sm text-white/78">submissions close {dareSubmissionsCloseText}</p>
+                    </div>
+                    <Chip className="bg-white text-[#5a2d14]">{dare.acceptedEmails.length} in</Chip>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      radius="full"
+                      className={currentUserAcceptedDare ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
+                      onPress={acceptDare}
+                    >
+                      {currentUserAcceptedDare ? "accepted 🎯" : "accept the dare 🎯"}
+                    </Button>
+                    {winningDareSubmission ? <Chip className="bg-white/15 text-white">winner announced tuesday</Chip> : null}
+                  </div>
+                  <p className="text-sm text-white/72">
+                    post your proof with a photo, location tag, and one line caption. finalists go to instagram. tuesday we crown the winner.
+                  </p>
+                </CardBody>
+              </Card>
+
+              {winningDareSubmission ? (
+                <Card className="rounded-[30px] border border-[#FFD89A] bg-[#FFF6E5] shadow-[0_18px_50px_rgba(245,166,35,0.14)]">
+                  <CardBody className="gap-4 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#F5A623]">tuesday winner</p>
+                        <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                          {winningDareSubmission.authorName} nailed the dare
+                        </p>
+                      </div>
+                      <Chip className="bg-[#F5A623] text-white">winner</Chip>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={winningDareSubmission.photoUrl}
+                      alt={winningDareSubmission.caption || winningDareSubmission.authorName}
+                      className="h-64 w-full rounded-[24px] object-cover"
+                      loading="lazy"
+                    />
+                    <p className="text-sm text-[#2C1A0E]">{winningDareSubmission.caption || "this one won the week."}</p>
+                    <p className="text-sm text-[#6c7289]">{winningDareSubmission.locationTag} • {dare.reward}</p>
+                  </CardBody>
+                </Card>
+              ) : null}
+
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]">
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -3640,23 +3989,62 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        the crumb trail
+                        dare to eat
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">your curated path through the best food spots in {citySpotlightName} right now.</p>
+                      <p className="mt-2 text-base text-[#6c7289]">wednesday dare drop. sunday proof cutoff. tuesday winner takes the reward.</p>
                     </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">weekly trail</Chip>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                   </div>
-                  <div className="grid gap-3">
-                    {crumbTrailItems.map((item, index) => (
-                      <div key={item} className="rounded-[22px] bg-[#FFF0D0] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">trail {index + 1}</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{item}</p>
+                  {currentUserAcceptedDare ? (
+                    <form className="grid gap-3" onSubmit={submitDareProof}>
+                      <Input
+                        radius="full"
+                        placeholder="location tag"
+                        value={dareLocationDraft}
+                        onValueChange={setDareLocationDraft}
+                        classNames={{ inputWrapper: "bg-white border border-[#FFF0D0]" }}
+                      />
+                      <Textarea
+                        placeholder="one line caption"
+                        value={dareCaptionDraft}
+                        onValueChange={setDareCaptionDraft}
+                        classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
+                      />
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                        onChange={(event) => {
+                          void handleDareProofFile(event.target.files);
+                        }}
+                        className="rounded-[18px] border border-[#FFF0D0] bg-white px-3 py-3 text-sm text-[#2C1A0E]"
+                      />
+                      {dareProofPhotoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={dareProofPhotoUrl} alt="dare proof preview" className="h-40 w-full rounded-[22px] object-cover" loading="lazy" />
+                      ) : null}
+                      <div className="flex items-center gap-3">
+                        <Button radius="full" className="bg-[#F5A623] text-white" type="submit" isDisabled={isUploadingDareProof}>
+                          {currentUserDareSubmission ? "update proof" : "submit proof"}
+                        </Button>
+                        {dareNotice ? <p className="text-sm text-[#6c7289]">{dareNotice}</p> : null}
                       </div>
-                    ))}
-                  </div>
-                  <p className="text-sm text-[#6c7289]">
-                    updated weekly by the crumbz team so students can follow the city like a series.
-                  </p>
+                    </form>
+                  ) : (
+                    <div className="grid gap-3">
+                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
+                      </div>
+                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
+                      </div>
+                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
+                      </div>
+                    </div>
+                  )}
                 </CardBody>
               </Card>
 

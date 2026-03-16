@@ -7,6 +7,7 @@ export const revalidate = 0;
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const STATE_ROW_ID = "crumbz-app-state";
 const MEDIA_BUCKET = "crumbz-media";
+const DARE_META_KEY = "__dare";
 
 type StoredUser = {
   signedIn: boolean;
@@ -113,6 +114,29 @@ function getMediaPath(url: string) {
   if (index === -1) return null;
 
   return url.slice(index + marker.length);
+}
+
+function splitDareFromInteractions(rawInteractions: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+  const dare = interactions[DARE_META_KEY] && typeof interactions[DARE_META_KEY] === "object" ? interactions[DARE_META_KEY] : null;
+  delete interactions[DARE_META_KEY];
+
+  return { interactions, dare };
+}
+
+function mergeDareIntoInteractions(rawInteractions: unknown, rawDare: unknown) {
+  const interactions =
+    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
+      ? { ...(rawInteractions as Record<string, unknown>) }
+      : {};
+
+  return {
+    ...interactions,
+    [DARE_META_KEY]: rawDare && typeof rawDare === "object" ? rawDare : {},
+  };
 }
 
 export async function POST(request: Request) {
@@ -374,10 +398,7 @@ export async function POST(request: Request) {
     const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
     const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
     const nextPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() !== targetEmail);
-    const currentInteractions =
-      sharedState?.interactions && typeof sharedState.interactions === "object" && !Array.isArray(sharedState.interactions)
-        ? (sharedState.interactions as Record<string, unknown>)
-        : {};
+    const { interactions: currentInteractions, dare } = splitDareFromInteractions(sharedState?.interactions);
 
     const nextInteractions = Object.fromEntries(
       Object.entries(currentInteractions)
@@ -403,7 +424,33 @@ export async function POST(request: Request) {
 
     await writeSharedState({
       posts: nextPosts,
-      interactions: nextInteractions,
+      interactions: mergeDareIntoInteractions(
+        nextInteractions,
+        dare && typeof dare === "object"
+          ? {
+              ...(dare as Record<string, unknown>),
+              acceptedEmails: Array.isArray((dare as { acceptedEmails?: unknown[] }).acceptedEmails)
+                ? ((dare as { acceptedEmails?: string[] }).acceptedEmails ?? []).filter((email) => email.toLowerCase() !== targetEmail.toLowerCase())
+                : [],
+              submissions: Array.isArray((dare as { submissions?: Array<{ authorEmail?: string }> }).submissions)
+                ? ((dare as { submissions?: Array<Record<string, unknown>> }).submissions ?? []).filter(
+                    (submission) => String(submission.authorEmail ?? "").toLowerCase() !== targetEmail.toLowerCase(),
+                  )
+                : [],
+              winnerSubmissionId:
+                Array.isArray((dare as { submissions?: Array<{ id?: string; authorEmail?: string }> }).submissions) &&
+                (dare as { winnerSubmissionId?: string | null }).winnerSubmissionId
+                  ? ((dare as { submissions?: Array<{ id?: string; authorEmail?: string }> }).submissions ?? []).some(
+                      (submission) =>
+                        submission.id === (dare as { winnerSubmissionId?: string | null }).winnerSubmissionId &&
+                        String(submission.authorEmail ?? "").toLowerCase() !== targetEmail.toLowerCase(),
+                    )
+                    ? (dare as { winnerSubmissionId?: string | null }).winnerSubmissionId ?? null
+                    : null
+                  : null,
+            }
+          : {},
+      ),
       announcements: sharedState?.announcements ?? [],
     }).catch(() => undefined);
 
