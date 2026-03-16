@@ -101,6 +101,7 @@ export default function FavoritesMap({
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(places[0]?.id ?? null);
   const [mapReady, setMapReady] = useState(false);
+  const [lockCenter, setLockCenter] = useState(true);
 
   const displayedPlaces = useMemo(() => {
     const hasQuery = searchQuery.trim().length >= 2;
@@ -179,6 +180,7 @@ export default function FavoritesMap({
     mapRef.current.setZoom(13);
     setSelectedPlaceId(places[0]?.id ?? null);
     setSearchResults([]);
+    setLockCenter(true);
   }, [effectiveCenter]);
 
   useEffect(() => {
@@ -188,6 +190,27 @@ export default function FavoritesMap({
       mapRef.current.setZoom(13);
     }
   }, [displayedPlaces.length, effectiveCenter]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !lockCenter) return;
+
+    const enforceCenter = () => {
+      if (!mapRef.current) return;
+      const center = mapRef.current.getCenter();
+      if (!center) return;
+      const latDiff = Math.abs(center.lat() - effectiveCenter[0]);
+      const lngDiff = Math.abs(center.lng() - effectiveCenter[1]);
+      if (latDiff > 0.2 || lngDiff > 0.2) {
+        mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
+        mapRef.current.setZoom(13);
+      }
+    };
+
+    const idleListener = mapRef.current.addListener("idle", enforceCenter);
+    return () => {
+      idleListener?.remove();
+    };
+  }, [effectiveCenter, lockCenter, mapReady]);
 
   useEffect(() => {
     const hasKnownCenter = Boolean(cityCenters[normalizeCityKey(cityName)]);
@@ -213,6 +236,7 @@ export default function FavoritesMap({
     const first = displayedPlaces[0];
     mapRef.current.setCenter({ lat: first.lat, lng: first.lon });
     setSelectedPlaceId((current) => current ?? first.id);
+    setLockCenter(false);
   }, [displayedPlaces]);
 
   useEffect(() => {
