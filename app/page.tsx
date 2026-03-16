@@ -419,28 +419,7 @@ function readUser(): StoredUser {
 }
 
 function readAccounts() {
-  const accounts = readJson<StoredUser[]>(ACCOUNTS_KEY, []);
-
-  return accounts.map((account) => {
-    const normalized = {
-      ...defaultUser,
-      ...account,
-      profile: {
-        ...defaultUser.profile,
-        ...(account.profile ?? {}),
-      },
-    };
-
-    if (normalized.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" && !normalized.profile.username) {
-      normalized.profile.username = "josheats";
-    }
-
-    if (typeof normalized.profile.isStudent !== "boolean") {
-      normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
-    }
-
-    return normalized;
-  });
+  return normalizeAccounts(readJson<StoredUser[]>(ACCOUNTS_KEY, []));
 }
 
 function readPosts() {
@@ -460,9 +439,20 @@ function normalizePosts(posts: Partial<AppPost>[]) {
   return posts.map((post) => ({
     ...defaultPostFields,
     ...post,
+    id: typeof post.id === "string" ? post.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: typeof post.title === "string" ? post.title : "untitled post",
+    body: typeof post.body === "string" ? post.body : "",
+    type: typeof post.type === "string" ? post.type : "chapter",
+    cta: typeof post.cta === "string" ? post.cta : "live now",
+    createdAt: typeof post.createdAt === "string" ? post.createdAt : formatNow(),
     mediaUrls: Array.isArray(post.mediaUrls) ? post.mediaUrls : [],
     videoRatio: post.videoRatio ?? "9:16",
     mediaKind: post.mediaKind ?? "none",
+    authorRole: post.authorRole === "student" ? "student" : "admin",
+    authorName: typeof post.authorName === "string" ? post.authorName : "crumbz",
+    authorEmail: typeof post.authorEmail === "string" ? post.authorEmail : ADMIN_EMAIL,
+    schoolName: typeof post.schoolName === "string" ? post.schoolName : "",
+    weekKey: typeof post.weekKey === "string" ? post.weekKey : "",
   })) as AppPost[];
 }
 
@@ -515,17 +505,76 @@ function removeUserFromInteractions(interactions: InteractionsMap, targetEmail: 
 }
 
 function readInteractions() {
-  const saved = readJson<InteractionsMap>(INTERACTIONS_KEY, {});
+  return normalizeInteractions(readJson<InteractionsMap>(INTERACTIONS_KEY, {}));
+}
+
+function normalizeAccounts(accounts: unknown): StoredUser[] {
+  if (!Array.isArray(accounts)) return [];
+
+  return accounts.map((account) => {
+    const candidate = account as Partial<StoredUser>;
+    const googleProfile =
+      candidate.googleProfile && typeof candidate.googleProfile === "object"
+        ? {
+            name: typeof candidate.googleProfile.name === "string" ? candidate.googleProfile.name : "",
+            email: typeof candidate.googleProfile.email === "string" ? candidate.googleProfile.email : "",
+            picture: typeof candidate.googleProfile.picture === "string" ? candidate.googleProfile.picture : undefined,
+          }
+        : null;
+
+    const normalized = {
+      ...defaultUser,
+      ...candidate,
+      signedIn: Boolean(candidate.signedIn),
+      googleProfile: googleProfile?.email ? googleProfile : null,
+      profile: {
+        ...defaultUser.profile,
+        ...(candidate.profile ?? {}),
+        fullName: typeof candidate.profile?.fullName === "string" ? candidate.profile.fullName : "",
+        username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
+        city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
+        schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
+        friends: Array.isArray(candidate.profile?.friends) ? candidate.profile.friends.filter((item): item is string => typeof item === "string") : [],
+        incomingFriendRequests: Array.isArray(candidate.profile?.incomingFriendRequests)
+          ? candidate.profile.incomingFriendRequests.filter((item): item is string => typeof item === "string")
+          : [],
+        outgoingFriendRequests: Array.isArray(candidate.profile?.outgoingFriendRequests)
+          ? candidate.profile.outgoingFriendRequests.filter((item): item is string => typeof item === "string")
+          : [],
+        favoritePlaceIds: Array.isArray(candidate.profile?.favoritePlaceIds)
+          ? candidate.profile.favoritePlaceIds.filter((item): item is string => typeof item === "string")
+          : [],
+      },
+    };
+
+    if (normalized.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" && !normalized.profile.username) {
+      normalized.profile.username = "josheats";
+    }
+
+    if (typeof normalized.profile.isStudent !== "boolean") {
+      normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
+    }
+
+    return normalized;
+  });
+}
+
+function normalizeInteractions(interactions: unknown): InteractionsMap {
+  if (!interactions || typeof interactions !== "object" || Array.isArray(interactions)) return {};
 
   return Object.fromEntries(
-    Object.entries(saved).map(([postId, bucket]) => [
-      postId,
-      {
-        comments: bucket.comments ?? [],
-        shares: bucket.shares ?? [],
-        likes: bucket.likes ?? [],
-      },
-    ]),
+    Object.entries(interactions).map(([postId, bucket]) => {
+      const safeBucket = bucket && typeof bucket === "object" ? (bucket as Partial<PostInteraction>) : {};
+
+      return [
+        postId,
+        {
+          comments: Array.isArray(safeBucket.comments) ? safeBucket.comments.filter((item): item is PostComment => Boolean(item && typeof item === "object")) : [],
+          shares: Array.isArray(safeBucket.shares) ? safeBucket.shares.filter((item): item is PostShare => Boolean(item && typeof item === "object")) : [],
+          likes: Array.isArray(safeBucket.likes) ? safeBucket.likes.filter((item): item is PostLike => Boolean(item && typeof item === "object")) : [],
+        },
+      ];
+    }),
   );
 }
 
@@ -1397,9 +1446,9 @@ export default function Page() {
               nextInteractions: nextInteractions,
             });
           } else {
-            setAccounts((payload.accounts ?? []) as StoredUser[]);
+            setAccounts(normalizeAccounts(payload.accounts));
             setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
-            setInteractions((payload.interactions ?? {}) as InteractionsMap);
+            setInteractions(normalizeInteractions(payload.interactions));
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           }
         });
@@ -1619,11 +1668,11 @@ export default function Page() {
             return;
           }
 
-          setAccounts((payload.accounts ?? []) as StoredUser[]);
+          setAccounts(normalizeAccounts(payload.accounts));
           const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
           const shouldPreserveLocalPosts = Date.now() - lastSharedStateMutationAtRef.current < 5000;
           setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
-          const serverInteractions = (payload.interactions ?? {}) as InteractionsMap;
+          const serverInteractions = normalizeInteractions(payload.interactions);
           setInteractions((current) =>
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
           );
