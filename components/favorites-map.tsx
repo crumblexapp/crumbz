@@ -111,7 +111,7 @@ export default function FavoritesMap({
 
     const request: google.maps.places.TextSearchRequest = {
       query,
-      location: mapRef.current?.getCenter() ?? new google.maps.LatLng(center[0], center[1]),
+      location: new google.maps.LatLng(effectiveCenter[0], effectiveCenter[1]),
       radius: SEARCH_RADIUS_METERS,
     };
 
@@ -172,6 +172,23 @@ export default function FavoritesMap({
     if (!mapRef.current) return;
     mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
   }, [effectiveCenter]);
+
+  useEffect(() => {
+    if (!mapReady || !placesServiceRef.current || !mapRef.current) return;
+
+    placesServiceRef.current.findPlaceFromQuery(
+      {
+        query: cityName,
+        fields: ["geometry"],
+      },
+      (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]?.geometry?.location) {
+          const loc = results[0].geometry.location;
+          mapRef.current?.setCenter(loc);
+        }
+      },
+    );
+  }, [cityName, mapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !displayedPlaces.length) return;
