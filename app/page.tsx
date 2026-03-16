@@ -4761,10 +4761,23 @@ export default function Page() {
               </Button>
             </div>
 
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
               {unreadNotificationItems.length ? (
                 unreadNotificationItems.map((item) => (
-                  <div key={item.id} className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4">
+                  <div
+                    key={item.id}
+                    className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4"
+                    onTouchStart={(event) => {
+                      event.currentTarget.dataset.swipeStartX = String(event.touches[0].clientX);
+                    }}
+                    onTouchEnd={(event) => {
+                      const startX = Number(event.currentTarget.dataset.swipeStartX || 0);
+                      const endX = event.changedTouches[0].clientX;
+                      if (startX && startX - endX > 70) {
+                        markNotificationSeen(item.id);
+                      }
+                    }}
+                  >
                     <div className="flex items-start gap-3">
                       <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#F5A623] text-white" />
                       <div className="flex-1">
