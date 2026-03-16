@@ -190,6 +190,8 @@ export default function FavoritesMap({
   }, [displayedPlaces.length, effectiveCenter]);
 
   useEffect(() => {
+    const hasKnownCenter = Boolean(cityCenters[normalizeCityKey(cityName)]);
+    if (hasKnownCenter) return; // we already have an exact center for this city
     if (!mapReady || !placesServiceRef.current || !mapRef.current) return;
 
     placesServiceRef.current.findPlaceFromQuery(
