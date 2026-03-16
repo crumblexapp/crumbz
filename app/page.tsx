@@ -4428,6 +4428,63 @@ export default function Page() {
                 <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
               </CardBody>
             </Card>
+
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-[#fff8ee] shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <CardBody className="gap-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">dare challenge</p>
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{dare.title}</p>
+                    <p className="mt-2 text-sm text-[#6c7289]">{isPreDareWindow ? `next dare drops ${dareReleaseText}` : dare.prompt}</p>
+                  </div>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
+                </div>
+
+                {isDareLiveWindow && currentUserAcceptedDare ? (
+                  <form className="grid gap-3" onSubmit={submitDareProof}>
+                    <Input
+                      radius="full"
+                      placeholder="location tag"
+                      value={dareLocationDraft}
+                      onValueChange={setDareLocationDraft}
+                      classNames={{ inputWrapper: "bg-white border border-[#FFF0D0]" }}
+                    />
+                    <Textarea
+                      placeholder="one line caption"
+                      value={dareCaptionDraft}
+                      onValueChange={setDareCaptionDraft}
+                      classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
+                    />
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                      onChange={(event) => {
+                        void handleDareProofFile(event.target.files);
+                      }}
+                      className="rounded-[18px] border border-[#FFF0D0] bg-white px-3 py-3 text-sm text-[#2C1A0E]"
+                    />
+                    {dareProofPhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dareProofPhotoUrl} alt="dare proof preview" className="h-40 w-full rounded-[22px] object-cover" loading="lazy" />
+                    ) : null}
+                    <div className="flex items-center gap-3">
+                      <Button radius="full" className="bg-[#F5A623] text-white" type="submit" isDisabled={isUploadingDareProof}>
+                        {currentUserDareSubmission ? "update proof" : "submit proof"}
+                      </Button>
+                      {dareNotice ? <p className="text-sm text-[#6c7289]">{dareNotice}</p> : null}
+                    </div>
+                  </form>
+                ) : (
+                  <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3 text-sm text-[#2C1A0E]">
+                    {isPreDareWindow
+                      ? "save your reminder in feed. once the dare goes live on wednesday, come back here to submit proof."
+                      : currentUserAcceptedDare
+                        ? "your proof form unlocks here while the dare is live."
+                        : "jump into the dare from feed first, then come back here to upload proof."}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
           </section>
         ) : null}
 
