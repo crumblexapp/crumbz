@@ -33,6 +33,7 @@ const FOOD_SEARCH_QUERIES = [
   "juice bar",
 ];
 const EXCLUDED_PLACE_TYPES = new Set(["liquor_store", "supermarket", "convenience_store", "grocery_or_supermarket"]);
+const SEARCH_RADIUS_METERS = 15000;
 
 function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePlace | null {
   const location = place.geometry?.location;
@@ -87,22 +88,33 @@ export default function FavoritesMap({
   const runTextSearch = async (query: string) => {
     if (!placesServiceRef.current || !mapRef.current) return [];
 
+    const request: google.maps.places.TextSearchRequest = {
+      query,
+      location: mapRef.current?.getCenter() ?? new google.maps.LatLng(center[0], center[1]),
+      radius: SEARCH_RADIUS_METERS,
+    };
+
     return new Promise<FavoritePlace[]>((resolve) => {
-      placesServiceRef.current?.textSearch(
-        {
-          query,
-          location: mapRef.current?.getCenter() ?? new google.maps.LatLng(center[0], center[1]),
-          radius: 7000,
-        },
-        (results, status) => {
-          if (status !== google.maps.places.PlacesServiceStatus.OK || !results) {
-            resolve([]);
-            return;
+      const collected: FavoritePlace[] = [];
+
+      const runPage = (pageRequest: google.maps.places.TextSearchRequest) => {
+        placesServiceRef.current?.textSearch(pageRequest, (results, status, pagination) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results?.length) {
+            collected.push(...results.map(normalizePlaceResult).filter((place): place is FavoritePlace => Boolean(place)));
           }
 
-          resolve(results.map(normalizePlaceResult).filter((place): place is FavoritePlace => Boolean(place)));
-        },
-      );
+          if (pagination?.hasNextPage && collected.length < 120) {
+            // google requires a small delay before calling nextPage
+            window.setTimeout(() => pagination.nextPage(), 320);
+          } else {
+            resolve(
+              collected.filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index),
+            );
+          }
+        });
+      };
+
+      runPage(request);
     });
   };
 
@@ -165,14 +177,11 @@ export default function FavoritesMap({
     if (!mapReady) return;
 
     const loadDefaultPlaces = async () => {
-      const batches = await Promise.all(FOOD_SEARCH_QUERIES.map((query) => runTextSearch(`${query} in ${cityName}`)));
-      const merged = batches
-        .flat()
-        .filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index);
-
-      if (merged.length) {
+      const primary = await runTextSearch(`restaurants in ${cityName}`);
+      const fallback = primary.length ? primary : await runTextSearch(`food in ${cityName}`);
+      if (fallback.length) {
         setSearchResults([]);
-        setSelectedPlaceId((current) => current ?? merged[0]?.id ?? null);
+        setSelectedPlaceId((current) => current ?? fallback[0]?.id ?? null);
       }
     };
 
@@ -238,7 +247,9 @@ export default function FavoritesMap({
               placeholder={`search places in ${cityName}...`}
               className="w-full bg-transparent text-sm font-medium text-[#2b1530] outline-none placeholder:text-[#b4b1c8]"
             />
-            <p className="text-xs text-[#8d89ab]">{searchLoading ? "searching google places..." : `${displayedPlaces.length} food spots`}</p>
+            <p className="text-xs text-[#8d89ab]">
+              {searchLoading ? "searching google places..." : `showing ${displayedPlaces.length} spots around ${cityName}`}
+            </p>
           </div>
         </div>
       </div>
