@@ -22,6 +22,22 @@ type FriendProfile = {
 };
 
 const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+const cityCenters: Record<string, [number, number]> = {
+  warsaw: [52.2297, 21.0122],
+  lodz: [51.7592, 19.456],
+  krakow: [50.0647, 19.945],
+  wroclaw: [51.1079, 17.0385],
+  poznan: [52.4064, 16.9252],
+  gdansk: [54.352, 18.6466],
+  szczecin: [53.4285, 14.5528],
+  bydgoszcz: [53.1235, 18.0084],
+  lublin: [51.2465, 22.5684],
+  katowice: [50.2649, 19.0238],
+  bialystok: [53.1325, 23.1688],
+  gdynia: [54.5189, 18.5305],
+  czestochowa: [50.8118, 19.1203],
+  torun: [53.0138, 18.5984],
+};
 const FOOD_SEARCH_QUERIES = [
   "restaurants",
   "cafes",
@@ -34,6 +50,10 @@ const FOOD_SEARCH_QUERIES = [
 ];
 const EXCLUDED_PLACE_TYPES = new Set(["liquor_store", "supermarket", "convenience_store", "grocery_or_supermarket"]);
 const SEARCH_RADIUS_METERS = 15000;
+
+function normalizeCityKey(cityName: string) {
+  return cityName.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
 function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePlace | null {
   const location = place.geometry?.location;
@@ -75,6 +95,7 @@ export default function FavoritesMap({
   const mapRef = useRef<google.maps.Map | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
@@ -130,7 +151,7 @@ export default function FavoritesMap({
       if (!mapElementRef.current) return;
 
       const map = new google.maps.Map(mapElementRef.current, {
-        center: { lat: center[0], lng: center[1] },
+        center: { lat: effectiveCenter[0], lng: effectiveCenter[1] },
         zoom: 13,
         disableDefaultUI: true,
         zoomControl: true,
@@ -145,12 +166,12 @@ export default function FavoritesMap({
       placesServiceRef.current = new google.maps.places.PlacesService(map);
       setMapReady(true);
     });
-  }, [center]);
+  }, [effectiveCenter]);
 
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setCenter({ lat: center[0], lng: center[1] });
-  }, [center]);
+    mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
+  }, [effectiveCenter]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !placesServiceRef.current) return;
