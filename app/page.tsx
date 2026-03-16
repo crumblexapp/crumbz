@@ -1795,6 +1795,20 @@ export default function Page() {
   }, [isAdmin, user.profile.city, user.signedIn]);
 
   useEffect(() => {
+    if (!user.signedIn || isAdmin) return;
+    if (favoritePlacesLoading) return;
+
+    const cityKey = normalizeCityKey(user.profile.city);
+    if (!favoritePlaces.length && cityKey) {
+      const fallback = getFallbackFavoritePlaces(cityKey);
+      if (fallback.length) {
+        setFavoritePlaces(fallback);
+        setFavoritePlacesError("");
+      }
+    }
+  }, [favoritePlaces.length, favoritePlacesLoading, isAdmin, user.profile.city, user.signedIn]);
+
+  useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   }, [accounts]);
