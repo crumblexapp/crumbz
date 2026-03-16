@@ -7,7 +7,6 @@ export const revalidate = 0;
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const STATE_ROW_ID = "crumbz-app-state";
 const MEDIA_BUCKET = "crumbz-media";
-const PLANS_META_KEY = "__plans";
 
 type StoredUser = {
   signedIn: boolean;
@@ -106,29 +105,6 @@ async function writeSharedState(payload: {
       announcements: payload.announcements,
       updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
-}
-
-function splitPlansFromInteractions(rawInteractions: unknown) {
-  const interactions =
-    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
-      ? { ...(rawInteractions as Record<string, unknown>) }
-      : {};
-  const plans = Array.isArray(interactions[PLANS_META_KEY]) ? interactions[PLANS_META_KEY] : [];
-  delete interactions[PLANS_META_KEY];
-
-  return { interactions, plans };
-}
-
-function mergePlansIntoInteractions(rawInteractions: unknown, rawPlans: unknown) {
-  const interactions =
-    rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
-      ? { ...(rawInteractions as Record<string, unknown>) }
-      : {};
-
-  return {
-    ...interactions,
-    [PLANS_META_KEY]: Array.isArray(rawPlans) ? rawPlans : [],
-  };
 }
 
 function getMediaPath(url: string) {
@@ -398,7 +374,10 @@ export async function POST(request: Request) {
     const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
     const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
     const nextPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() !== targetEmail);
-    const { interactions: currentInteractions, plans } = splitPlansFromInteractions(sharedState?.interactions);
+    const currentInteractions =
+      sharedState?.interactions && typeof sharedState.interactions === "object" && !Array.isArray(sharedState.interactions)
+        ? (sharedState.interactions as Record<string, unknown>)
+        : {};
 
     const nextInteractions = Object.fromEntries(
       Object.entries(currentInteractions)
@@ -424,17 +403,7 @@ export async function POST(request: Request) {
 
     await writeSharedState({
       posts: nextPosts,
-      interactions: mergePlansIntoInteractions(
-        nextInteractions,
-        Array.isArray(plans)
-          ? plans.filter((plan) => {
-              const participantEmails = Array.isArray((plan as { participantEmails?: unknown[] }).participantEmails)
-                ? ((plan as { participantEmails?: string[] }).participantEmails ?? [])
-                : [];
-              return !participantEmails.some((email) => String(email).toLowerCase() === targetEmail);
-            })
-          : [],
-      ),
+      interactions: nextInteractions,
       announcements: sharedState?.announcements ?? [],
     }).catch(() => undefined);
 
