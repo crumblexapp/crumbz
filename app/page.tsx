@@ -746,7 +746,19 @@ function getInteractionBucket(interactions: InteractionsMap, postId: string) {
 
 function openMediaDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(MEDIA_DB_NAME, 1);
+    if (typeof window === "undefined" || !("indexedDB" in window) || !window.indexedDB) {
+      reject(new Error("indexeddb unavailable"));
+      return;
+    }
+
+    let request: IDBOpenDBRequest;
+
+    try {
+      request = window.indexedDB.open(MEDIA_DB_NAME, 1);
+    } catch (error) {
+      reject(error);
+      return;
+    }
 
     request.onupgradeneeded = () => {
       const db = request.result;
