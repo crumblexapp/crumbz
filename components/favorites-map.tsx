@@ -171,6 +171,9 @@ export default function FavoritesMap({
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
+    mapRef.current.setZoom(13);
+    setSelectedPlaceId(places[0]?.id ?? null);
+    setSearchResults([]);
   }, [effectiveCenter]);
 
   useEffect(() => {
