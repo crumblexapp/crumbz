@@ -1230,6 +1230,20 @@ export default function Page() {
     hour: "2-digit",
     minute: "2-digit",
   });
+  const draftReleaseText = new Date(fromLocalDateTimeValue(dareReleaseAtDraft, dare.releaseAt)).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const draftCloseText = new Date(fromLocalDateTimeValue(dareClosesAtDraft, dare.closesAt)).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const currentUserAcceptedDare = Boolean(user.googleProfile?.email && dare.acceptedEmails.includes(user.googleProfile.email));
   const currentUserDareReminder = Boolean(user.googleProfile?.email && dare.reminderEmails.includes(user.googleProfile.email));
   const currentUserDareSubmission =
@@ -3259,57 +3273,10 @@ export default function Page() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">dare to eat</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">design the full challenge here, then track every challenger in the new tab.</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">admin-only controls. create the dare here, save it, and it becomes the wednesday reveal.</p>
                         </div>
                         <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                       </div>
-                      <form className="grid gap-3" onSubmit={launchWeeklyDare}>
-                        <Input
-                          label="dare title"
-                          labelPlacement="outside"
-                          placeholder="late-night sleeper hit"
-                          value={dareTitleDraft}
-                          onValueChange={setDareTitleDraft}
-                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                        />
-                        <Textarea
-                          label="challenge prompt"
-                          labelPlacement="outside"
-                          placeholder="find the best thing nobody orders and prove it"
-                          value={darePromptDraft}
-                          onValueChange={setDarePromptDraft}
-                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                        />
-                        <Input
-                          label="winner reward"
-                          labelPlacement="outside"
-                          placeholder="free coffee + pastry drop"
-                          value={dareRewardDraft}
-                          onValueChange={setDareRewardDraft}
-                          classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                        />
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <Input
-                            type="datetime-local"
-                            label="drops at"
-                            labelPlacement="outside"
-                            value={dareReleaseAtDraft}
-                            onValueChange={setDareReleaseAtDraft}
-                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                          />
-                          <Input
-                            type="datetime-local"
-                            label="proof closes at"
-                            labelPlacement="outside"
-                            value={dareClosesAtDraft}
-                            onValueChange={setDareClosesAtDraft}
-                            classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
-                          />
-                        </div>
-                        <Button type="submit" radius="full" className="bg-[#2C1A0E] text-white">
-                          publish dare design
-                        </Button>
-                      </form>
                       <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{dare.title}</p>
                         <p className="mt-1 text-sm text-[#2C1A0E]">{dare.prompt}</p>
@@ -3412,8 +3379,8 @@ export default function Page() {
                     <CardBody className="gap-3 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">design the dare</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">whatever admin puts here is what students will see when wednesday hits.</p>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">admin dare access</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">this is the control to make the dare and save what shows in the wednesday card.</p>
                         </div>
                         <Chip className="bg-[#FFF0D0] text-[#F5A623]">{isPreDareWindow ? "scheduled" : "live"}</Chip>
                       </div>
@@ -3467,7 +3434,7 @@ export default function Page() {
                       <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{dareTitleDraft || "untitled dare"}</p>
                         <p className="mt-1 text-sm text-[#2C1A0E]">{darePromptDraft || "the dare copy preview shows here."}</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">shows {dareReleaseText} • closes {dareSubmissionsCloseText}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">shows {draftReleaseText} • closes {draftCloseText}</p>
                         <p className="mt-1 text-sm text-[#2C1A0E]">{dareRewardDraft || "reward preview goes here."}</p>
                       </div>
                     </CardBody>
@@ -4339,62 +4306,26 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        {dare.title}
+                        dare to eat
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">{dare.prompt}</p>
+                      <p className="mt-2 text-base text-[#6c7289]">a weekly food challenge. crumbz drops the dare, everyone jumps in, then the best proof gets the spotlight.</p>
                     </div>
                     <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
                   </div>
-                  {isDareLiveWindow && currentUserAcceptedDare ? (
-                    <form className="grid gap-3" onSubmit={submitDareProof}>
-                      <Input
-                        radius="full"
-                        placeholder="location tag"
-                        value={dareLocationDraft}
-                        onValueChange={setDareLocationDraft}
-                        classNames={{ inputWrapper: "bg-white border border-[#FFF0D0]" }}
-                      />
-                      <Textarea
-                        placeholder="one line caption"
-                        value={dareCaptionDraft}
-                        onValueChange={setDareCaptionDraft}
-                        classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
-                      />
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                        onChange={(event) => {
-                          void handleDareProofFile(event.target.files);
-                        }}
-                        className="rounded-[18px] border border-[#FFF0D0] bg-white px-3 py-3 text-sm text-[#2C1A0E]"
-                      />
-                      {dareProofPhotoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={dareProofPhotoUrl} alt="dare proof preview" className="h-40 w-full rounded-[22px] object-cover" loading="lazy" />
-                      ) : null}
-                      <div className="flex items-center gap-3">
-                        <Button radius="full" className="bg-[#F5A623] text-white" type="submit" isDisabled={isUploadingDareProof}>
-                          {currentUserDareSubmission ? "update proof" : "submit proof"}
-                        </Button>
-                        {dareNotice ? <p className="text-sm text-[#6c7289]">{dareNotice}</p> : null}
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="grid gap-3">
-                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
-                      </div>
-                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
-                      </div>
-                      <div className="rounded-[22px] bg-[#FFF0D0] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
-                      </div>
+                  <div className="grid gap-3">
+                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
                     </div>
-                  )}
+                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
+                    </div>
+                    <div className="rounded-[22px] bg-[#FFF0D0] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
+                      <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
+                    </div>
+                  </div>
                 </CardBody>
               </Card>
 
