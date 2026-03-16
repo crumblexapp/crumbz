@@ -182,6 +182,14 @@ export default function FavoritesMap({
   }, [effectiveCenter]);
 
   useEffect(() => {
+    if (!mapRef.current) return;
+    if (!displayedPlaces.length) {
+      mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
+      mapRef.current.setZoom(13);
+    }
+  }, [displayedPlaces.length, effectiveCenter]);
+
+  useEffect(() => {
     if (!mapReady || !placesServiceRef.current || !mapRef.current) return;
 
     placesServiceRef.current.findPlaceFromQuery(
