@@ -102,7 +102,12 @@ export default function FavoritesMap({
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(places[0]?.id ?? null);
   const [mapReady, setMapReady] = useState(false);
 
-  const displayedPlaces = useMemo(() => (searchQuery.trim().length >= 2 ? searchResults : places), [places, searchQuery, searchResults]);
+  const displayedPlaces = useMemo(() => {
+    const hasQuery = searchQuery.trim().length >= 2;
+    if (hasQuery) return searchResults;
+    if (searchResults.length && !places.length) return searchResults;
+    return places;
+  }, [places, searchQuery, searchResults]);
   const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
   const selectedMutualFans = selectedPlace ? friends.filter((friend) => friend.favoritePlaceIds.includes(selectedPlace.id)) : [];
 
