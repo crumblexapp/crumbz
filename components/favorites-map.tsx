@@ -21,6 +21,10 @@ type FriendProfile = {
   favoritePlaceIds: string[];
 };
 
+type MapMarkerWithCleanup = {
+  setMap: (map: google.maps.Map | null) => void;
+};
+
 const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const cityCenters: Record<string, [number, number]> = {
   warsaw: [52.2297, 21.0122],
@@ -80,6 +84,52 @@ function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePl
   };
 }
 
+function createFriendPin(selected: boolean, favorited: boolean, fans: FriendProfile[]) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "flex items-center gap-2";
+
+  const pin = document.createElement("div");
+  pin.className = "flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white shadow-[0_10px_24px_rgba(43,21,48,0.18)]";
+  pin.style.background = favorited ? "#FE8A01" : "#3cc58f";
+  pin.style.transform = selected ? "scale(1.08)" : "scale(1)";
+  pin.innerHTML = '<span style="font-size:16px;line-height:1;color:white;">♥</span>';
+  wrapper.appendChild(pin);
+
+  if (!fans.length) return wrapper;
+
+  const stack = document.createElement("div");
+  stack.className = "flex -space-x-2";
+
+  fans.slice(0, 2).forEach((fan, index) => {
+    const bubble = document.createElement("div");
+    bubble.className = "flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#fff3e1] text-[11px] font-semibold text-[#2b1530] shadow-[0_8px_20px_rgba(43,21,48,0.14)]";
+    bubble.style.position = "relative";
+    bubble.style.zIndex = String(3 - index);
+
+    if (fan.picture) {
+      const image = document.createElement("img");
+      image.src = fan.picture;
+      image.alt = fan.name;
+      image.className = "h-full w-full object-cover";
+      bubble.appendChild(image);
+    } else {
+      bubble.textContent = fan.name.slice(0, 1).toUpperCase();
+    }
+
+    stack.appendChild(bubble);
+  });
+
+  if (fans.length > 2) {
+    const extra = document.createElement("div");
+    extra.className = "flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#2b1530] text-[10px] font-semibold text-white";
+    extra.textContent = `+${fans.length - 2}`;
+    stack.appendChild(extra);
+  }
+
+  wrapper.appendChild(stack);
+  return wrapper;
+}
+
 export default function FavoritesMap({
   center,
   cityName,
@@ -87,6 +137,7 @@ export default function FavoritesMap({
   favoriteIds,
   onToggleFavorite,
   friends,
+  highlightedPlaceId,
 }: {
   center: [number, number];
   places: FavoritePlace[];
@@ -95,11 +146,12 @@ export default function FavoritesMap({
   onToggleFavorite: (placeId: string) => void;
   cityName: string;
   friends: FriendProfile[];
+  highlightedPlaceId?: string | null;
 }) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
+  const markersRef = useRef<MapMarkerWithCleanup[]>([]);
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -116,6 +168,13 @@ export default function FavoritesMap({
   }, [places, searchQuery, searchResults]);
   const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
   const selectedMutualFans = selectedPlace ? friends.filter((friend) => friend.favoritePlaceIds.includes(selectedPlace.id)) : [];
+  const mutualFansByPlace = useMemo(
+    () =>
+      Object.fromEntries(
+        displayedPlaces.map((place) => [place.id, friends.filter((friend) => friend.favoritePlaceIds.includes(place.id))]),
+      ) as Record<string, FriendProfile[]>,
+    [displayedPlaces, friends],
+  );
 
   const runTextSearch = async (query: string) => {
     if (!placesServiceRef.current || !mapRef.current) return [];
@@ -158,7 +217,7 @@ export default function FavoritesMap({
       v: "weekly",
     });
 
-    void Promise.all([importLibrary("maps"), importLibrary("places")]).then(() => {
+    void Promise.all([importLibrary("maps"), importLibrary("places"), importLibrary("marker")]).then(() => {
       if (!mapElementRef.current) return;
 
       const map = new google.maps.Map(mapElementRef.current, {
@@ -290,18 +349,11 @@ export default function FavoritesMap({
 
     displayedPlaces.forEach((place) => {
       const isFavorited = favoriteIds.includes(place.id);
-      const marker = new google.maps.Marker({
+      const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: place.lat, lng: place.lon },
         map: mapRef.current,
         title: place.name,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: selectedPlace?.id === place.id ? 11 : 8,
-          fillColor: isFavorited ? "#FE8A01" : "#3cc58f",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 3,
-        },
+        content: createFriendPin(selectedPlace?.id === place.id, isFavorited, mutualFansByPlace[place.id] ?? []),
       });
 
       marker.addListener("click", () => {
@@ -309,14 +361,28 @@ export default function FavoritesMap({
         mapRef.current?.panTo({ lat: place.lat, lng: place.lon });
       });
 
-      markersRef.current.push(marker);
+      markersRef.current.push({
+        setMap: (map) => {
+          marker.map = map;
+        },
+      });
     });
-  }, [displayedPlaces, favoriteIds, mapReady, selectedPlace?.id]);
+  }, [displayedPlaces, favoriteIds, mapReady, mutualFansByPlace, selectedPlace?.id]);
 
   useEffect(() => {
     if (!selectedPlace || !mapRef.current) return;
     mapRef.current.panTo({ lat: selectedPlace.lat, lng: selectedPlace.lon });
   }, [selectedPlace]);
+
+  useEffect(() => {
+    if (!highlightedPlaceId) return;
+    const nextPlace = displayedPlaces.find((place) => place.id === highlightedPlaceId);
+    if (!nextPlace) return;
+
+    setSelectedPlaceId(nextPlace.id);
+    mapRef.current?.panTo({ lat: nextPlace.lat, lng: nextPlace.lon });
+    setLockCenter(false);
+  }, [displayedPlaces, highlightedPlaceId]);
 
   if (!GOOGLE_MAPS_KEY) {
     return (

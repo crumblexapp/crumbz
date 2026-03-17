@@ -1154,6 +1154,7 @@ export default function Page() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
+  const [highlightedFavoritePlaceId, setHighlightedFavoritePlaceId] = useState<string | null>(null);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
@@ -1421,6 +1422,14 @@ export default function Page() {
         })),
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
+  const sharedFavoriteMoments = favoritePlaces
+    .map((place) => ({
+      place,
+      fans: mutualFansByPlace[place.id] ?? [],
+    }))
+    .filter((item) => item.fans.length > 0)
+    .sort((a, b) => b.fans.length - a.fans.length)
+    .slice(0, 8);
   const notificationItems = [
     ...(currentUserDareReminder
       ? [
@@ -4617,6 +4626,7 @@ export default function Page() {
                   places={favoritePlaces}
                   favoriteIds={favoritePlaceIds}
                   mutualFansByPlace={mutualFansByPlace}
+                  highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
                   friends={friendAccounts.map((account) => ({
                     email: account.googleProfile?.email ?? account.profile.username,
@@ -4626,6 +4636,37 @@ export default function Page() {
                     favoritePlaceIds: account.profile.favoritePlaceIds ?? [],
                   }))}
                 />
+
+                {sharedFavoriteMoments.length ? (
+                  <div className="grid gap-3">
+                    {sharedFavoriteMoments.map(({ place, fans }) => (
+                      <div key={place.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex -space-x-2">
+                              {fans.slice(0, 2).map((fan) => (
+                                <Avatar key={`${place.id}-${fan.email}`} src={fan.picture} name={fan.name} className="h-9 w-9 border-2 border-[#FFF7E8]" />
+                              ))}
+                            </div>
+                            <p className="mt-3 text-base font-semibold text-[#2C1A0E]">
+                              {fans.length === 1
+                                ? `${fans[0]?.username} added ${place.name} in ${user.profile.city}`
+                                : `${fans[0]?.username} and ${fans.length - 1} friends added ${place.name} in ${user.profile.city}`}
+                            </p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                          </div>
+                          <Button
+                            radius="full"
+                            className="bg-[#F5A623] text-white"
+                            onPress={() => setHighlightedFavoritePlaceId(place.id)}
+                          >
+                            show me
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
 
                 {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">loading food spots around the city...</p> : null}
                 {favoritePlacesError ? <p className="text-sm text-[#2C1A0E]">{favoritePlacesError}</p> : null}
