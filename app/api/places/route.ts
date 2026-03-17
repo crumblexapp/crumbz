@@ -12,6 +12,11 @@ type GooglePlace = {
 const GOOGLE_MAPS_SERVER_API_KEY = process.env.GOOGLE_MAPS_SERVER_API_KEY ?? "";
 const FOOD_TYPES = ["restaurant", "cafe", "bakery", "bar", "coffee_shop", "fast_food", "meal_takeaway", "dessert_shop"];
 
+function isFoodPlace(place: { kind: string; name: string; address: string }) {
+  const haystack = `${place.kind} ${place.name} ${place.address}`.toLowerCase();
+  return FOOD_TYPES.some((type) => haystack.includes(type.replace(/_/g, " ")));
+}
+
 function normalizePlace(place: GooglePlace) {
   const id = place.id;
   const name = place.displayName?.text;
@@ -64,7 +69,8 @@ async function searchNearby(lat: number, lon: number, radius: number) {
     .filter((place): place is NonNullable<ReturnType<typeof normalizePlace>> => Boolean(place));
 }
 
-async function searchText(query: string, lat?: number, lon?: number) {
+async function searchText(rawQuery: string, city?: string, lat?: number, lon?: number) {
+  const textQuery = city ? `${rawQuery} in ${city}` : rawQuery;
   const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -73,10 +79,8 @@ async function searchText(query: string, lat?: number, lon?: number) {
       "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types",
     },
     body: JSON.stringify({
-      textQuery: query,
+      textQuery,
       pageSize: 12,
-      includedType: "restaurant",
-      strictTypeFiltering: false,
       locationBias:
         typeof lat === "number" && typeof lon === "number"
           ? {
@@ -100,8 +104,9 @@ async function searchText(query: string, lat?: number, lon?: number) {
     .filter((place): place is NonNullable<ReturnType<typeof normalizePlace>> => Boolean(place));
 
   return normalized.filter((place) => {
-    const kind = place.kind.toLowerCase();
-    return FOOD_TYPES.some((type) => kind.includes(type.replace(/_/g, " "))) || place.name.toLowerCase().includes(query.toLowerCase());
+    const loweredQuery = rawQuery.toLowerCase();
+    const exactNameMatch = place.name.toLowerCase().includes(loweredQuery);
+    return exactNameMatch || isFoodPlace(place);
   });
 }
 
@@ -119,7 +124,7 @@ export async function GET(request: Request) {
 
   try {
     const places = query
-      ? await searchText(city ? `${query} in ${city}` : query, Number.isFinite(lat) ? lat : undefined, Number.isFinite(lon) ? lon : undefined)
+      ? await searchText(query, city || undefined, Number.isFinite(lat) ? lat : undefined, Number.isFinite(lon) ? lon : undefined)
       : Number.isFinite(lat) && Number.isFinite(lon)
         ? await searchNearby(lat, lon, Number.isFinite(radius) ? radius : 3500)
         : [];
