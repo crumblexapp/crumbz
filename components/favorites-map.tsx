@@ -155,6 +155,7 @@ export default function FavoritesMap({
 
   const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
   const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
+  const showSearchResults = searchQuery.trim().length >= 2 && !searchLoading;
 
   useEffect(() => {
     setSelectedPlaceId((current) => current ?? places[0]?.id ?? null);
@@ -204,20 +205,52 @@ export default function FavoritesMap({
     <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(254,138,1,0.14),_transparent_34%)]" />
 
-      <div className="absolute left-4 right-4 top-4 z-[500] rounded-full bg-white/94 px-4 py-3 shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
-        <div className="flex items-center gap-3">
-          <span className="text-xl text-[#7a7895]">⌕</span>
-          <div className="min-w-0 flex-1">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="find cafes, bakeries, restaurants..."
-              className="w-full bg-transparent text-sm font-medium text-[#2b1530] outline-none placeholder:text-[#b4b1c8]"
-            />
-            <p className="text-xs text-[#8d89ab]">{searchLoading ? "searching food spots..." : "add your favorite spots here."}</p>
+      <div className="absolute left-4 right-4 top-4 z-[500]">
+        <div className="rounded-[28px] bg-white/94 px-4 py-3 shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
+          <div className="flex items-center gap-3">
+            <span className="text-xl text-[#7a7895]">⌕</span>
+            <div className="min-w-0 flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="find cafes, bakeries, restaurants..."
+                className="w-full bg-transparent text-sm font-medium text-[#2b1530] outline-none placeholder:text-[#b4b1c8]"
+              />
+              <p className="text-xs text-[#8d89ab]">{searchLoading ? "searching food spots..." : "add your favorite spots here."}</p>
+            </div>
           </div>
         </div>
+
+        {showSearchResults ? (
+          <div className="mt-3 overflow-hidden rounded-[24px] bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
+            {searchResults.length ? (
+              searchResults.slice(0, 5).map((place) => (
+                <button
+                  key={place.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPlaceId(place.id);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 text-left last:border-b-0"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
+                    <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
+                  </div>
+                  <span
+                    className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
+                    style={{ background: getPlaceAccent(place.kind).chip }}
+                  >
+                    {place.kind}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-4 text-sm text-[#7c6d60]">no food spots found for that search yet.</div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="absolute right-4 top-20 z-[500] rounded-full bg-white/94 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a7895] shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
