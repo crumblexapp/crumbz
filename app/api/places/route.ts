@@ -69,6 +69,17 @@ async function searchNearby(lat: number, lon: number, radius: number) {
     .filter((place): place is NonNullable<ReturnType<typeof normalizePlace>> => Boolean(place));
 }
 
+async function searchNearbyFallback(city: string, lat: number, lon: number) {
+  const searches = await Promise.all(
+    ["restaurants", "cafes", "bakeries", "desserts"].map((term) => searchText(term, city || undefined, lat, lon)),
+  );
+
+  return searches
+    .flat()
+    .filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index)
+    .slice(0, 20);
+}
+
 async function searchText(rawQuery: string, city?: string, lat?: number, lon?: number) {
   const textQuery = city ? `${rawQuery} in ${city}` : rawQuery;
   const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
@@ -126,7 +137,9 @@ export async function GET(request: Request) {
     const places = query
       ? await searchText(query, city || undefined, Number.isFinite(lat) ? lat : undefined, Number.isFinite(lon) ? lon : undefined)
       : Number.isFinite(lat) && Number.isFinite(lon)
-        ? await searchNearby(lat, lon, Number.isFinite(radius) ? radius : 3500)
+        ? await searchNearby(lat, lon, Number.isFinite(radius) ? radius : 3500).catch(() =>
+            searchNearbyFallback(city, lat, lon),
+          )
         : [];
 
     return NextResponse.json({ ok: true, places }, { status: 200 });
