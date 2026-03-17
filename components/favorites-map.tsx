@@ -39,19 +39,6 @@ const cityCenters: Record<string, [number, number]> = {
   torun: [53.0138, 18.5984],
 };
 
-const FOOD_QUERY_HINTS = ["restaurant", "cafe", "bakery", "dessert", "coffee"];
-const ALLOWED_OSM_TYPES = new Set([
-  "restaurant",
-  "cafe",
-  "bakery",
-  "fast_food",
-  "food_court",
-  "ice_cream",
-  "bar",
-  "pub",
-  "biergarten",
-]);
-
 function normalizeCityKey(cityName: string) {
   return cityName
     .trim()
@@ -191,59 +178,15 @@ export default function FavoritesMap({
       setSearchLoading(true);
 
       try {
-        const queryVariants = Array.from(
-          new Set([`${query} ${cityName}`, ...FOOD_QUERY_HINTS.map((hint) => `${query} ${hint} ${cityName}`)]),
-        );
-
-        const resultSets = await Promise.all(
-          queryVariants.map(async (variant) => {
-            const params = new URLSearchParams({
-              q: variant,
-              format: "jsonv2",
-              limit: "8",
-              addressdetails: "1",
-              namedetails: "1",
-              countrycodes: "pl",
-            });
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
-            return (await response.json().catch(() => [])) as Array<{
-              place_id?: number;
-              display_name?: string;
-              lat?: string;
-              lon?: string;
-              type?: string;
-              class?: string;
-              name?: string;
-              namedetails?: { name?: string };
-            }>;
-          }),
-        );
-
-        const nextResults = resultSets
-          .flat()
-          .map((item) => {
-            const lat = Number(item.lat);
-            const lon = Number(item.lon);
-            if (!item.place_id || Number.isNaN(lat) || Number.isNaN(lon)) return null;
-
-            const isFoodType = ALLOWED_OSM_TYPES.has(item.type ?? "");
-            const looksFoodLike = FOOD_QUERY_HINTS.some((hint) => (item.display_name ?? "").toLowerCase().includes(hint));
-            const matchesQuery = (item.display_name ?? "").toLowerCase().includes(query.toLowerCase());
-            if (!isFoodType && !looksFoodLike && !matchesQuery) return null;
-
-            const parts = (item.display_name ?? "").split(",");
-            return {
-              id: `osm-${item.place_id}`,
-              name: item.namedetails?.name ?? item.name ?? parts[0]?.trim() ?? "food spot",
-              kind: (item.type ?? "food spot").replace(/_/g, " "),
-              lat,
-              lon,
-              address: item.display_name ?? "city spot",
-            } satisfies FavoritePlace;
-          })
-          .filter((item): item is FavoritePlace => Boolean(item))
-          .filter((item, index, list) => list.findIndex((candidate) => candidate.name === item.name && candidate.address === item.address) === index)
-          .slice(0, 12);
+        const params = new URLSearchParams({
+          city: cityName,
+          query,
+          lat: String(effectiveCenter[0]),
+          lon: String(effectiveCenter[1]),
+        });
+        const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
+        const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
+        const nextResults = (payload.places ?? []).slice(0, 12);
 
         setSearchResults(nextResults);
         setSelectedPlaceId(nextResults[0]?.id ?? null);
@@ -255,7 +198,7 @@ export default function FavoritesMap({
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [cityName, searchQuery]);
+  }, [cityName, effectiveCenter, searchQuery]);
 
   return (
     <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">

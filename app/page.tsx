@@ -698,10 +698,6 @@ function formatFileSize(bytes: number) {
   return `${Math.ceil(bytes / 1024)}kb`;
 }
 
-function formatPlaceKind(kind: string) {
-  return kind.replace(/_/g, " ");
-}
-
 function formatCalendarTimestamp(date: Date) {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
@@ -1779,61 +1775,23 @@ export default function Page() {
       setFavoritePlacesLoading(true);
       setFavoritePlacesError("");
 
-      const query = `
-        [out:json][timeout:25];
-        (
-          node["amenity"~"restaurant|cafe|fast_food|ice_cream|bar|pub|food_court"](around:3500,${center[0]},${center[1]});
-          way["amenity"~"restaurant|cafe|fast_food|ice_cream|bar|pub|food_court"](around:3500,${center[0]},${center[1]});
-          node["shop"~"bakery|pastry|coffee|confectionery|tea|deli|cheese|chocolate"](around:3500,${center[0]},${center[1]});
-          way["shop"~"bakery|pastry|coffee|confectionery|tea|deli|cheese|chocolate"](around:3500,${center[0]},${center[1]});
-        );
-        out center 80;
-      `;
-
       try {
-        const response = await fetch("https://overpass-api.de/api/interpreter", {
-          method: "POST",
-          body: query,
-          signal: controller.signal,
+        const params = new URLSearchParams({
+          city: user.profile.city,
+          lat: String(center[0]),
+          lon: String(center[1]),
+          radius: "3500",
         });
+        const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
 
         if (!response.ok) {
           throw new Error("places request failed");
         }
 
-        const payload = (await response.json()) as {
-          elements?: Array<{
-            id: number;
-            lat?: number;
-            lon?: number;
-            center?: { lat: number; lon: number };
-            tags?: Record<string, string>;
-          }>;
-        };
-
-        const nextPlaces = (payload.elements ?? [])
-          .map((element) => {
-            const tags = element.tags ?? {};
-            const lat = element.lat ?? element.center?.lat;
-            const lon = element.lon ?? element.center?.lon;
-            const name = tags.name;
-            if (!lat || !lon || !name) return null;
-
-            const street = tags["addr:street"];
-            const houseNumber = tags["addr:housenumber"];
-            const address = [street, houseNumber].filter(Boolean).join(" ") || user.profile.city;
-
-            return {
-              id: `place-${element.id}`,
-              name,
-              kind: formatPlaceKind(tags.amenity ?? tags.shop ?? "food spot"),
-              lat,
-              lon,
-              address,
-            };
-          })
-          .filter((place): place is FavoritePlace => Boolean(place))
-          .filter((place, index, list) => list.findIndex((item) => item.name === place.name) === index);
+        const payload = (await response.json()) as { places?: FavoritePlace[] };
+        const nextPlaces = (payload.places ?? []).filter(
+          (place, index, list) => list.findIndex((item) => item.name === place.name) === index,
+        );
 
         setFavoritePlaces(nextPlaces.length ? nextPlaces : getFallbackFavoritePlaces(cityKey));
       } catch {
