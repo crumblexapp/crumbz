@@ -12,6 +12,10 @@ import {
   CardHeader,
   Chip,
   Input,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalHeader,
   Select,
   SelectItem,
   Tab,
@@ -698,6 +702,14 @@ function formatPlaceKind(kind: string) {
   return kind.replace(/_/g, " ");
 }
 
+function formatCalendarTimestamp(date: Date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function escapeIcsText(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+}
+
 function normalizeCityKey(cityName: string) {
   return cityName
     .trim()
@@ -758,6 +770,18 @@ function renderStudentTabIcon(tabKey: StudentTab, className: string) {
 
 function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
+}
+
+function getDareReminderEvent(dare: DareState) {
+  const start = new Date(dare.releaseAt);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+
+  return {
+    title: `crumbz dare drop: ${dare.title}`,
+    details: `${dare.prompt}\n\n${dare.reward}`,
+    start,
+    end,
+  };
 }
 
 function hasAnySharedState(payload: {
@@ -1143,6 +1167,7 @@ export default function Page() {
   const [dareCaptionDraft, setDareCaptionDraft] = useState("");
   const [dareProofPhotoUrl, setDareProofPhotoUrl] = useState("");
   const [dareNotice, setDareNotice] = useState("");
+  const [dareReminderModalOpen, setDareReminderModalOpen] = useState(false);
   const [isUploadingDareProof, setIsUploadingDareProof] = useState(false);
   const [adminActionNotice, setAdminActionNotice] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
@@ -1262,6 +1287,8 @@ export default function Page() {
   });
   const currentUserAcceptedDare = Boolean(user.googleProfile?.email && dare.acceptedEmails.includes(user.googleProfile.email));
   const currentUserDareReminder = Boolean(user.googleProfile?.email && dare.reminderEmails.includes(user.googleProfile.email));
+  const dareReminderEvent = getDareReminderEvent(dare);
+  const dareReminderNotificationId = `dare-reminder-${dare.id}-${isDareLiveWindow ? "live" : "scheduled"}`;
   const currentUserDareSubmission =
     dare.submissions.find((submission) => submission.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) ?? null;
   const winningDareSubmission =
@@ -1395,6 +1422,18 @@ export default function Page() {
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
   const notificationItems = [
+    ...(currentUserDareReminder
+      ? [
+          {
+            id: dareReminderNotificationId,
+            kind: "dare_reminder" as const,
+            title: isDareLiveWindow ? `${dare.title} is live now` : `dare reminder set for ${dareReleaseText}`,
+            detail: isDareLiveWindow
+              ? "the challenge is open now. jump in and post proof before sunday midnight."
+              : "we’ll keep this in your crumbz notifications too, so you don’t miss the drop.",
+          },
+        ]
+      : []),
     ...announcements.slice(0, 4).map((announcement) => ({
       id: announcement.id,
       kind: "announcement" as const,
@@ -1436,6 +1475,7 @@ export default function Page() {
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
   ].filter(Boolean) as Array<
+    | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
@@ -2356,16 +2396,75 @@ export default function Page() {
     setDareNotice("you’re in. now go get proof before sunday midnight.");
   };
 
-  const remindMeForDare = () => {
+  const saveDareReminder = () => {
     const userEmail = user.googleProfile?.email;
-    if (!userEmail || dare.reminderEmails.includes(userEmail)) return;
+    if (!userEmail || dare.reminderEmails.includes(userEmail)) return false;
 
     lastSharedStateMutationAtRef.current = Date.now();
     setDare((current) => ({
       ...current,
       reminderEmails: [...current.reminderEmails, userEmail],
     }));
-    setDareNotice("nice. we’ll nudge you when the dare drops on wednesday.");
+    return true;
+  };
+
+  const downloadAppleCalendarInvite = () => {
+    if (typeof window === "undefined") return;
+
+    const stamp = Date.now();
+    const icsBody = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//crumbz//dare reminder//EN",
+      "BEGIN:VEVENT",
+      `UID:${dare.id}-${stamp}@crumbz.app`,
+      `DTSTAMP:${formatCalendarTimestamp(new Date(stamp))}`,
+      `DTSTART:${formatCalendarTimestamp(dareReminderEvent.start)}`,
+      `DTEND:${formatCalendarTimestamp(dareReminderEvent.end)}`,
+      `SUMMARY:${escapeIcsText(dareReminderEvent.title)}`,
+      `DESCRIPTION:${escapeIcsText(dareReminderEvent.details)}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+
+    const file = new Blob([icsBody], { type: "text/calendar;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "crumbz-dare-reminder.ics";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+    setDareNotice("apple calendar file is ready. crumbz will keep this reminder in your app too.");
+    setDareReminderModalOpen(false);
+  };
+
+  const openGoogleCalendarReminder = () => {
+    if (typeof window === "undefined") return;
+
+    const url = new URL("https://calendar.google.com/calendar/render");
+    url.searchParams.set("action", "TEMPLATE");
+    url.searchParams.set("text", dareReminderEvent.title);
+    url.searchParams.set("details", dareReminderEvent.details);
+    url.searchParams.set(
+      "dates",
+      `${formatCalendarTimestamp(dareReminderEvent.start)}/${formatCalendarTimestamp(dareReminderEvent.end)}`,
+    );
+
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+    setDareNotice("google calendar is opening. crumbz will keep this reminder in your app too.");
+    setDareReminderModalOpen(false);
+  };
+
+  const remindMeForDare = () => {
+    const addedReminder = saveDareReminder();
+    setDareNotice(
+      addedReminder
+        ? "nice. we’ll remind you in crumbz too. pick apple or google calendar if you want it there as well."
+        : "your crumbz reminder is already set. you can still add it to apple or google calendar.",
+    );
+    setDareReminderModalOpen(true);
   };
 
   const handleDareProofFile = async (files: FileList | null) => {
@@ -4844,6 +4943,20 @@ export default function Page() {
                               view update
                             </Button>
                           </div>
+                        ) : item.kind === "dare_reminder" ? (
+                          <div className="mt-3">
+                            <Button
+                              radius="full"
+                              className="bg-[#F5A623] text-white"
+                              onPress={() => {
+                                markNotificationSeen(item.id);
+                                setStudentTab("feed");
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              open dare
+                            </Button>
+                          </div>
                         ) : (
                           <div className="mt-3">
                             <Button
@@ -4868,6 +4981,34 @@ export default function Page() {
           </motion.aside>
         </div>
       ) : null}
+
+      <Modal isOpen={dareReminderModalOpen} onOpenChange={setDareReminderModalOpen} placement="bottom-center">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1">add the dare reminder</ModalHeader>
+              <ModalBody className="pb-6">
+                <div className="rounded-[22px] bg-[#FFF8EE] p-4 text-sm text-[#2C1A0E]">
+                  next drop: {dareReleaseText}
+                </div>
+                <p className="text-sm leading-6 text-[#6c7289]">
+                  crumbz will keep reminding you in the app. if you want, you can also save the drop to apple or google
+                  calendar.
+                </p>
+                <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={downloadAppleCalendarInvite}>
+                  add to apple calendar
+                </Button>
+                <Button radius="full" className="bg-[#F5A623] text-white" onPress={openGoogleCalendarReminder}>
+                  add to google calendar
+                </Button>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  not now
+                </Button>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </main>
   );
 }
