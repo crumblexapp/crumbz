@@ -52,6 +52,19 @@ const FOOD_SEARCH_QUERIES = [
   "coffee",
   "juice bar",
 ];
+const CUSTOM_MAP_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ color: "#f7f2e8" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#6f655e" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#f7f2e8" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#e7ddcf" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#efe5d7" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#d8efd5" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#eadfce" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#ffd9ad" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#ddd4c7" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#cde8f6" }] },
+];
 const ALLOWED_PLACE_TYPES = new Set([
   "restaurant",
   "cafe",
@@ -95,15 +108,26 @@ function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePl
   };
 }
 
+function getPlaceAccent(kind: string) {
+  const normalized = kind.toLowerCase();
+  if (normalized.includes("bakery")) return { bg: "#ff8a65", fg: "#fff7f0", icon: "🥐", chip: "#ffe0d3" };
+  if (normalized.includes("cafe") || normalized.includes("coffee")) return { bg: "#7b61ff", fg: "#f6f2ff", icon: "☕", chip: "#e5ddff" };
+  if (normalized.includes("dessert") || normalized.includes("ice")) return { bg: "#ff5fa2", fg: "#fff2f8", icon: "🍰", chip: "#ffd9eb" };
+  if (normalized.includes("bubble")) return { bg: "#2dbf8d", fg: "#eefdf7", icon: "🧋", chip: "#d7f7eb" };
+  return { bg: "#fe8a01", fg: "#fff7ea", icon: "🍽️", chip: "#ffe5bf" };
+}
+
 function createFriendPin(selected: boolean, favorited: boolean, fans: FriendProfile[]) {
+  const accent = favorited ? { bg: "#fe8a01", fg: "#fff7ea", icon: "♥" } : { bg: "#2dbf8d", fg: "#eefdf7", icon: "✦" };
   const wrapper = document.createElement("div");
   wrapper.className = "flex items-center gap-2";
 
   const pin = document.createElement("div");
-  pin.className = "flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-white shadow-[0_10px_24px_rgba(43,21,48,0.18)]";
-  pin.style.background = favorited ? "#FE8A01" : "#3cc58f";
-  pin.style.transform = selected ? "scale(1.08)" : "scale(1)";
-  pin.innerHTML = '<span style="font-size:16px;line-height:1;color:white;">♥</span>';
+  pin.className = "flex h-11 w-11 items-center justify-center rounded-[18px] border-[3px] border-white shadow-[0_12px_28px_rgba(43,21,48,0.18)]";
+  pin.style.background = accent.bg;
+  pin.style.transform = selected ? "translateY(-2px) scale(1.08)" : "scale(1)";
+  pin.style.transition = "transform 180ms ease";
+  pin.innerHTML = `<span style="font-size:18px;line-height:1;color:${accent.fg};">${accent.icon}</span>`;
   wrapper.appendChild(pin);
 
   if (!fans.length) return wrapper;
@@ -234,12 +258,13 @@ export default function FavoritesMap({
         center: { lat: effectiveCenter[0], lng: effectiveCenter[1] },
         zoom: 13,
         disableDefaultUI: true,
-        zoomControl: true,
+        zoomControl: false,
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
         mapTypeId: google.maps.MapTypeId.ROADMAP,
         gestureHandling: "greedy",
+        styles: CUSTOM_MAP_STYLES,
       });
 
       mapRef.current = map;
@@ -360,11 +385,15 @@ export default function FavoritesMap({
 
     displayedPlaces.forEach((place) => {
       const isFavorited = favoriteIds.includes(place.id);
+      const accent = getPlaceAccent(place.kind);
+      const pinContent = createFriendPin(selectedPlace?.id === place.id, isFavorited, mutualFansByPlace[place.id] ?? []);
+      pinContent.firstChild && ((pinContent.firstChild as HTMLDivElement).innerHTML = `<span style="font-size:18px;line-height:1;color:${accent.fg};">${accent.icon}</span>`);
+      pinContent.firstChild && (((pinContent.firstChild as HTMLDivElement).style.background = isFavorited ? "#fe8a01" : accent.bg));
       const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: place.lat, lng: place.lon },
         map: mapRef.current,
         title: place.name,
-        content: createFriendPin(selectedPlace?.id === place.id, isFavorited, mutualFansByPlace[place.id] ?? []),
+        content: pinContent,
       });
 
       marker.addListener("click", () => {
@@ -405,6 +434,7 @@ export default function FavoritesMap({
 
   return (
     <div className="relative overflow-hidden rounded-[32px] border border-[#e5e1f4] bg-[linear-gradient(180deg,_#f8f7ff_0%,_#eef4ff_100%)] shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.5),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(254,138,1,0.14),_transparent_34%)]" />
       <div className="absolute left-4 right-4 top-4 z-10 rounded-full bg-white/94 px-4 py-3 shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
         <div className="flex items-center gap-3">
           <span className="text-xl text-[#7a7895]">⌕</span>
@@ -434,22 +464,30 @@ export default function FavoritesMap({
       ) : null}
 
       {selectedPlace ? (
-        <div className="absolute inset-x-4 bottom-4 z-10 rounded-[28px] bg-white/96 p-4 shadow-[0_20px_50px_rgba(43,21,48,0.16)] backdrop-blur">
+        <div className="absolute inset-x-4 bottom-4 z-10 rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-2xl font-semibold text-[#2b1530]">{selectedPlace.name}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#b56d19]">{selectedPlace.kind}</p>
-              <p className="mt-2 text-sm text-[#785c42]">{selectedPlace.address}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2b1530]"
+                  style={{ background: getPlaceAccent(selectedPlace.kind).chip }}
+                >
+                  {selectedPlace.kind}
+                </span>
+                <span className="text-xs font-medium text-[#7c6d60]">{selectedMutualFans.length ? `${selectedMutualFans.length} friend saves` : "new food spot"}</span>
+              </div>
+              <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPlace.name}</p>
+              <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPlace.address}</p>
             </div>
             <button
               type="button"
               onClick={() => onToggleFavorite(selectedPlace.id)}
-              className={`flex h-11 w-11 items-center justify-center rounded-full ${
-                favoriteIds.includes(selectedPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff5e8] text-[#d97706]"
+              className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${
+                favoriteIds.includes(selectedPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
               }`}
               aria-label={`heart ${selectedPlace.name}`}
             >
-              <span className="text-xl">♥</span>
+              <span className="text-2xl">♥</span>
             </button>
           </div>
 
