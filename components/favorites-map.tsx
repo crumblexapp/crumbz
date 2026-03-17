@@ -1,8 +1,9 @@
 "use client";
 
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { Avatar, Spinner } from "@heroui/react";
 import L from "leaflet";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 
 type FavoritePlace = {
@@ -38,6 +39,7 @@ const cityCenters: Record<string, [number, number]> = {
   czestochowa: [50.8118, 19.1203],
   torun: [53.0138, 18.5984],
 };
+const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 
 function normalizeCityKey(cityName: string) {
   return cityName
@@ -125,6 +127,7 @@ export default function FavoritesMap({
   highlightedPlaceId?: string | null;
 }) {
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
@@ -157,6 +160,20 @@ export default function FavoritesMap({
   }, [displayedPlaces, highlightedPlaceId]);
 
   useEffect(() => {
+    if (!GOOGLE_MAPS_KEY || placesServiceRef.current) return;
+
+    setOptions({
+      key: GOOGLE_MAPS_KEY,
+      v: "weekly",
+    });
+
+    void importLibrary("places").then(() => {
+      const serviceHost = document.createElement("div");
+      placesServiceRef.current = new google.maps.places.PlacesService(serviceHost);
+    });
+  }, []);
+
+  useEffect(() => {
     const query = searchQuery.trim();
     if (query.length < 2) {
       setSearchResults([]);
@@ -168,39 +185,79 @@ export default function FavoritesMap({
       setSearchLoading(true);
 
       try {
-        const params = new URLSearchParams({
-          q: `${query} in ${cityName}`,
-          format: "jsonv2",
-          limit: "12",
-          addressdetails: "1",
-        });
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
-        const payload = (await response.json().catch(() => [])) as Array<{
-          place_id?: number;
-          display_name?: string;
-          lat?: string;
-          lon?: string;
-          type?: string;
-          name?: string;
-        }>;
+        let nextResults: FavoritePlace[] = [];
 
-        const nextResults = payload
-          .map((item) => {
-            const lat = Number(item.lat);
-            const lon = Number(item.lon);
-            if (!item.place_id || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+        if (placesServiceRef.current && window.google) {
+          nextResults = await new Promise<FavoritePlace[]>((resolve) => {
+            placesServiceRef.current?.textSearch(
+              {
+                query: `${query} in ${cityName}`,
+                location: new google.maps.LatLng(effectiveCenter[0], effectiveCenter[1]),
+                radius: 15000,
+              },
+              (results, status) => {
+                if (status !== google.maps.places.PlacesServiceStatus.OK || !results?.length) {
+                  resolve([]);
+                  return;
+                }
 
-            const parts = (item.display_name ?? "").split(",");
-            return {
-              id: `osm-${item.place_id}`,
-              name: item.name ?? parts[0]?.trim() ?? "food spot",
-              kind: (item.type ?? "food spot").replace(/_/g, " "),
-              lat,
-              lon,
-              address: item.display_name ?? "city spot",
-            } satisfies FavoritePlace;
-          })
-          .filter((item): item is FavoritePlace => Boolean(item));
+                resolve(
+                  results
+                    .map((item) => {
+                      const location = item.geometry?.location;
+                      if (!location || !item.place_id || !item.name) return null;
+
+                      return {
+                        id: item.place_id,
+                        name: item.name,
+                        kind: (item.types?.[0] ?? "food spot").replace(/_/g, " "),
+                        lat: location.lat(),
+                        lon: location.lng(),
+                        address: item.formatted_address ?? item.vicinity ?? "city spot",
+                      } satisfies FavoritePlace;
+                    })
+                    .filter((item): item is FavoritePlace => Boolean(item)),
+                );
+              },
+            );
+          });
+        }
+
+        if (!nextResults.length) {
+          const params = new URLSearchParams({
+            q: `${query} in ${cityName}`,
+            format: "jsonv2",
+            limit: "12",
+            addressdetails: "1",
+          });
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+          const payload = (await response.json().catch(() => [])) as Array<{
+            place_id?: number;
+            display_name?: string;
+            lat?: string;
+            lon?: string;
+            type?: string;
+            name?: string;
+          }>;
+
+          nextResults = payload
+            .map((item) => {
+              const lat = Number(item.lat);
+              const lon = Number(item.lon);
+              if (!item.place_id || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+
+              const parts = (item.display_name ?? "").split(",");
+              return {
+                id: `osm-${item.place_id}`,
+                name: item.name ?? parts[0]?.trim() ?? "food spot",
+                kind: (item.type ?? "food spot").replace(/_/g, " "),
+                lat,
+                lon,
+                address: item.display_name ?? "city spot",
+              } satisfies FavoritePlace;
+            })
+            .filter((item): item is FavoritePlace => Boolean(item));
+        }
 
         setSearchResults(nextResults);
         setSelectedPlaceId(nextResults[0]?.id ?? null);
@@ -212,7 +269,7 @@ export default function FavoritesMap({
     }, 350);
 
     return () => window.clearTimeout(timeout);
-  }, [cityName, searchQuery]);
+  }, [cityName, effectiveCenter, searchQuery]);
 
   return (
     <div className="relative overflow-hidden rounded-[32px] border border-[#e5e1f4] bg-[linear-gradient(180deg,_#f8f7ff_0%,_#eef4ff_100%)] shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
