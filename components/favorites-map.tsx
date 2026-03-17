@@ -223,7 +223,16 @@ export default function FavoritesMap({
         </div>
 
         {showSearchResults ? (
-          <div className="mt-3 overflow-hidden rounded-[24px] bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
+          <div className="mt-3 overflow-hidden rounded-[24px] border border-white/70 bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
+            <div className="flex items-center justify-between border-b border-[#f3eadc] bg-[#fff8ef] px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#b56d19]">live google maps results</p>
+                <p className="mt-1 text-xs text-[#7c6d60]">tap a spot to preview it on the map</p>
+              </div>
+              <div className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2b1530] shadow-[0_6px_18px_rgba(43,21,48,0.06)]">
+                {searchResults.length} found
+              </div>
+            </div>
             {searchResults.length ? (
               searchResults.slice(0, 5).map((place) => (
                 <button
@@ -232,18 +241,29 @@ export default function FavoritesMap({
                   onClick={() => {
                     setSelectedPlaceId(place.id);
                   }}
-                  className="flex w-full items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 text-left last:border-b-0"
+                  className="flex w-full items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 text-left transition-colors hover:bg-[#fff9f1] last:border-b-0"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
-                    <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-lg shadow-[0_10px_24px_rgba(43,21,48,0.08)]"
+                      style={{ background: getPlaceAccent(place.kind).chip }}
+                    >
+                      {getPlaceAccent(place.kind).icon}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
+                      <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
+                    </div>
                   </div>
-                  <span
-                    className="shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
-                    style={{ background: getPlaceAccent(place.kind).chip }}
-                  >
-                    {place.kind}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
+                      style={{ background: getPlaceAccent(place.kind).chip }}
+                    >
+                      {place.kind}
+                    </span>
+                    <span className="text-lg text-[#b56d19]">›</span>
+                  </div>
                 </button>
               ))
             ) : (
