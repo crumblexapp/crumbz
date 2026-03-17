@@ -336,12 +336,10 @@ export default function FavoritesMap({
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={`search places in ${cityName}...`}
+              placeholder="find cafes, bakeries, restaurants..."
               className="w-full bg-transparent text-sm font-medium text-[#2b1530] outline-none placeholder:text-[#b4b1c8]"
             />
-            <p className="text-xs text-[#8d89ab]">
-              {searchLoading ? "searching google places..." : `showing ${displayedPlaces.length} spots around ${cityName}`}
-            </p>
+            <p className="text-xs text-[#8d89ab]">{searchLoading ? "searching google places..." : "add your favorite spots here."}</p>
           </div>
         </div>
       </div>

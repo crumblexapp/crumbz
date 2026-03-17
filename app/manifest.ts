@@ -7,18 +7,20 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "the crumbz student brand app.",
     start_url: "/",
     display: "standalone",
-    background_color: "#fffaf4",
+    background_color: "#FE8A01",
     theme_color: "#FE8A01",
     icons: [
       {
-        src: "/brand/crumbz-app-icon.png",
-        sizes: "1024x1024",
+        src: "/brand/onboarding-page-exact.png",
+        sizes: "1080x1920",
         type: "image/png",
+        purpose: "any",
       },
       {
-        src: "/brand/crumbz-app-icon.png",
-        sizes: "1024x1024",
+        src: "/brand/onboarding-page-exact.png",
+        sizes: "1080x1920",
         type: "image/png",
+        purpose: "maskable",
       },
     ],
   };
