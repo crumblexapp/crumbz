@@ -1,8 +1,9 @@
 "use client";
 
-import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { Avatar, Spinner } from "@heroui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import { useEffect, useMemo, useState } from "react";
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 
 type FavoritePlace = {
   id: string;
@@ -21,11 +22,6 @@ type FriendProfile = {
   favoritePlaceIds: string[];
 };
 
-type MapMarkerWithCleanup = {
-  setMap: (map: google.maps.Map | null) => void;
-};
-
-const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
 const cityCenters: Record<string, [number, number]> = {
   warsaw: [52.2297, 21.0122],
   lodz: [51.7592, 19.456],
@@ -42,41 +38,19 @@ const cityCenters: Record<string, [number, number]> = {
   czestochowa: [50.8118, 19.1203],
   torun: [53.0138, 18.5984],
 };
-const FOOD_SEARCH_QUERIES = [
-  "restaurants",
-  "cafes",
-  "bakeries",
-  "desserts",
-  "matcha",
-  "bubble tea",
-  "coffee",
-  "juice bar",
-];
-const CUSTOM_MAP_STYLES: google.maps.MapTypeStyle[] = [
-  { elementType: "geometry", stylers: [{ color: "#f7f2e8" }] },
-  { elementType: "labels.text.fill", stylers: [{ color: "#6f655e" }] },
-  { elementType: "labels.text.stroke", stylers: [{ color: "#f7f2e8" }] },
-  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#e7ddcf" }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#efe5d7" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#d8efd5" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#eadfce" }] },
-  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#ffd9ad" }] },
-  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#ddd4c7" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#cde8f6" }] },
-];
-const ALLOWED_PLACE_TYPES = new Set([
+
+const FOOD_QUERY_HINTS = ["restaurant", "cafe", "bakery", "dessert", "coffee"];
+const ALLOWED_OSM_TYPES = new Set([
   "restaurant",
   "cafe",
   "bakery",
-  "meal_takeaway",
-  "meal_delivery",
-  "food",
+  "fast_food",
+  "food_court",
+  "ice_cream",
   "bar",
-  "coffee_shop",
+  "pub",
+  "biergarten",
 ]);
-const EXCLUDED_PLACE_TYPES = new Set(["liquor_store", "supermarket", "convenience_store", "grocery_or_supermarket"]);
-const SEARCH_RADIUS_METERS = 15000;
 
 function normalizeCityKey(cityName: string) {
   return cityName
@@ -87,25 +61,13 @@ function normalizeCityKey(cityName: string) {
     .toLowerCase();
 }
 
-function normalizePlaceResult(place: google.maps.places.PlaceResult): FavoritePlace | null {
-  const location = place.geometry?.location;
-  const placeId = place.place_id;
-  const name = place.name;
-  if (!location || !placeId || !name) return null;
-
-  const kinds = place.types ?? [];
-  const blocked = kinds.some((kind) => EXCLUDED_PLACE_TYPES.has(kind));
-  const allowed = kinds.some((kind) => ALLOWED_PLACE_TYPES.has(kind));
-  if (blocked || !allowed) return null;
-
-  return {
-    id: placeId,
-    name,
-    kind: (kinds[0] ?? "food spot").replace(/_/g, " "),
-    lat: location.lat(),
-    lon: location.lng(),
-    address: place.formatted_address ?? place.vicinity ?? "city spot",
-  };
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getPlaceAccent(kind: string) {
@@ -113,58 +75,58 @@ function getPlaceAccent(kind: string) {
   if (normalized.includes("bakery")) return { bg: "#ff8a65", fg: "#fff7f0", icon: "🥐", chip: "#ffe0d3" };
   if (normalized.includes("cafe") || normalized.includes("coffee")) return { bg: "#7b61ff", fg: "#f6f2ff", icon: "☕", chip: "#e5ddff" };
   if (normalized.includes("dessert") || normalized.includes("ice")) return { bg: "#ff5fa2", fg: "#fff2f8", icon: "🍰", chip: "#ffd9eb" };
-  if (normalized.includes("bubble")) return { bg: "#2dbf8d", fg: "#eefdf7", icon: "🧋", chip: "#d7f7eb" };
-  return { bg: "#fe8a01", fg: "#fff7ea", icon: "🍽️", chip: "#ffe5bf" };
+  if (normalized.includes("bar") || normalized.includes("pub")) return { bg: "#2dbf8d", fg: "#eefdf7", icon: "🍸", chip: "#d7f7eb" };
+  return { bg: "#fe8a01", fg: "#fff7ea", icon: "🍽", chip: "#ffe5bf" };
 }
 
-function createFriendPin(selected: boolean, favorited: boolean, fans: FriendProfile[]) {
-  const accent = favorited ? { bg: "#fe8a01", fg: "#fff7ea", icon: "♥" } : { bg: "#2dbf8d", fg: "#eefdf7", icon: "✦" };
-  const wrapper = document.createElement("div");
-  wrapper.className = "flex items-center gap-2";
+function buildMarkerIcon(place: FavoritePlace, selected: boolean, favorited: boolean, fans: FriendProfile[]) {
+  const accent = getPlaceAccent(place.kind);
+  const bubbles = fans
+    .slice(0, 2)
+    .map((fan, index) => {
+      const content = fan.picture
+        ? `<img src="${escapeHtml(fan.picture)}" alt="${escapeHtml(fan.name)}" style="height:100%;width:100%;object-fit:cover;" />`
+        : `<span>${escapeHtml(fan.name.slice(0, 1).toUpperCase())}</span>`;
 
-  const pin = document.createElement("div");
-  pin.className = "flex h-11 w-11 items-center justify-center rounded-[18px] border-[3px] border-white shadow-[0_12px_28px_rgba(43,21,48,0.18)]";
-  pin.style.background = accent.bg;
-  pin.style.transform = selected ? "translateY(-2px) scale(1.08)" : "scale(1)";
-  pin.style.transition = "transform 180ms ease";
-  pin.innerHTML = `<span style="font-size:18px;line-height:1;color:${accent.fg};">${accent.icon}</span>`;
-  wrapper.appendChild(pin);
+      return `<div style="height:32px;width:32px;border-radius:999px;overflow:hidden;border:2px solid white;background:#fff3e1;color:#2b1530;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;position:relative;z-index:${3 - index};margin-left:${index === 0 ? 0 : -8}px;box-shadow:0 8px 20px rgba(43,21,48,0.14);">${content}</div>`;
+    })
+    .join("");
 
-  if (!fans.length) return wrapper;
+  const extra =
+    fans.length > 2
+      ? `<div style="height:32px;width:32px;border-radius:999px;border:2px solid white;background:#2b1530;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-left:-8px;">+${fans.length - 2}</div>`
+      : "";
 
-  const stack = document.createElement("div");
-  stack.className = "flex -space-x-2";
+  return L.divIcon({
+    className: "crumbz-map-marker",
+    html: `<div style="display:flex;align-items:center;gap:8px;">
+      <div style="height:44px;width:44px;border-radius:18px;border:3px solid white;background:${favorited ? "#fe8a01" : accent.bg};display:flex;align-items:center;justify-content:center;color:${accent.fg};font-size:18px;box-shadow:0 12px 28px rgba(43,21,48,0.18);transform:${selected ? "translateY(-2px) scale(1.08)" : "scale(1)"};transition:transform 180ms ease;">${accent.icon}</div>
+      ${fans.length ? `<div style="display:flex;align-items:center;">${bubbles}${extra}</div>` : ""}
+    </div>`,
+    iconSize: [fans.length ? 96 : 44, 44],
+    iconAnchor: [22, 22],
+  });
+}
 
-  fans.slice(0, 2).forEach((fan, index) => {
-    const bubble = document.createElement("div");
-    bubble.className =
-      "flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#fff3e1] text-[11px] font-semibold text-[#2b1530] shadow-[0_8px_20px_rgba(43,21,48,0.14)]";
-    bubble.style.position = "relative";
-    bubble.style.zIndex = String(3 - index);
+function MapViewportSync({
+  center,
+  selectedPlace,
+}: {
+  center: [number, number];
+  selectedPlace: FavoritePlace | null;
+}) {
+  const map = useMap();
 
-    if (fan.picture) {
-      const image = document.createElement("img");
-      image.src = fan.picture;
-      image.alt = fan.name;
-      image.className = "h-full w-full object-cover";
-      bubble.appendChild(image);
-    } else {
-      bubble.textContent = fan.name.slice(0, 1).toUpperCase();
+  useEffect(() => {
+    if (selectedPlace) {
+      map.setView([selectedPlace.lat, selectedPlace.lon], Math.max(map.getZoom(), 15), { animate: true });
+      return;
     }
 
-    stack.appendChild(bubble);
-  });
+    map.setView(center, 13, { animate: true });
+  }, [center, map, selectedPlace]);
 
-  if (fans.length > 2) {
-    const extra = document.createElement("div");
-    extra.className =
-      "flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#2b1530] text-[10px] font-semibold text-white";
-    extra.textContent = `+${fans.length - 2}`;
-    stack.appendChild(extra);
-  }
-
-  wrapper.appendChild(stack);
-  return wrapper;
+  return null;
 }
 
 export default function FavoritesMap({
@@ -185,26 +147,17 @@ export default function FavoritesMap({
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
 }) {
-  const mapElementRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const markersRef = useRef<MapMarkerWithCleanup[]>([]);
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(places[0]?.id ?? null);
-  const [mapReady, setMapReady] = useState(false);
-  const [lockCenter, setLockCenter] = useState(true);
 
   const displayedPlaces = useMemo(() => {
-    const hasQuery = searchQuery.trim().length >= 2;
-    if (hasQuery) return searchResults;
-    if (searchResults.length && !places.length) return searchResults;
+    if (searchQuery.trim().length >= 2) return searchResults;
     return places;
   }, [places, searchQuery, searchResults]);
-  const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
-  const selectedMutualFans = selectedPlace ? friends.filter((friend) => friend.favoritePlaceIds.includes(selectedPlace.id)) : [];
+
   const mutualFansByPlace = useMemo(
     () =>
       Object.fromEntries(
@@ -213,134 +166,20 @@ export default function FavoritesMap({
     [displayedPlaces, friends],
   );
 
-  const runTextSearch = async (query: string) => {
-    if (!placesServiceRef.current || !mapRef.current) return [];
-
-    const request: google.maps.places.TextSearchRequest = {
-      query,
-      location: new google.maps.LatLng(effectiveCenter[0], effectiveCenter[1]),
-      radius: SEARCH_RADIUS_METERS,
-    };
-
-    return new Promise<FavoritePlace[]>((resolve) => {
-      const collected: FavoritePlace[] = [];
-
-      const runPage = (pageRequest: google.maps.places.TextSearchRequest) => {
-        placesServiceRef.current?.textSearch(pageRequest, (results, status, pagination) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results?.length) {
-            collected.push(...results.map(normalizePlaceResult).filter((place): place is FavoritePlace => Boolean(place)));
-          }
-
-          if (pagination?.hasNextPage && collected.length < 120) {
-            window.setTimeout(() => pagination.nextPage(), 320);
-          } else {
-            resolve(collected.filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index));
-          }
-        });
-      };
-
-      runPage(request);
-    });
-  };
+  const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
+  const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
 
   useEffect(() => {
-    if (!mapElementRef.current || mapRef.current || !GOOGLE_MAPS_KEY) return;
-
-    setOptions({
-      key: GOOGLE_MAPS_KEY,
-      v: "weekly",
-    });
-
-    void Promise.all([importLibrary("maps"), importLibrary("places"), importLibrary("marker")]).then(() => {
-      if (!mapElementRef.current) return;
-
-      const map = new google.maps.Map(mapElementRef.current, {
-        center: { lat: effectiveCenter[0], lng: effectiveCenter[1] },
-        zoom: 13,
-        disableDefaultUI: true,
-        zoomControl: false,
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
-        mapTypeId: google.maps.MapTypeId.ROADMAP,
-        gestureHandling: "greedy",
-        styles: CUSTOM_MAP_STYLES,
-      });
-
-      mapRef.current = map;
-      placesServiceRef.current = new google.maps.places.PlacesService(map);
-      setMapReady(true);
-    });
-  }, [effectiveCenter]);
+    setSelectedPlaceId((current) => current ?? places[0]?.id ?? null);
+  }, [places]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
-    mapRef.current.setZoom(13);
-    setSelectedPlaceId(places[0]?.id ?? null);
-    setSearchResults([]);
-    setLockCenter(true);
-  }, [effectiveCenter, places]);
+    if (!highlightedPlaceId) return;
+    const nextPlace = displayedPlaces.find((place) => place.id === highlightedPlaceId);
+    if (nextPlace) setSelectedPlaceId(nextPlace.id);
+  }, [displayedPlaces, highlightedPlaceId]);
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    if (!displayedPlaces.length) {
-      mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
-      mapRef.current.setZoom(13);
-    }
-  }, [displayedPlaces.length, effectiveCenter]);
-
-  useEffect(() => {
-    if (!mapRef.current || !mapReady || !lockCenter) return;
-
-    const enforceCenter = () => {
-      if (!mapRef.current) return;
-      const currentCenter = mapRef.current.getCenter();
-      if (!currentCenter) return;
-      const latDiff = Math.abs(currentCenter.lat() - effectiveCenter[0]);
-      const lngDiff = Math.abs(currentCenter.lng() - effectiveCenter[1]);
-      if (latDiff > 0.2 || lngDiff > 0.2) {
-        mapRef.current.setCenter({ lat: effectiveCenter[0], lng: effectiveCenter[1] });
-        mapRef.current.setZoom(13);
-      }
-    };
-
-    const idleListener = mapRef.current.addListener("idle", enforceCenter);
-    return () => {
-      idleListener?.remove();
-    };
-  }, [effectiveCenter, lockCenter, mapReady]);
-
-  useEffect(() => {
-    const hasKnownCenter = Boolean(cityCenters[normalizeCityKey(cityName)]);
-    if (hasKnownCenter) return;
-    if (!mapReady || !placesServiceRef.current || !mapRef.current) return;
-
-    placesServiceRef.current.findPlaceFromQuery(
-      {
-        query: cityName,
-        fields: ["geometry"],
-      },
-      (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]?.geometry?.location) {
-          const loc = results[0].geometry.location;
-          mapRef.current?.setCenter(loc);
-        }
-      },
-    );
-  }, [cityName, mapReady]);
-
-  useEffect(() => {
-    if (!mapRef.current || !displayedPlaces.length) return;
-    const first = displayedPlaces[0];
-    mapRef.current.setCenter({ lat: first.lat, lng: first.lon });
-    setSelectedPlaceId((current) => current ?? first.id);
-    setLockCenter(false);
-  }, [displayedPlaces]);
-
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !placesServiceRef.current) return;
-
     const query = searchQuery.trim();
     if (query.length < 2) {
       setSearchResults([]);
@@ -350,92 +189,79 @@ export default function FavoritesMap({
 
     const timeout = window.setTimeout(async () => {
       setSearchLoading(true);
-      const results = await runTextSearch(`${query} in ${cityName}`);
-      setSearchResults(results);
-      setSelectedPlaceId(results[0]?.id ?? null);
-      setSearchLoading(false);
-    }, 350);
+
+      try {
+        const queryVariants = Array.from(
+          new Set([`${query} ${cityName}`, ...FOOD_QUERY_HINTS.map((hint) => `${query} ${hint} ${cityName}`)]),
+        );
+
+        const resultSets = await Promise.all(
+          queryVariants.map(async (variant) => {
+            const params = new URLSearchParams({
+              q: variant,
+              format: "jsonv2",
+              limit: "8",
+              addressdetails: "1",
+              namedetails: "1",
+              countrycodes: "pl",
+            });
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+            return (await response.json().catch(() => [])) as Array<{
+              place_id?: number;
+              display_name?: string;
+              lat?: string;
+              lon?: string;
+              type?: string;
+              class?: string;
+              name?: string;
+              namedetails?: { name?: string };
+            }>;
+          }),
+        );
+
+        const nextResults = resultSets
+          .flat()
+          .map((item) => {
+            const lat = Number(item.lat);
+            const lon = Number(item.lon);
+            if (!item.place_id || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+
+            const isFoodType = ALLOWED_OSM_TYPES.has(item.type ?? "");
+            const looksFoodLike = FOOD_QUERY_HINTS.some((hint) => (item.display_name ?? "").toLowerCase().includes(hint));
+            const matchesQuery = (item.display_name ?? "").toLowerCase().includes(query.toLowerCase());
+            if (!isFoodType && !looksFoodLike && !matchesQuery) return null;
+
+            const parts = (item.display_name ?? "").split(",");
+            return {
+              id: `osm-${item.place_id}`,
+              name: item.namedetails?.name ?? item.name ?? parts[0]?.trim() ?? "food spot",
+              kind: (item.type ?? "food spot").replace(/_/g, " "),
+              lat,
+              lon,
+              address: item.display_name ?? "city spot",
+            } satisfies FavoritePlace;
+          })
+          .filter((item): item is FavoritePlace => Boolean(item))
+          .filter((item, index, list) => list.findIndex((candidate) => candidate.name === item.name && candidate.address === item.address) === index)
+          .slice(0, 12);
+
+        setSearchResults(nextResults);
+        setSelectedPlaceId(nextResults[0]?.id ?? null);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [cityName, mapReady, searchQuery]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-
-    const loadDefaultPlaces = async () => {
-      const resultSets = await Promise.all(FOOD_SEARCH_QUERIES.slice(0, 4).map((query) => runTextSearch(`${query} in ${cityName}`)));
-      const merged = resultSets.flat();
-      const deduped = merged.filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index);
-      if (deduped.length) {
-        setSearchResults([]);
-        setSelectedPlaceId((current) => current ?? deduped[0]?.id ?? null);
-      }
-    };
-
-    if (!places.length) {
-      void loadDefaultPlaces();
-    }
-  }, [cityName, mapReady, places.length]);
-
-  useEffect(() => {
-    if (!mapRef.current || !window.google || !mapReady) return;
-
-    markersRef.current.forEach((marker) => marker.setMap(null));
-    markersRef.current = [];
-
-    displayedPlaces.forEach((place) => {
-      const isFavorited = favoriteIds.includes(place.id);
-      const accent = getPlaceAccent(place.kind);
-      const pinContent = createFriendPin(selectedPlace?.id === place.id, isFavorited, mutualFansByPlace[place.id] ?? []);
-      pinContent.firstChild && ((pinContent.firstChild as HTMLDivElement).innerHTML = `<span style="font-size:18px;line-height:1;color:${accent.fg};">${accent.icon}</span>`);
-      pinContent.firstChild && (((pinContent.firstChild as HTMLDivElement).style.background = isFavorited ? "#fe8a01" : accent.bg));
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        position: { lat: place.lat, lng: place.lon },
-        map: mapRef.current,
-        title: place.name,
-        content: pinContent,
-      });
-
-      marker.addListener("click", () => {
-        setSelectedPlaceId(place.id);
-        mapRef.current?.panTo({ lat: place.lat, lng: place.lon });
-      });
-
-      markersRef.current.push({
-        setMap: (map) => {
-          marker.map = map;
-        },
-      });
-    });
-  }, [displayedPlaces, favoriteIds, mapReady, mutualFansByPlace, selectedPlace?.id]);
-
-  useEffect(() => {
-    if (!selectedPlace || !mapRef.current) return;
-    mapRef.current.panTo({ lat: selectedPlace.lat, lng: selectedPlace.lon });
-  }, [selectedPlace]);
-
-  useEffect(() => {
-    if (!highlightedPlaceId) return;
-    const nextPlace = displayedPlaces.find((place) => place.id === highlightedPlaceId);
-    if (!nextPlace) return;
-
-    setSelectedPlaceId(nextPlace.id);
-    mapRef.current?.panTo({ lat: nextPlace.lat, lng: nextPlace.lon });
-    setLockCenter(false);
-  }, [displayedPlaces, highlightedPlaceId]);
-
-  if (!GOOGLE_MAPS_KEY) {
-    return (
-      <div className="rounded-[32px] border border-dashed border-[#ffd9ab] bg-white px-4 py-8 text-sm text-[#8b6338]">
-        add `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to turn on the real interactive google map here.
-      </div>
-    );
-  }
+  }, [cityName, searchQuery]);
 
   return (
-    <div className="relative overflow-hidden rounded-[32px] border border-[#e5e1f4] bg-[linear-gradient(180deg,_#f8f7ff_0%,_#eef4ff_100%)] shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.5),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(254,138,1,0.14),_transparent_34%)]" />
-      <div className="absolute left-4 right-4 top-4 z-10 rounded-full bg-white/94 px-4 py-3 shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
+    <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(254,138,1,0.14),_transparent_34%)]" />
+
+      <div className="absolute left-4 right-4 top-4 z-[500] rounded-full bg-white/94 px-4 py-3 shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
         <div className="flex items-center gap-3">
           <span className="text-xl text-[#7a7895]">⌕</span>
           <div className="min-w-0 flex-1">
@@ -451,20 +277,54 @@ export default function FavoritesMap({
         </div>
       </div>
 
-      <div className="absolute right-4 top-20 z-10 rounded-full bg-white/94 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a7895] shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
+      <div className="absolute right-4 top-20 z-[500] rounded-full bg-white/94 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7a7895] shadow-[0_14px_40px_rgba(43,21,48,0.08)] backdrop-blur">
         {cityName}
       </div>
 
-      <div ref={mapElementRef} className="h-[560px] w-full" />
+      <div className="h-[560px] w-full overflow-hidden">
+        <MapContainer
+          center={effectiveCenter}
+          zoom={13}
+          zoomControl={false}
+          attributionControl={false}
+          className="h-full w-full"
+        >
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+          />
+          <MapViewportSync center={effectiveCenter} selectedPlace={selectedPlace} />
+          {displayedPlaces.map((place) => (
+            <Marker
+              key={place.id}
+              position={[place.lat, place.lon]}
+              icon={buildMarkerIcon(place, selectedPlace?.id === place.id, favoriteIds.includes(place.id), mutualFansByPlace[place.id] ?? [])}
+              eventHandlers={{
+                click: () => {
+                  setSelectedPlaceId(place.id);
+                },
+              }}
+            />
+          ))}
+        </MapContainer>
+      </div>
 
-      {!mapReady ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+      {!displayedPlaces.length && !searchLoading ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]">
+          <div className="rounded-[24px] bg-white/95 px-5 py-4 text-center text-sm text-[#785c42] shadow-[0_20px_40px_rgba(43,21,48,0.08)]">
+            search for a cafe, bakery, or restaurant to add it here.
+          </div>
+        </div>
+      ) : null}
+
+      {searchLoading ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/35 backdrop-blur-[1px]">
           <Spinner color="warning" />
         </div>
       ) : null}
 
       {selectedPlace ? (
-        <div className="absolute inset-x-4 bottom-4 z-10 rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
+        <div className="absolute inset-x-4 bottom-4 z-[500] rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -474,7 +334,9 @@ export default function FavoritesMap({
                 >
                   {selectedPlace.kind}
                 </span>
-                <span className="text-xs font-medium text-[#7c6d60]">{selectedMutualFans.length ? `${selectedMutualFans.length} friend saves` : "new food spot"}</span>
+                <span className="text-xs font-medium text-[#7c6d60]">
+                  {selectedMutualFans.length ? `${selectedMutualFans.length} friend saves` : "new food spot"}
+                </span>
               </div>
               <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPlace.name}</p>
               <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPlace.address}</p>
