@@ -139,12 +139,13 @@ export default function FavoritesMap({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const defaultDisplayedPlaces = useMemo(() => places.slice(0, 24), [places]);
 
   const selectedPlace = useMemo(
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
     [places, searchResults, selectedPlaceId],
   );
-  const displayedPlaces = searchResults.length ? searchResults : selectedPlace ? [selectedPlace] : [];
+  const displayedPlaces = searchResults.length ? searchResults : defaultDisplayedPlaces;
 
   const mutualFansByPlace = useMemo(
     () =>
@@ -305,7 +306,7 @@ export default function FavoritesMap({
         </MapContainer>
       </div>
 
-      {!selectedPlace && !searchLoading ? (
+      {!displayedPlaces.length && !searchLoading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]">
           <div className="rounded-[24px] bg-white/95 px-5 py-4 text-center text-sm text-[#785c42] shadow-[0_20px_40px_rgba(43,21,48,0.08)]">
             search for a cafe, bakery, or restaurant, then tap one to preview it here.
