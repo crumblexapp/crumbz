@@ -129,7 +129,7 @@ export default function FavoritesMap({
   places: FavoritePlace[];
   favoriteIds: string[];
   mutualFansByPlace: Record<string, unknown>;
-  onToggleFavorite: (placeId: string) => void;
+  onToggleFavorite: (place: FavoritePlace) => void;
   cityName: string;
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
@@ -139,12 +139,14 @@ export default function FavoritesMap({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [previewedPlace, setPreviewedPlace] = useState<FavoritePlace | null>(null);
   const defaultDisplayedPlaces = useMemo(() => places.slice(0, 24), [places]);
 
   const selectedPlace = useMemo(
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
     [places, searchResults, selectedPlaceId],
   );
+  const focusedPlace = previewedPlace ?? selectedPlace;
   const displayedPlaces = searchResults.length ? searchResults : defaultDisplayedPlaces;
 
   const mutualFansByPlace = useMemo(
@@ -155,21 +157,26 @@ export default function FavoritesMap({
     [displayedPlaces, friends],
   );
 
-  const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
+  const selectedMutualFans = focusedPlace ? friends.filter((friend) => friend.favoritePlaceIds.includes(focusedPlace.id)) : [];
   const showSearchResults = searchQuery.trim().length >= 2 && !searchLoading;
-  const showSelectedPlaceCard = Boolean(selectedPlace) && !showSearchResults;
-  const selectedPreviewPlace = showSelectedPlaceCard ? selectedPlace : null;
+  const showSelectedPlaceCard = Boolean(focusedPlace) && !showSearchResults;
+  const selectedPreviewPlace = showSelectedPlaceCard ? focusedPlace : null;
   const selectedPreviewAccent = selectedPreviewPlace ? getPlaceAccent(selectedPreviewPlace.kind) : null;
 
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
+    setPreviewedPlace(place);
     setSearchQuery("");
+    setSearchResults([]);
   };
 
   useEffect(() => {
     if (!highlightedPlaceId) return;
     const nextPlace = places.find((place) => place.id === highlightedPlaceId);
-    if (nextPlace) setSelectedPlaceId(nextPlace.id);
+    if (nextPlace) {
+      setSelectedPlaceId(nextPlace.id);
+      setPreviewedPlace(nextPlace);
+    }
   }, [highlightedPlaceId, places]);
 
   useEffect(() => {
@@ -290,15 +297,16 @@ export default function FavoritesMap({
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             attribution="&copy; OpenStreetMap contributors &copy; CARTO"
           />
-          <MapViewportSync center={effectiveCenter} selectedPlace={selectedPlace} />
+          <MapViewportSync center={effectiveCenter} selectedPlace={focusedPlace} />
           {displayedPlaces.map((place) => (
             <Marker
               key={place.id}
               position={[place.lat, place.lon]}
-              icon={buildMarkerIcon(place, selectedPlace?.id === place.id, favoriteIds.includes(place.id), mutualFansByPlace[place.id] ?? [])}
+              icon={buildMarkerIcon(place, focusedPlace?.id === place.id, favoriteIds.includes(place.id), mutualFansByPlace[place.id] ?? [])}
               eventHandlers={{
                 click: () => {
                   setSelectedPlaceId(place.id);
+                  setPreviewedPlace(place);
                 },
               }}
             />
@@ -343,7 +351,7 @@ export default function FavoritesMap({
             </div>
             <button
               type="button"
-              onClick={() => onToggleFavorite(selectedPreviewPlace.id)}
+              onClick={() => onToggleFavorite(selectedPreviewPlace)}
               className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${
                 favoriteIds.includes(selectedPreviewPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
               }`}

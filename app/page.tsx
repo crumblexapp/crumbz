@@ -261,6 +261,7 @@ type StoredUser = {
     incomingFriendRequests: string[];
     outgoingFriendRequests: string[];
     favoritePlaceIds: string[];
+    favoriteActivities?: FavoriteActivity[];
   };
 };
 
@@ -271,6 +272,16 @@ type FavoritePlace = {
   lat: number;
   lon: number;
   address: string;
+};
+
+type FavoriteActivity = {
+  id: string;
+  placeId: string;
+  placeName: string;
+  placeKind: string;
+  placeAddress: string;
+  city: string;
+  createdAt: string;
 };
 
 type AppPost = {
@@ -435,6 +446,7 @@ const defaultUser: StoredUser = {
     incomingFriendRequests: [],
     outgoingFriendRequests: [],
     favoritePlaceIds: [],
+    favoriteActivities: [],
   },
 };
 
@@ -646,6 +658,22 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
           : [],
         favoritePlaceIds: Array.isArray(candidate.profile?.favoritePlaceIds)
           ? candidate.profile.favoritePlaceIds.filter((item): item is string => typeof item === "string")
+          : [],
+        favoriteActivities: Array.isArray(candidate.profile?.favoriteActivities)
+          ? candidate.profile.favoriteActivities.filter(
+              (item): item is FavoriteActivity =>
+                Boolean(
+                  item &&
+                    typeof item === "object" &&
+                    typeof item.id === "string" &&
+                    typeof item.placeId === "string" &&
+                    typeof item.placeName === "string" &&
+                    typeof item.placeKind === "string" &&
+                    typeof item.placeAddress === "string" &&
+                    typeof item.city === "string" &&
+                    typeof item.createdAt === "string",
+                ),
+            )
           : [],
       },
     };
@@ -882,6 +910,7 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
   currentEmail?: string;
   targetEmail?: string;
   favoritePlaceIds?: string[];
+  favoritePlace?: FavoritePlace;
 }) {
   const response = await fetch("/api/account", {
     method: "POST",
@@ -1426,6 +1455,19 @@ export default function Page() {
     .filter((item) => item.fans.length > 0)
     .sort((a, b) => b.fans.length - a.fans.length)
     .slice(0, 8);
+  const friendFavoriteNotifications = friendAccounts
+    .flatMap((account) =>
+      (account.profile.favoriteActivities ?? []).map((activity) => ({
+        id: activity.id,
+        kind: "friend_favorite" as const,
+        title: `${account.profile.fullName} saved ${activity.placeName}`,
+        detail: `${activity.placeKind} • ${activity.city || account.profile.city}${activity.placeAddress ? ` • ${activity.placeAddress}` : ""}`,
+        picture: account.googleProfile?.picture,
+        createdAt: activity.createdAt,
+      })),
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 8);
   const notificationItems = [
     ...(currentUserDareReminder
       ? [
@@ -1479,10 +1521,12 @@ export default function Page() {
         postId: post.id,
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
+    ...friendFavoriteNotifications,
   ].filter(Boolean) as Array<
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
+    | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
@@ -2126,6 +2170,7 @@ export default function Page() {
         incomingFriendRequests: user.profile.incomingFriendRequests,
         outgoingFriendRequests: user.profile.outgoingFriendRequests,
         favoritePlaceIds: user.profile.favoritePlaceIds,
+        favoriteActivities: user.profile.favoriteActivities ?? [],
       },
     };
 
@@ -2264,7 +2309,8 @@ export default function Page() {
       });
   };
 
-  const toggleFavoritePlace = (placeId: string) => {
+  const toggleFavoritePlace = (place: FavoritePlace) => {
+    const placeId = place.id;
     const nextFavoritePlaceIds = favoritePlaceIds.includes(placeId)
       ? favoritePlaceIds.filter((id) => id !== placeId)
       : [...favoritePlaceIds, placeId];
@@ -2273,6 +2319,7 @@ export default function Page() {
       action: "update_favorites",
       currentEmail: user.googleProfile?.email ?? "",
       favoritePlaceIds: nextFavoritePlaceIds,
+      favoritePlace: place,
     })
       .then((result) => {
         setAccounts(result.accounts);
@@ -4957,6 +5004,20 @@ export default function Page() {
                               }}
                             >
                               open dare
+                            </Button>
+                          </div>
+                        ) : item.kind === "friend_favorite" ? (
+                          <div className="mt-3">
+                            <Button
+                              radius="full"
+                              className="bg-[#F5A623] text-white"
+                              onPress={() => {
+                                markNotificationSeen(item.id);
+                                setStudentTab("favorites");
+                                setNotificationsOpen(false);
+                              }}
+                            >
+                              open favorites
                             </Button>
                           </div>
                         ) : (

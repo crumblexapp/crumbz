@@ -26,6 +26,15 @@ type StoredUser = {
     incomingFriendRequests: string[];
     outgoingFriendRequests: string[];
     favoritePlaceIds: string[];
+    favoriteActivities?: {
+      id: string;
+      placeId: string;
+      placeName: string;
+      placeKind: string;
+      placeAddress: string;
+      city: string;
+      createdAt: string;
+    }[];
   };
 };
 
@@ -38,6 +47,7 @@ function normalizeAccount(account: StoredUser) {
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],
       outgoingFriendRequests: account.profile.outgoingFriendRequests ?? [],
       favoritePlaceIds: account.profile.favoritePlaceIds ?? [],
+      favoriteActivities: account.profile.favoriteActivities ?? [],
     },
   };
 }
@@ -147,6 +157,12 @@ export async function POST(request: Request) {
         currentEmail?: string;
         targetEmail?: string;
         favoritePlaceIds?: string[];
+        favoritePlace?: {
+          id?: string;
+          name?: string;
+          kind?: string;
+          address?: string;
+        };
       }
     | null;
 
@@ -349,11 +365,32 @@ export async function POST(request: Request) {
     nextAccounts = accounts.map((account) => {
       if (getEmail(account) !== currentEmail) return account;
 
+      const nextFavoritePlaceIds = Array.isArray(body?.favoritePlaceIds) ? body.favoritePlaceIds : [];
+      const previousFavoritePlaceIds = account.profile.favoritePlaceIds ?? [];
+      const addedFavoritePlaceId =
+        nextFavoritePlaceIds.find((placeId) => !previousFavoritePlaceIds.includes(placeId)) ?? null;
+      const nextFavoriteActivities =
+        addedFavoritePlaceId && body?.favoritePlace?.id === addedFavoritePlaceId
+          ? [
+              {
+                id: `favorite-${currentEmail}-${addedFavoritePlaceId}-${Date.now()}`,
+                placeId: addedFavoritePlaceId,
+                placeName: body.favoritePlace.name ?? "new food spot",
+                placeKind: body.favoritePlace.kind ?? "food spot",
+                placeAddress: body.favoritePlace.address ?? "",
+                city: account.profile.city ?? "",
+                createdAt: new Date().toISOString(),
+              },
+              ...(account.profile.favoriteActivities ?? []),
+            ].slice(0, 30)
+          : account.profile.favoriteActivities ?? [];
+
       const next = normalizeAccount({
         ...account,
         profile: {
           ...account.profile,
-          favoritePlaceIds: Array.isArray(body?.favoritePlaceIds) ? body.favoritePlaceIds : [],
+          favoritePlaceIds: nextFavoritePlaceIds,
+          favoriteActivities: nextFavoriteActivities,
         },
       });
       nextUser = next;
