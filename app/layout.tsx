@@ -1,50 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import {
-  Geist,
-  Geist_Mono,
-  Manrope,
-  Space_Grotesk,
-  Bricolage_Grotesque,
-  Instrument_Serif,
-} from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const manrope = Manrope({
+const manrope = localFont({
+  src: "./fonts/Manrope-Bold.ttf",
   variable: "--font-manrope",
-  subsets: ["latin"],
-});
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-});
-
-const bricolageGrotesque = Bricolage_Grotesque({
-  variable: "--font-bricolage",
-  subsets: ["latin"],
-});
-
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-instrument-serif",
-  weight: "400",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 const youngSerif = localFont({
   src: "./fonts/YoungSerif-Regular.ttf",
   variable: "--font-young-serif",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -91,7 +59,16 @@ export default function RootLayout({
     <html lang="en" className="light" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${spaceGrotesk.variable} ${bricolageGrotesque.variable} ${instrumentSerif.variable} ${youngSerif.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
+        className={`${manrope.variable} ${youngSerif.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
+        style={
+          {
+            "--font-geist-sans": '"Manrope", system-ui, sans-serif',
+            "--font-geist-mono": '"SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace',
+            "--font-space-grotesk": '"Manrope", system-ui, sans-serif',
+            "--font-bricolage": '"Manrope", system-ui, sans-serif',
+            "--font-instrument-serif": '"Times New Roman", Georgia, serif',
+          } as React.CSSProperties
+        }
       >
         <Providers>{children}</Providers>
       </body>

@@ -157,6 +157,8 @@ export default function FavoritesMap({
   const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
   const showSearchResults = searchQuery.trim().length >= 2 && !searchLoading;
   const showSelectedPlaceCard = Boolean(selectedPlace) && !showSearchResults;
+  const selectedPreviewPlace = showSelectedPlaceCard ? selectedPlace : null;
+  const selectedPreviewAccent = selectedPreviewPlace ? getPlaceAccent(selectedPreviewPlace.kind) : null;
 
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
@@ -318,7 +320,7 @@ export default function FavoritesMap({
         </div>
       ) : null}
 
-      {showSelectedPlaceCard ? (
+      {selectedPreviewPlace && selectedPreviewAccent ? (
         <div
           className="absolute inset-x-4 z-[500] max-h-[220px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur"
           style={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom, 0px))" }}
@@ -328,24 +330,24 @@ export default function FavoritesMap({
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2b1530]"
-                  style={{ background: getPlaceAccent(selectedPlace.kind).chip }}
+                  style={{ background: selectedPreviewAccent.chip }}
                 >
-                  {selectedPlace.kind}
+                  {selectedPreviewPlace.kind}
                 </span>
                 <span className="text-xs font-medium text-[#7c6d60]">
                   {selectedMutualFans.length ? `${selectedMutualFans.length} friend saves` : "new food spot"}
                 </span>
               </div>
-              <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPlace.name}</p>
-              <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPlace.address}</p>
+              <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPreviewPlace.name}</p>
+              <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPreviewPlace.address}</p>
             </div>
             <button
               type="button"
-              onClick={() => onToggleFavorite(selectedPlace.id)}
+              onClick={() => onToggleFavorite(selectedPreviewPlace.id)}
               className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${
-                favoriteIds.includes(selectedPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
+                favoriteIds.includes(selectedPreviewPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
               }`}
-              aria-label={`heart ${selectedPlace.name}`}
+              aria-label={`heart ${selectedPreviewPlace.name}`}
             >
               <span className="text-2xl">♥</span>
             </button>
