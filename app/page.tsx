@@ -4144,7 +4144,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-white text-[#2C1A0E]">
-      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-40 pt-5 font-[family-name:var(--font-manrope)]">
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -4827,7 +4827,10 @@ export default function Page() {
           </section>
         ) : null}
 
-        <nav className="fixed bottom-3 left-1/2 z-20 w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur">
+        <nav
+          className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
+          style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <div className="grid grid-cols-5 gap-1 text-center">
             {[
               { label: "Feed", key: "feed" },
