@@ -144,7 +144,7 @@ export default function FavoritesMap({
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
     [places, searchResults, selectedPlaceId],
   );
-  const displayedPlaces = selectedPlace ? [selectedPlace] : [];
+  const displayedPlaces = searchResults.length ? searchResults : selectedPlace ? [selectedPlace] : [];
 
   const mutualFansByPlace = useMemo(
     () =>
@@ -163,7 +163,6 @@ export default function FavoritesMap({
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
     setSearchQuery("");
-    setSearchResults([]);
   };
 
   useEffect(() => {
