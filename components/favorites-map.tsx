@@ -247,34 +247,26 @@ export default function FavoritesMap({
                     key={place.id}
                     className="flex items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 transition-colors hover:bg-[#fff9f1] last:border-b-0"
                   >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-lg shadow-[0_10px_24px_rgba(43,21,48,0.08)]"
-                        style={{ background: getPlaceAccent(place.kind).chip }}
-                      >
-                        {getPlaceAccent(place.kind).icon}
-                      </div>
-                      <button type="button" onClick={() => previewPlace(place)} className="min-w-0 text-left">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-lg shadow-[0_10px_24px_rgba(43,21,48,0.08)]"
+                      style={{ background: getPlaceAccent(place.kind).chip }}
+                    >
+                      {getPlaceAccent(place.kind).icon}
+                    </div>
+                    <button type="button" onClick={() => previewPlace(place)} className="min-w-0 flex-1 text-left">
                         <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
-                        <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
-                      </button>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span
-                        className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
-                        style={{ background: getPlaceAccent(place.kind).chip }}
-                      >
-                        {place.kind}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => previewPlace(place)}
-                        aria-label={`show ${place.name} on the map`}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff4e3] text-lg text-[#b56d19]"
-                      >
-                        ›
-                      </button>
-                    </div>
+                        <p className="mt-1 truncate text-xs font-semibold uppercase tracking-[0.14em] text-[#b56d19]">{place.kind}</p>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => previewPlace(place)}
+                    aria-label={`show ${place.name} on the map`}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#fff4e3] text-lg text-[#b56d19]"
+                  >
+                    ›
+                  </button>
                   </div>
                 ))}
               </div>
@@ -289,7 +281,7 @@ export default function FavoritesMap({
         {cityName}
       </div>
 
-      <div className="h-[640px] w-full overflow-hidden pb-[140px]">
+      <div className="h-[740px] w-full overflow-hidden pb-[280px]">
         <MapContainer
           center={effectiveCenter}
           zoom={13}
@@ -332,7 +324,7 @@ export default function FavoritesMap({
       ) : null}
 
       {showSelectedPlaceCard ? (
-        <div className="absolute inset-x-4 bottom-24 z-[500] max-h-[260px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
+        <div className="absolute inset-x-4 bottom-40 z-[500] max-h-[220px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
