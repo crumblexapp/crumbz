@@ -156,6 +156,13 @@ export default function FavoritesMap({
   const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
   const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
   const showSearchResults = searchQuery.trim().length >= 2 && !searchLoading;
+  const showSelectedPlaceCard = Boolean(selectedPlace) && !showSearchResults;
+
+  const previewPlace = (place: FavoritePlace) => {
+    setSelectedPlaceId(place.id);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
 
   useEffect(() => {
     setSelectedPlaceId((current) => current ?? places[0]?.id ?? null);
@@ -223,7 +230,7 @@ export default function FavoritesMap({
         </div>
 
         {showSearchResults ? (
-          <div className="mt-3 overflow-hidden rounded-[24px] border border-white/70 bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
+          <div className="mt-3 max-h-[260px] overflow-hidden rounded-[24px] border border-white/70 bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
             <div className="flex items-center justify-between border-b border-[#f3eadc] bg-[#fff8ef] px-4 py-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#b56d19]">live google maps results</p>
@@ -234,38 +241,43 @@ export default function FavoritesMap({
               </div>
             </div>
             {searchResults.length ? (
-              searchResults.slice(0, 5).map((place) => (
-                <button
-                  key={place.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedPlaceId(place.id);
-                  }}
-                  className="flex w-full items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 text-left transition-colors hover:bg-[#fff9f1] last:border-b-0"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-lg shadow-[0_10px_24px_rgba(43,21,48,0.08)]"
-                      style={{ background: getPlaceAccent(place.kind).chip }}
-                    >
-                      {getPlaceAccent(place.kind).icon}
+              <div className="max-h-[188px] overflow-y-auto overscroll-contain">
+                {searchResults.map((place) => (
+                  <div
+                    key={place.id}
+                    className="flex items-center justify-between gap-3 border-b border-[#f3eadc] px-4 py-3 transition-colors hover:bg-[#fff9f1] last:border-b-0"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] text-lg shadow-[0_10px_24px_rgba(43,21,48,0.08)]"
+                        style={{ background: getPlaceAccent(place.kind).chip }}
+                      >
+                        {getPlaceAccent(place.kind).icon}
+                      </div>
+                      <button type="button" onClick={() => previewPlace(place)} className="min-w-0 text-left">
+                        <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
+                        <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
+                      </button>
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#2b1530]">{place.name}</p>
-                      <p className="truncate text-xs text-[#7c6d60]">{place.address}</p>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
+                        style={{ background: getPlaceAccent(place.kind).chip }}
+                      >
+                        {place.kind}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => previewPlace(place)}
+                        aria-label={`show ${place.name} on the map`}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff4e3] text-lg text-[#b56d19]"
+                      >
+                        ›
+                      </button>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span
-                      className="rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2b1530]"
-                      style={{ background: getPlaceAccent(place.kind).chip }}
-                    >
-                      {place.kind}
-                    </span>
-                    <span className="text-lg text-[#b56d19]">›</span>
-                  </div>
-                </button>
-              ))
+                ))}
+              </div>
             ) : (
               <div className="px-4 py-4 text-sm text-[#7c6d60]">no food spots found for that search yet.</div>
             )}
@@ -277,7 +289,7 @@ export default function FavoritesMap({
         {cityName}
       </div>
 
-      <div className="h-[560px] w-full overflow-hidden">
+      <div className="h-[640px] w-full overflow-hidden pb-[140px]">
         <MapContainer
           center={effectiveCenter}
           zoom={13}
@@ -319,8 +331,8 @@ export default function FavoritesMap({
         </div>
       ) : null}
 
-      {selectedPlace ? (
-        <div className="absolute inset-x-4 bottom-4 z-[500] rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
+      {showSelectedPlaceCard ? (
+        <div className="absolute inset-x-4 bottom-24 z-[500] max-h-[260px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
