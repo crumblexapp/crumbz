@@ -281,7 +281,7 @@ export default function FavoritesMap({
         {cityName}
       </div>
 
-      <div className="h-[820px] w-full overflow-hidden pb-[380px]">
+      <div className="h-[640px] w-full overflow-hidden sm:h-[820px]">
         <MapContainer
           center={effectiveCenter}
           zoom={13}
@@ -326,7 +326,7 @@ export default function FavoritesMap({
       {showSelectedPlaceCard ? (
         <div
           className="absolute inset-x-4 z-[500] max-h-[220px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur"
-          style={{ bottom: "calc(13rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "calc(7.5rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
