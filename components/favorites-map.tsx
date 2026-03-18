@@ -138,12 +138,13 @@ export default function FavoritesMap({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(places[0]?.id ?? null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
 
-  const displayedPlaces = useMemo(() => {
-    if (searchQuery.trim().length >= 2) return searchResults;
-    return places;
-  }, [places, searchQuery, searchResults]);
+  const selectedPlace = useMemo(
+    () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
+    [places, searchResults, selectedPlaceId],
+  );
+  const displayedPlaces = selectedPlace ? [selectedPlace] : [];
 
   const mutualFansByPlace = useMemo(
     () =>
@@ -153,7 +154,6 @@ export default function FavoritesMap({
     [displayedPlaces, friends],
   );
 
-  const selectedPlace = displayedPlaces.find((place) => place.id === selectedPlaceId) ?? displayedPlaces[0] ?? null;
   const selectedMutualFans = selectedPlace ? mutualFansByPlace[selectedPlace.id] ?? [] : [];
   const showSearchResults = searchQuery.trim().length >= 2 && !searchLoading;
   const showSelectedPlaceCard = Boolean(selectedPlace) && !showSearchResults;
@@ -165,14 +165,10 @@ export default function FavoritesMap({
   };
 
   useEffect(() => {
-    setSelectedPlaceId((current) => current ?? places[0]?.id ?? null);
-  }, [places]);
-
-  useEffect(() => {
     if (!highlightedPlaceId) return;
-    const nextPlace = displayedPlaces.find((place) => place.id === highlightedPlaceId);
+    const nextPlace = places.find((place) => place.id === highlightedPlaceId);
     if (nextPlace) setSelectedPlaceId(nextPlace.id);
-  }, [displayedPlaces, highlightedPlaceId]);
+  }, [highlightedPlaceId, places]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -197,7 +193,6 @@ export default function FavoritesMap({
         const nextResults = (payload.places ?? []).slice(0, 12);
 
         setSearchResults(nextResults);
-        setSelectedPlaceId(nextResults[0]?.id ?? null);
       } catch {
         setSearchResults([]);
       } finally {
@@ -309,10 +304,10 @@ export default function FavoritesMap({
         </MapContainer>
       </div>
 
-      {!displayedPlaces.length && !searchLoading ? (
+      {!selectedPlace && !searchLoading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]">
           <div className="rounded-[24px] bg-white/95 px-5 py-4 text-center text-sm text-[#785c42] shadow-[0_20px_40px_rgba(43,21,48,0.08)]">
-            search for a cafe, bakery, or restaurant to add it here.
+            search for a cafe, bakery, or restaurant, then tap one to preview it here.
           </div>
         </div>
       ) : null}
@@ -326,7 +321,7 @@ export default function FavoritesMap({
       {showSelectedPlaceCard ? (
         <div
           className="absolute inset-x-4 z-[500] max-h-[220px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur"
-          style={{ bottom: "calc(7.5rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
