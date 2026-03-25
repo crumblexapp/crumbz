@@ -1360,9 +1360,10 @@ export default function Page() {
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
-  const displayPosts = adminPosts.length ? adminPosts : fallbackFeedPosts;
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
+  const shouldShowSundayDumpFeed = canSubmitWeeklyDumpToday;
+  const shouldShowAdminPosts = adminPosts.length > 0;
   const currentSundayKey = getSundayKey(today);
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
@@ -2145,7 +2146,7 @@ export default function Page() {
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [displayPosts, isAdmin, user.signedIn]);
+  }, [isAdmin, user.signedIn]);
 
   const finishOnboarding = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -4328,16 +4329,145 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
+              <Card
+                id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
+                className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
+              >
+                <CardBody className="gap-4 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
+                      <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
+                        {selectedAnnouncement?.title || "Upcoming Food Mob"}
+                      </h3>
+                      <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
+                        {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
+                      </p>
+                    </div>
+                    <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button radius="full" className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
+                      remind me
+                    </Button>
+                    <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
+                  </div>
+                </CardBody>
+              </Card>
+
+              {shouldShowSundayDumpFeed ? (
+                <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+                  <CardBody className="gap-4 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
+                            sunday food drop
+                          </p>
+                          <p className="mt-3 text-lg text-[#73809a]">add up to 7 photos from your week.</p>
+                        </div>
+                      <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{activeWeeklyDumpMediaUrls.length}/7</Chip>
+                    </div>
+
+                    <form className="space-y-4" onSubmit={submitWeeklyDump}>
+                      <div className="grid grid-cols-4 gap-3">
+                        {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
+                          const showAddTile = activeWeeklyDumpMediaUrls.length < 7 && index === 0;
+                          const imageIndex = activeWeeklyDumpMediaUrls.length < 7 ? index - 1 : index;
+                          const imageUrl = activeWeeklyDumpMediaUrls[imageIndex];
+
+                          if (showAddTile) {
+                            return (
+                              <button
+                                key="weekly-dump-add-tile"
+                                type="button"
+                                aria-label="add sunday dump photos"
+                                disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
+                                onClick={() => weeklyDumpInputRef.current?.click()}
+                                className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
+                              >
+                                +
+                              </button>
+                            );
+                          }
+
+                          if (imageUrl) {
+                            return (
+                              <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={imageUrl} alt={`weekly dump photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                              </div>
+                            );
+                          }
+
+                          return <div key={`weekly-dump-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
+                        })}
+                      </div>
+                      <Textarea
+                        placeholder="what hit this week?"
+                        value={activeWeeklyDumpCaption}
+                        onValueChange={setWeeklyDumpCaption}
+                        classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
+                      />
+                      <input
+                        ref={weeklyDumpInputRef}
+                        key={weeklyDumpInputKey}
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                        multiple
+                        disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7}
+                        onChange={(event) => {
+                          void handleWeeklyDumpFiles(event.target.files);
+                        }}
+                        className="hidden"
+                      />
+                      <div className="flex items-center gap-3">
+                        {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
+                        <Button
+                          type="submit"
+                          radius="full"
+                          size="lg"
+                          isDisabled={!canSubmitWeeklyDumpToday || isUploadingWeeklyDump}
+                        className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                      >
+                          →
+                        </Button>
+                      </div>
+                    </form>
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {shouldShowSundayDumpFeed ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
+                      <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{communityTitle}</h3>
+                    </div>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendWeeklyDumps.length} dumps</Chip>
+                  </div>
+                  {friendWeeklyDumps.length ? (
+                    friendWeeklyDumps.map(renderFeedCard)
+                  ) : (
+                    <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                      <CardBody className="p-5 text-sm text-[#2C1A0E]">{communityEmpty}</CardBody>
+                    </Card>
+                  )}
+                </div>
+              ) : null}
+
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.14),_transparent_28%),linear-gradient(135deg,_#2d1a10_0%,_#5a2d14_52%,_#f5a623_100%)] text-white shadow-[0_24px_60px_rgba(90,45,20,0.24)]">
                 <CardBody className="gap-4 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.24em] text-[#ffd88b]">🎯 dare to eat</p>
                       <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-[1.02] text-white">
-                        {isPreDareWindow ? "a new food challenge drops every wednesday at midday." : dare.title}
+                        {isPreDareWindow ? "dare to eat" : dare.title}
                       </h3>
                       <p className="mt-3 text-sm text-white/78">
-                        {isPreDareWindow ? `next dare drops ${dareReleaseText}` : dare.prompt}
+                        {isPreDareWindow
+                          ? `next dare drops ${dareReleaseText}`
+                          : dare.prompt}
                       </p>
                     </div>
                     {isDareLiveWindow ? (
@@ -4366,11 +4496,6 @@ export default function Page() {
                     )}
                     {winningDareSubmission ? <Chip className="bg-white/15 text-white">winner announced tuesday</Chip> : null}
                   </div>
-                  <p className="text-sm text-white/72">
-                    {isPreDareWindow
-                      ? "we’ll drop the challenge on wednesday, then everyone has until sunday midnight to post proof. tuesday the winner gets the spotlight and the reward."
-                      : `post your proof with a photo, location tag, and one line caption. ${dare.reward}`}
-                  </p>
                 </CardBody>
               </Card>
 
@@ -4399,111 +4524,33 @@ export default function Page() {
                 </Card>
               ) : null}
 
-              <Card
-                id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
-                className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
-              >
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
-                      <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
-                        {selectedAnnouncement?.title || "Upcoming Food Mob"}
-                      </h3>
-                      <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
-                        {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
-                      </p>
-                    </div>
-                    <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Button radius="full" className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
-                      remind me
-                    </Button>
-                    <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
-                  </div>
-                </CardBody>
-              </Card>
-
               <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
                 <CardBody className="gap-4 p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
-                          sunday food drop
-                        </p>
-                        <p className="mt-3 text-lg text-[#73809a]">Add up to 7 photos from your week.</p>
-                      </div>
-                    <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{activeWeeklyDumpMediaUrls.length}/7</Chip>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        what your friends ate
+                      </p>
+                      <p className="mt-2 text-base text-[#6c7289]">your friends&apos; real food activity this week. no algorithm, no recommendations engine.</p>
+                    </div>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendFoodMoments.length} updates</Chip>
                   </div>
-
-                  <form className="space-y-4" onSubmit={submitWeeklyDump}>
-                    <div className="grid grid-cols-4 gap-3">
-                      {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
-                        const showAddTile = activeWeeklyDumpMediaUrls.length < 7 && index === 0;
-                        const imageIndex = activeWeeklyDumpMediaUrls.length < 7 ? index - 1 : index;
-                        const imageUrl = activeWeeklyDumpMediaUrls[imageIndex];
-
-                        if (showAddTile) {
-                          return (
-                            <button
-                              key="weekly-dump-add-tile"
-                              type="button"
-                              aria-label="add sunday dump photos"
-                              disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
-                              onClick={() => weeklyDumpInputRef.current?.click()}
-                              className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
-                            >
-                              +
-                            </button>
-                          );
-                        }
-
-                        if (imageUrl) {
-                          return (
-                            <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={imageUrl} alt={`weekly dump photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
-                            </div>
-                          );
-                        }
-
-                        return <div key={`weekly-dump-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
-                      })}
+                  {friendFoodMoments.length ? (
+                    <div className="grid gap-3">
+                      {friendFoodMoments.map((item) => (
+                        <div key={item.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                          <p className="text-lg font-semibold text-[#2C1A0E]">{item.title}</p>
+                          <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
+                        </div>
+                      ))}
                     </div>
-                    <Textarea
-                      placeholder="what hit this week?"
-                      value={activeWeeklyDumpCaption}
-                      onValueChange={setWeeklyDumpCaption}
-                      classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
-                    />
-                    <input
-                      ref={weeklyDumpInputRef}
-                      key={weeklyDumpInputKey}
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                      multiple
-                      disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7}
-                      onChange={(event) => {
-                        void handleWeeklyDumpFiles(event.target.files);
-                      }}
-                      className="hidden"
-                    />
-                    <div className="flex items-center gap-3">
-                      {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
-                      <Button
-                        type="submit"
-                        radius="full"
-                        size="lg"
-                        isDisabled={!canSubmitWeeklyDumpToday || isUploadingWeeklyDump}
-                      className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
-                    >
-                        →
-                      </Button>
-                    </div>
-                  </form>
+                  ) : (
+                    <p className="text-sm text-[#6c7289]">once your friends post or like spots this week, they&apos;ll land here.</p>
+                  )}
                 </CardBody>
               </Card>
+
+              {shouldShowAdminPosts ? <div className="space-y-4">{adminPosts.map(renderFeedCard)}</div> : null}
 
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[#eadffd] shadow-[0_18px_50px_rgba(123,79,255,0.16)]">
                 <CardBody className="flex-row items-center justify-between gap-4 p-5">
@@ -4535,105 +4582,6 @@ export default function Page() {
                   </div>
                 </CardBody>
               </Card>
-
-              <Card className="rounded-[30px] border border-[#f1e8da] bg-[#fff8ee] shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        dare to eat
-                      </p>
-                      <p className="mt-2 text-base text-[#6c7289]">a weekly food challenge. crumbz drops the dare, everyone jumps in, then the best proof gets the spotlight.</p>
-                    </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
-                  </div>
-                  <div className="grid gap-3">
-                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_right,_rgba(255,190,92,0.26),_transparent_34%),linear-gradient(135deg,_#fff4d8_0%,_#fff0cb_52%,_#ffe8ac_100%)] p-4">
-                      <div className="absolute right-4 top-4 h-16 w-16 rounded-full bg-[#ffb23f]/18" />
-                      <div className="absolute bottom-4 right-16 text-[1.1rem] text-[#ffb23f]">✦</div>
-                      <div className="absolute bottom-7 right-8 text-[0.9rem] text-[#ffb23f]">✦</div>
-                      <div className="relative flex items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">wednesday</p>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
-                          📣
-                        </div>
-                      </div>
-                      <p className="relative mt-2 max-w-[14rem] text-lg font-semibold text-[#2C1A0E]">the dare drops + everyone gets the push</p>
-                    </div>
-                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_left,_rgba(255,156,109,0.2),_transparent_30%),linear-gradient(135deg,_#fff1d7_0%,_#ffeabf_55%,_#ffe2a7_100%)] p-4">
-                      <div className="absolute -right-3 bottom-0 h-20 w-20 rounded-full bg-[#ff7b2f]/14" />
-                      <div className="absolute right-14 top-4 rounded-full bg-white/90 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-[#ff7b2f]">
-                        proof
-                      </div>
-                      <div className="relative flex items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">sunday</p>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
-                          📸
-                        </div>
-                      </div>
-                      <p className="relative mt-2 max-w-[15rem] text-lg font-semibold text-[#2C1A0E]">submissions close and instagram voting starts</p>
-                    </div>
-                    <div className="relative overflow-hidden rounded-[22px] bg-[radial-gradient(circle_at_top_right,_rgba(255,214,102,0.24),_transparent_32%),linear-gradient(135deg,_#fff3dc_0%,_#ffefcf_48%,_#ffe6b6_100%)] p-4">
-                      <div className="absolute right-5 top-5 h-14 w-14 rounded-[18px] bg-[#fff3a6]/55" />
-                      <div className="absolute right-9 top-9 text-[1rem] text-[#f5a623]">✦</div>
-                      <div className="relative flex items-center justify-between gap-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tuesday</p>
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-white text-[1.35rem] shadow-[0_10px_24px_rgba(245,166,35,0.18)]">
-                          🏆
-                        </div>
-                      </div>
-                      <p className="relative mt-2 max-w-[15rem] text-lg font-semibold text-[#2C1A0E]">winner gets posted everywhere + rewarded</p>
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-
-              <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        what your friends ate
-                      </p>
-                      <p className="mt-2 text-base text-[#6c7289]">your friends&apos; real food activity this week. no algorithm, no recommendations engine.</p>
-                    </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendFoodMoments.length} updates</Chip>
-                  </div>
-                  {friendFoodMoments.length ? (
-                    <div className="grid gap-3">
-                      {friendFoodMoments.map((item) => (
-                        <div key={item.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
-                          <p className="text-lg font-semibold text-[#2C1A0E]">{item.title}</p>
-                          <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[#6c7289]">once your friends post or like spots this week, they&apos;ll land here.</p>
-                  )}
-                </CardBody>
-              </Card>
-
-              <div className="space-y-4">
-                {displayPosts.map(renderFeedCard)}
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{communityTitle}</h3>
-                  </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{visibleStudentWeeklyDumps.length} dumps</Chip>
-                </div>
-                {visibleStudentWeeklyDumps.length ? (
-                  visibleStudentWeeklyDumps.map(renderFeedCard)
-                ) : (
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                    <CardBody className="p-5 text-sm text-[#2C1A0E]">{communityEmpty}</CardBody>
-                  </Card>
-                )}
-              </div>
             </motion.section>
           </>
         ) : null}
