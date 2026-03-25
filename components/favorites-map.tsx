@@ -147,7 +147,12 @@ export default function FavoritesMap({
     [places, searchResults, selectedPlaceId],
   );
   const focusedPlace = previewedPlace ?? selectedPlace;
-  const displayedPlaces = searchResults.length ? searchResults : defaultDisplayedPlaces;
+  const displayedPlaces = useMemo(() => {
+    if (searchResults.length) return searchResults;
+    if (!focusedPlace) return defaultDisplayedPlaces;
+    if (defaultDisplayedPlaces.some((place) => place.id === focusedPlace.id)) return defaultDisplayedPlaces;
+    return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 24);
+  }, [defaultDisplayedPlaces, focusedPlace, searchResults]);
 
   const mutualFansByPlace = useMemo(
     () =>
