@@ -1399,6 +1399,9 @@ export default function Page() {
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
   const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
   const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
+  const profileLikedSpots = favoritePlaceIds
+    .map((placeId) => favoritePlaces.find((place) => place.id === placeId) ?? allFoodSpots.find((place) => place.id === placeId) ?? null)
+    .filter((place): place is FavoritePlace => Boolean(place));
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
@@ -4896,6 +4899,41 @@ export default function Page() {
                     log out
                   </Button>
                 </div>
+              </CardBody>
+            </Card>
+
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <CardBody className="gap-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">liked spots</p>
+                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
+                      your saved places
+                    </h2>
+                  </div>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{profileLikedSpots.length}</Chip>
+                </div>
+
+                {profileLikedSpots.length ? (
+                  <div className="grid gap-3">
+                    {profileLikedSpots.map((place) => (
+                      <div key={place.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{place.kind}</p>
+                            <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{place.name}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                          </div>
+                          <div className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
+                            liked
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6c7289]">once you like food spots, they’ll show up here.</p>
+                )}
               </CardBody>
             </Card>
           </section>
