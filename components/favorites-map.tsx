@@ -202,8 +202,12 @@ export default function FavoritesMap({
         const nextResults = (payload.places ?? []).slice(0, 12);
 
         setSearchResults(nextResults);
+        setSelectedPlaceId(nextResults[0]?.id ?? null);
+        setPreviewedPlace(nextResults[0] ?? null);
       } catch {
         setSearchResults([]);
+        setSelectedPlaceId(null);
+        setPreviewedPlace(null);
       } finally {
         setSearchLoading(false);
       }
