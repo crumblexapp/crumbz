@@ -280,6 +280,8 @@ type FavoriteActivity = {
   placeName: string;
   placeKind: string;
   placeAddress: string;
+  lat: number;
+  lon: number;
   city: string;
   createdAt: string;
 };
@@ -670,6 +672,8 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
                     typeof item.placeName === "string" &&
                     typeof item.placeKind === "string" &&
                     typeof item.placeAddress === "string" &&
+                    typeof item.lat === "number" &&
+                    typeof item.lon === "number" &&
                     typeof item.city === "string" &&
                     typeof item.createdAt === "string",
                 ),
@@ -1180,6 +1184,7 @@ export default function Page() {
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [highlightedFavoritePlaceId, setHighlightedFavoritePlaceId] = useState<string | null>(null);
+  const [favoriteViewCity, setFavoriteViewCity] = useState<string | null>(null);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
@@ -1392,7 +1397,8 @@ export default function Page() {
     return username === normalizedFriendQuery;
   });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
-  const favoriteCityCenter = cityCenters[normalizeCityKey(liveProfile.city)] ?? [52.2297, 21.0122];
+  const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
+  const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
@@ -1464,6 +1470,15 @@ export default function Page() {
         detail: `${activity.placeKind} • ${activity.city || account.profile.city}${activity.placeAddress ? ` • ${activity.placeAddress}` : ""}`,
         picture: account.googleProfile?.picture,
         createdAt: activity.createdAt,
+        city: activity.city || account.profile.city,
+        place: {
+          id: activity.placeId,
+          name: activity.placeName,
+          kind: activity.placeKind,
+          lat: activity.lat,
+          lon: activity.lon,
+          address: activity.placeAddress,
+        } satisfies FavoritePlace,
       })),
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -1526,7 +1541,7 @@ export default function Page() {
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
-    | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string }
+    | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string; city: string; place: FavoritePlace }
     | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
   >;
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
@@ -1805,7 +1820,7 @@ export default function Page() {
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
 
-    const cityKey = normalizeCityKey(user.profile.city);
+    const cityKey = normalizeCityKey(currentFavoriteCity);
     const center = cityCenters[cityKey];
     if (!center) {
       setFavoritePlaces(getFallbackFavoritePlaces(cityKey));
@@ -1821,7 +1836,7 @@ export default function Page() {
 
       try {
         const params = new URLSearchParams({
-          city: user.profile.city,
+          city: currentFavoriteCity,
           lat: String(center[0]),
           lon: String(center[1]),
           radius: "3500",
@@ -1853,13 +1868,13 @@ export default function Page() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [isAdmin, user.profile.city, user.signedIn]);
+  }, [currentFavoriteCity, isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
     if (favoritePlacesLoading) return;
 
-    const cityKey = normalizeCityKey(user.profile.city);
+    const cityKey = normalizeCityKey(currentFavoriteCity);
     if (!favoritePlaces.length && cityKey) {
       const fallback = getFallbackFavoritePlaces(cityKey);
       if (fallback.length) {
@@ -1867,7 +1882,7 @@ export default function Page() {
         setFavoritePlacesError("");
       }
     }
-  }, [favoritePlaces.length, favoritePlacesLoading, isAdmin, user.profile.city, user.signedIn]);
+  }, [currentFavoriteCity, favoritePlaces.length, favoritePlacesLoading, isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
@@ -2586,6 +2601,18 @@ export default function Page() {
       const target = document.getElementById(`post-${postId}`);
       target?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 120);
+  };
+
+  const openFriendFavoriteNotification = (notificationId: string, cityName: string, place: FavoritePlace) => {
+    markNotificationSeen(notificationId);
+    setFavoriteViewCity(cityName);
+    setHighlightedFavoritePlaceId(place.id);
+    setFavoritePlaces((current) => {
+      const next = current.filter((item) => item.id !== place.id);
+      return [place, ...next].slice(0, 24);
+    });
+    setStudentTab("favorites");
+    setNotificationsOpen(false);
   };
 
   const resetComposer = () => {
@@ -4616,7 +4643,7 @@ export default function Page() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">favorites</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      food map for {user.profile.city}
+                      food map for {currentFavoriteCity}
                     </h2>
                     <p className="text-sm text-[#2C1A0E]">
                       heart the cafes, restaurants, bakeries, and food spots you rate. your friends can spot the overlap.
@@ -4626,7 +4653,7 @@ export default function Page() {
                 </div>
 
                 <FavoritesMap
-                  cityName={user.profile.city}
+                  cityName={currentFavoriteCity}
                   center={favoriteCityCenter}
                   places={favoritePlaces}
                   favoriteIds={favoritePlaceIds}
@@ -4892,7 +4919,13 @@ export default function Page() {
                 className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
                   studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
                 }`}
-                onClick={() => setStudentTab(item.key as StudentTab)}
+                onClick={() => {
+                  if (item.key === "favorites") {
+                    setFavoriteViewCity(null);
+                    setHighlightedFavoritePlaceId(null);
+                  }
+                  setStudentTab(item.key as StudentTab);
+                }}
               >
                 <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
                   {renderStudentTabIcon(item.key as StudentTab, "h-6 w-6")}
@@ -5011,11 +5044,7 @@ export default function Page() {
                             <Button
                               radius="full"
                               className="bg-[#F5A623] text-white"
-                              onPress={() => {
-                                markNotificationSeen(item.id);
-                                setStudentTab("favorites");
-                                setNotificationsOpen(false);
-                              }}
+                              onPress={() => openFriendFavoriteNotification(item.id, item.city, item.place)}
                             >
                               open favorites
                             </Button>

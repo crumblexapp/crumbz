@@ -32,6 +32,8 @@ type StoredUser = {
       placeName: string;
       placeKind: string;
       placeAddress: string;
+      lat: number;
+      lon: number;
       city: string;
       createdAt: string;
     }[];
@@ -161,6 +163,8 @@ export async function POST(request: Request) {
           id?: string;
           name?: string;
           kind?: string;
+          lat?: number;
+          lon?: number;
           address?: string;
         };
       }
@@ -378,6 +382,8 @@ export async function POST(request: Request) {
                 placeName: body.favoritePlace.name ?? "new food spot",
                 placeKind: body.favoritePlace.kind ?? "food spot",
                 placeAddress: body.favoritePlace.address ?? "",
+                lat: typeof body.favoritePlace.lat === "number" ? body.favoritePlace.lat : 0,
+                lon: typeof body.favoritePlace.lon === "number" ? body.favoritePlace.lon : 0,
                 city: account.profile.city ?? "",
                 createdAt: new Date().toISOString(),
               },
