@@ -2400,21 +2400,11 @@ export default function Page() {
       releaseAt: nextReleaseAt,
       closesAt: nextClosesAt,
     };
-    const nextAnnouncements = [
-      {
-        id: `announcement-dare-${Date.now()}`,
-        title: `${trimmedTitle} is live`,
-        body: trimmedPrompt,
-        createdAt: formatNow(),
-      },
-      ...announcements,
-    ].slice(0, 12);
 
     lastSharedStateMutationAtRef.current = Date.now();
     setDare(nextDare);
-    setAnnouncements(nextAnnouncements);
-    syncSharedState({ nextAnnouncements, nextDare });
-    setAdminActionNotice("new dare design is live. challengers can set reminders, jump in, and submit proof now.");
+    syncSharedState({ nextDare });
+    setAdminActionNotice("new dare design is live in dare to eat. push notifications only go out when you send one from push to all users.");
   };
 
   const acceptDare = () => {
