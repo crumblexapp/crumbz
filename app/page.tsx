@@ -752,6 +752,29 @@ function formatProfileMeta(cityName: string, schoolName: string) {
   return cityName || schoolName || "";
 }
 
+function getEmailHandle(email: string) {
+  return email.split("@")[0]?.trim() || "";
+}
+
+function getSafePublicIdentity({
+  username,
+  fullName,
+  email,
+}: {
+  username?: string | null;
+  fullName?: string | null;
+  email?: string | null;
+}) {
+  const cleanUsername = username?.trim().replace(/^@+/, "") ?? "";
+  if (cleanUsername) return `@${cleanUsername}`;
+
+  const cleanFullName = fullName?.trim() ?? "";
+  if (cleanFullName) return cleanFullName;
+
+  const handle = getEmailHandle(email ?? "");
+  return handle ? `@${handle}` : "@crumbz-user";
+}
+
 function renderStudentTabIcon(tabKey: StudentTab, className: string) {
   switch (tabKey) {
     case "feed":
@@ -1334,7 +1357,7 @@ export default function Page() {
   );
   const resolveChallenger = (email: string, submission?: DareSubmission | null) => {
     const account = accountByEmail.get(email.toLowerCase()) ?? null;
-    const fallbackName = submission?.authorName || email.split("@")[0] || "crumbz user";
+    const fallbackName = submission?.authorName || getSafePublicIdentity({ email });
 
     return {
       email,
@@ -3736,7 +3759,7 @@ export default function Page() {
                                 <div>
                                   <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
                                   <p className="text-sm text-[#2C1A0E]">
-                                    {challenger.username ? `@${challenger.username}` : challenger.email}
+                                    {getSafePublicIdentity({ username: challenger.username, fullName: challenger.name, email: challenger.email })}
                                     {challenger.meta ? ` • ${challenger.meta}` : ""}
                                   </p>
                                 </div>
@@ -3769,7 +3792,7 @@ export default function Page() {
                                 <div>
                                   <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
                                   <p className="text-sm text-[#2C1A0E]">
-                                    {challenger.username ? `@${challenger.username}` : challenger.email}
+                                    {getSafePublicIdentity({ username: challenger.username, fullName: challenger.name, email: challenger.email })}
                                     {challenger.meta ? ` • ${challenger.meta}` : ""}
                                   </p>
                                 </div>
@@ -3803,7 +3826,7 @@ export default function Page() {
                                   <div>
                                     <p className="text-sm font-semibold text-[#2C1A0E]">{challenger.name}</p>
                                     <p className="text-sm text-[#2C1A0E]">
-                                      {challenger.username ? `@${challenger.username}` : challenger.email}
+                                      {getSafePublicIdentity({ username: challenger.username, fullName: challenger.name, email: challenger.email })}
                                       {challenger.meta ? ` • ${challenger.meta}` : ""}
                                     </p>
                                   </div>
