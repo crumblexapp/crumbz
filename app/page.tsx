@@ -2429,6 +2429,12 @@ export default function Page() {
     setDareNotice("you’re in. now go get proof before sunday midnight.");
   };
 
+  const openDareProof = () => {
+    if (!currentUserAcceptedDare || !isDareLiveWindow) return;
+    setStudentTab("rewards");
+    setDareNotice((current) => current || "drop your proof here before sunday 23:59.");
+  };
+
   const saveDareReminder = () => {
     const userEmail = user.googleProfile?.email;
     if (!userEmail || dare.reminderEmails.includes(userEmail)) return false;
@@ -4489,9 +4495,9 @@ export default function Page() {
                       <Button
                         radius="full"
                         className={currentUserAcceptedDare ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
-                        onPress={acceptDare}
+                        onPress={currentUserAcceptedDare ? openDareProof : acceptDare}
                       >
-                        {currentUserAcceptedDare ? "accepted 🎯" : "are you in? 🎯"}
+                        {currentUserAcceptedDare ? "submit proof" : "are you in? 🎯"}
                       </Button>
                     )}
                     {winningDareSubmission ? <Chip className="bg-white/15 text-white">winner announced tuesday</Chip> : null}
