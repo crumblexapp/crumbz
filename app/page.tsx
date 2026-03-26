@@ -2375,6 +2375,15 @@ export default function Page() {
     setAnnouncementBody("");
   };
 
+  const deleteAnnouncement = (announcementId: string) => {
+    const nextAnnouncements = announcements.filter((announcement) => announcement.id !== announcementId);
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setAnnouncements(nextAnnouncements);
+    syncSharedState({ nextAnnouncements });
+    setAdminActionNotice("push notification deleted everywhere.");
+  };
+
   const launchWeeklyDare = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -3506,11 +3515,27 @@ export default function Page() {
                           push to all users
                         </Button>
                       </form>
-                      {latestAnnouncement ? (
-                        <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
-                          <p className="text-sm font-semibold text-[#2C1A0E]">{latestAnnouncement.title}</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
-                          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{latestAnnouncement.createdAt}</p>
+                      {announcements.length ? (
+                        <div className="grid gap-2">
+                          {announcements.map((announcement) => (
+                            <div key={announcement.id} className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-[#2C1A0E]">{announcement.title}</p>
+                                  <p className="mt-1 text-sm text-[#2C1A0E]">{announcement.body}</p>
+                                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{announcement.createdAt}</p>
+                                </div>
+                                <Button
+                                  radius="full"
+                                  variant="flat"
+                                  className="bg-white text-[#B3261E]"
+                                  onPress={() => deleteAnnouncement(announcement.id)}
+                                >
+                                  delete
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                     </CardBody>
@@ -3850,11 +3875,27 @@ export default function Page() {
                                 push to all users
                               </Button>
                             </form>
-                            {latestAnnouncement ? (
-                              <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#2C1A0E]">{latestAnnouncement.title}</p>
-                                <p className="mt-1 text-sm text-[#2C1A0E]">{latestAnnouncement.body}</p>
-                                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{latestAnnouncement.createdAt}</p>
+                            {announcements.length ? (
+                              <div className="grid gap-2">
+                                {announcements.map((announcement) => (
+                                  <div key={announcement.id} className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <p className="text-sm font-semibold text-[#2C1A0E]">{announcement.title}</p>
+                                        <p className="mt-1 text-sm text-[#2C1A0E]">{announcement.body}</p>
+                                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{announcement.createdAt}</p>
+                                      </div>
+                                      <Button
+                                        radius="full"
+                                        variant="flat"
+                                        className="bg-white text-[#B3261E]"
+                                        onPress={() => deleteAnnouncement(announcement.id)}
+                                      >
+                                        delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             ) : null}
                           </CardBody>
