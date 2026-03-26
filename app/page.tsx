@@ -2392,11 +2392,16 @@ export default function Page() {
 
     const nextDare = {
       ...getDefaultDare(),
-      id: `dare-${Date.now()}`,
+      id: dare.id || `dare-${Date.now()}`,
       title: trimmedTitle,
       prompt: trimmedPrompt,
       reward: trimmedReward || "winner gets a special partner discount drop on tuesday.",
-      createdAt: formatNow(),
+      createdAt: dare.createdAt || formatNow(),
+      acceptedEmails: dare.acceptedEmails,
+      reminderEmails: dare.reminderEmails,
+      submissions: dare.submissions,
+      instagramPostedAt: dare.instagramPostedAt,
+      winnerSubmissionId: dare.winnerSubmissionId,
       releaseAt: nextReleaseAt,
       closesAt: nextClosesAt,
     };
@@ -2405,6 +2410,20 @@ export default function Page() {
     setDare(nextDare);
     syncSharedState({ nextDare });
     setAdminActionNotice("new dare design is live in dare to eat. push notifications only go out when you send one from push to all users.");
+  };
+
+  const deleteDare = () => {
+    const nextDare = getDefaultDare();
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setDare(nextDare);
+    setDareTitleDraft(nextDare.title);
+    setDarePromptDraft(nextDare.prompt);
+    setDareRewardDraft(nextDare.reward);
+    setDareReleaseAtDraft(toLocalDateTimeValue(nextDare.releaseAt));
+    setDareClosesAtDraft(toLocalDateTimeValue(nextDare.closesAt));
+    syncSharedState({ nextDare });
+    setAdminActionNotice("current dare cleared. you can now set up the next one.");
   };
 
   const acceptDare = () => {
@@ -3656,9 +3675,14 @@ export default function Page() {
                             classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                           />
                         </div>
-                        <Button type="submit" radius="full" className="bg-[#2C1A0E] text-white">
-                          save dare
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button type="submit" radius="full" className="flex-1 bg-[#2C1A0E] text-white">
+                            save dare
+                          </Button>
+                          <Button type="button" radius="full" variant="flat" className="bg-[#FFF0D0] text-[#B3261E]" onPress={deleteDare}>
+                            delete dare
+                          </Button>
+                        </div>
                       </form>
                       <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{dareTitleDraft || "untitled dare"}</p>
