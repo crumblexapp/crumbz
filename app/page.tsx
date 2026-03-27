@@ -1453,6 +1453,7 @@ export default function Page() {
     authoredWeeklyDumps.find((post) => post.id === `weekly-dump-${currentUserEmail}-${currentSundayKey}`) ??
     authoredWeeklyDumps[0] ??
     null;
+  const studentUserPosts = [...studentDailyPosts, ...studentWeeklyDumps].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserProfilePosts = studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === currentUserEmail);
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfilePosts = selectedProfileEmail
@@ -2892,6 +2893,11 @@ export default function Page() {
   };
 
   const deletePost = (postId: string) => {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("delete this post only?");
+      if (!confirmed) return;
+    }
+
     lastSharedStateMutationAtRef.current = Date.now();
     setPosts((current) => current.filter((post) => post.id !== postId));
     setInteractions((current) => {
@@ -4323,7 +4329,7 @@ export default function Page() {
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { label: "signups", value: totalSignups },
-                      { label: "student posts", value: studentWeeklyDumps.length },
+                      { label: "student posts", value: studentUserPosts.length },
                       { label: "comments", value: totalComments },
                       { label: "unique sharers", value: uniqueSharers },
                     ].map((item) => (
@@ -4378,6 +4384,40 @@ export default function Page() {
                           <p className="text-sm text-[#2C1A0E]">no users yet.</p>
                         )}
                       </div>
+                    </CardBody>
+                  </Card>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">user posts</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">remove one student post without deleting the whole account.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{studentUserPosts.length} total</Chip>
+                      </div>
+                      {studentUserPosts.length ? (
+                        <div className="grid gap-2">
+                          {studentUserPosts.map((post) => (
+                            <div key={post.id} className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                                  <p className="mt-1 text-sm text-[#2C1A0E]">{post.authorName || "student post"}</p>
+                                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                    {post.type === "weekly-dump" ? "sunday dump" : "post"} • {post.createdAt}
+                                  </p>
+                                </div>
+                                <Button radius="full" color="danger" variant="flat" className="bg-white text-[#B3261E]" onPress={() => deletePost(post.id)}>
+                                  delete
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#2C1A0E]">no user posts yet.</p>
+                      )}
                     </CardBody>
                   </Card>
 
