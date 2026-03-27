@@ -1821,6 +1821,19 @@ export default function Page() {
     );
   };
 
+  const ensureAuthenticatedSession = (message?: string) => {
+    if (readGoogleIdToken()) return true;
+
+    const nextMessage = message ?? "your session needs a quick refresh. sign out and sign back in with google, then try again.";
+    if (isAdmin) {
+      setAdminActionNotice(nextMessage);
+    } else {
+      setError(nextMessage);
+    }
+
+    return false;
+  };
+
   const syncSharedState = ({
     nextPosts,
     nextInteractions,
@@ -1832,6 +1845,10 @@ export default function Page() {
     nextDare?: DareState;
     nextAnnouncements?: AppAnnouncement[];
   }) => {
+    if (!ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined)) {
+      return;
+    }
+
     void fetch("/api/state", {
       method: "POST",
       cache: "no-store",
@@ -1846,7 +1863,23 @@ export default function Page() {
         ...(nextDare ? { dare: nextDare } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
       }),
-    }).catch(() => undefined);
+    })
+      .then(async (response) => {
+        if (response.ok) return;
+
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        const fallbackMessage = isAdmin
+          ? "that admin change didn’t stick. sign out and back in with crumbleappco@gmail.com, then try again."
+          : "that change didn’t stick. sign out and back in with google, then try again.";
+        const nextMessage = payload?.message ?? fallbackMessage;
+
+        if (isAdmin) {
+          setAdminActionNotice(nextMessage);
+        } else {
+          setError(nextMessage);
+        }
+      })
+      .catch(() => undefined);
   };
 
   useEffect(() => {
@@ -2934,6 +2967,10 @@ export default function Page() {
     if (typeof window !== "undefined") {
       const confirmed = window.confirm("delete this post only?");
       if (!confirmed) return;
+    }
+
+    if (!ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the post again.")) {
+      return;
     }
 
     const nextPosts = posts.filter((post) => post.id !== postId);
