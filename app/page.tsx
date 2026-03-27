@@ -1504,6 +1504,8 @@ export default function Page() {
       id: post.id,
       title: `${post.authorName} posted ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
       detail: post.body || "fresh food photos just landed",
+      city: "",
+      place: null,
     })),
     ...friendAccounts
       .flatMap((account) =>
@@ -1514,11 +1516,13 @@ export default function Page() {
                 id: `${account.googleProfile?.email}-like-${placeId}`,
                 title: `${account.profile.fullName} liked ${matchedPlace.name}`,
                 detail: matchedPlace.address,
+                city: account.profile.city || liveProfile.city,
+                place: matchedPlace,
               }
             : null;
         }),
       )
-      .filter((item): item is { id: string; title: string; detail: string } => Boolean(item)),
+      .filter((item): item is { id: string; title: string; detail: string; city: string; place: FavoritePlace } => Boolean(item)),
   ].slice(0, 4);
   const storyRailItems = [
     {
@@ -2741,6 +2745,16 @@ export default function Page() {
     });
     setStudentTab("favorites");
     setNotificationsOpen(false);
+  };
+
+  const openFriendFavoriteMoment = (cityName: string, place: FavoritePlace) => {
+    setFavoriteViewCity(cityName);
+    setHighlightedFavoritePlaceId(place.id);
+    setFavoritePlaces((current) => {
+      const next = current.filter((item) => item.id !== place.id);
+      return [place, ...next].slice(0, 24);
+    });
+    setStudentTab("favorites");
   };
 
   const resetComposer = () => {
@@ -4778,10 +4792,19 @@ export default function Page() {
                   {friendFoodMoments.length ? (
                     <div className="grid gap-3">
                       {friendFoodMoments.map((item) => (
-                        <div key={item.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="rounded-[22px] bg-[#FFF7E8] p-4 text-left"
+                          onClick={() => {
+                            if (item.place) {
+                              openFriendFavoriteMoment(item.city, item.place);
+                            }
+                          }}
+                        >
                           <p className="text-lg font-semibold text-[#2C1A0E]">{item.title}</p>
                           <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   ) : (
