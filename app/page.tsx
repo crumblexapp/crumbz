@@ -493,6 +493,10 @@ function readUser(): StoredUser {
     normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
   }
 
+  if (normalized.signedIn && !readGoogleIdToken()) {
+    normalized.signedIn = false;
+  }
+
   return normalized;
 }
 
@@ -1024,6 +1028,11 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
     | null;
 
   if (!response.ok || !data?.ok) {
+    if (response.status === 401) {
+      clearGoogleIdToken();
+      persistUser(defaultUser);
+    }
+
     throw new Error(data?.message ?? "account update failed");
   }
 
