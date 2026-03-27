@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.crumbz.pl"),
   applicationName: "crumbz",
   icons: {
-    icon: "/brand/onboarding-page-exact.png",
-    apple: "/brand/onboarding-page-exact.png",
+    icon: "/brand/crumbz-logo.png",
+    apple: "/brand/crumbz-logo.png",
   },
   manifest: "/manifest.webmanifest",
   appleWebApp: {

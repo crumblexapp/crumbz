@@ -11,14 +11,14 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#FE8A01",
     icons: [
       {
-        src: "/brand/onboarding-page-exact.png",
-        sizes: "1080x1920",
+        src: "/brand/crumbz-logo.png",
+        sizes: "2000x2000",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/brand/onboarding-page-exact.png",
-        sizes: "1080x1920",
+        src: "/brand/crumbz-logo.png",
+        sizes: "2000x2000",
         type: "image/png",
         purpose: "maskable",
       },
