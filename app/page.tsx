@@ -2898,12 +2898,16 @@ export default function Page() {
       if (!confirmed) return;
     }
 
+    const nextPosts = posts.filter((post) => post.id !== postId);
+    const nextInteractions = { ...interactions };
+    delete nextInteractions[postId];
+
     lastSharedStateMutationAtRef.current = Date.now();
-    setPosts((current) => current.filter((post) => post.id !== postId));
-    setInteractions((current) => {
-      const next = { ...current };
-      delete next[postId];
-      return next;
+    setPosts(nextPosts);
+    setInteractions(nextInteractions);
+    syncSharedState({
+      nextPosts,
+      nextInteractions,
     });
 
     if (editingPostId === postId) {
