@@ -186,6 +186,7 @@ const defaultPosts: AppPost[] = [
     type: "chapter",
     cta: "first drop loading",
     createdAt: "today",
+    createdAtIso: new Date().toISOString(),
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
@@ -202,6 +203,7 @@ const defaultPosts: AppPost[] = [
     type: "discount",
     cta: "rewards coming soon",
     createdAt: "today",
+    createdAtIso: new Date().toISOString(),
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
@@ -221,6 +223,7 @@ const fallbackFeedPosts: AppPost[] = [
     type: "chapter",
     cta: "live soon",
     createdAt: "soon",
+    createdAtIso: new Date().toISOString(),
     mediaKind: "none",
     mediaUrls: [],
     videoRatio: "9:16",
@@ -293,6 +296,7 @@ type AppPost = {
   type: PostType;
   cta: string;
   createdAt: string;
+  createdAtIso: string;
   mediaKind: MediaKind;
   mediaUrls: string[];
   videoRatio: VideoRatio;
@@ -312,6 +316,7 @@ const defaultPostFields = {
   authorEmail: ADMIN_EMAIL,
   schoolName: "",
   weekKey: "",
+  createdAtIso: "",
 };
 
 function getDefaultDare(): DareState {
@@ -517,6 +522,10 @@ function normalizePosts(posts: Partial<AppPost>[]) {
     type: typeof post.type === "string" ? post.type : "chapter",
     cta: typeof post.cta === "string" ? post.cta : "live now",
     createdAt: typeof post.createdAt === "string" ? post.createdAt : formatNow(),
+    createdAtIso:
+      typeof post.createdAtIso === "string" && !Number.isNaN(Date.parse(post.createdAtIso))
+        ? post.createdAtIso
+        : new Date().toISOString(),
     mediaUrls: Array.isArray(post.mediaUrls) ? post.mediaUrls : [],
     videoRatio: post.videoRatio ?? "9:16",
     mediaKind: post.mediaKind ?? "none",
@@ -916,6 +925,36 @@ function formatNow() {
   });
 }
 
+function getPostTimestamp(post: Pick<AppPost, "createdAtIso">) {
+  const timestamp = Date.parse(post.createdAtIso);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isLiveDailyPost(post: AppPost, nowTimestamp: number) {
+  if (post.authorRole !== "student" || post.type === "weekly-dump") return false;
+  const createdTimestamp = getPostTimestamp(post);
+  if (!createdTimestamp || createdTimestamp > nowTimestamp) return false;
+  return nowTimestamp - createdTimestamp < 24 * 60 * 60 * 1000;
+}
+
+function formatRelativePostTime(createdAtIso: string, fallback: string) {
+  const timestamp = Date.parse(createdAtIso);
+  if (Number.isNaN(timestamp)) return fallback;
+
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 60_000) return "just now";
+
+  const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+  if (diffHours < 1) {
+    const diffMinutes = Math.max(1, Math.floor(diffMs / (60 * 1000)));
+    return `${diffMinutes}m ago`;
+  }
+
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  return fallback;
+}
+
 function toLocalDateTimeValue(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
@@ -1231,6 +1270,11 @@ export default function Page() {
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [dailyPostNotice, setDailyPostNotice] = useState("");
+  const [dailyPostCaption, setDailyPostCaption] = useState("");
+  const [dailyPostMediaUrls, setDailyPostMediaUrls] = useState<string[]>([]);
+  const [isUploadingDailyPost, setIsUploadingDailyPost] = useState(false);
+  const [dailyPostInputKey, setDailyPostInputKey] = useState(0);
   const [weeklyDumpNotice, setWeeklyDumpNotice] = useState("");
   const [weeklyDumpCaption, setWeeklyDumpCaption] = useState("");
   const [weeklyDumpMediaUrls, setWeeklyDumpMediaUrls] = useState<string[]>([]);
@@ -1239,6 +1283,7 @@ export default function Page() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
     title: "",
@@ -1250,6 +1295,7 @@ export default function Page() {
     videoRatio: "9:16" as VideoRatio,
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const dailyPostInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
@@ -1372,16 +1418,27 @@ export default function Page() {
   const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => post.authorRole !== "student");
+  const nowTimestamp = Date.now();
+  const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+  const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
+  const studentDailyPosts = posts
+    .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump")
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
-    const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
-    const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
-
-    return authorEmail === currentEmail || friendEmails.includes(authorEmail);
+    return authorEmail === currentUserEmail || friendEmails.includes(authorEmail);
+  });
+  const visibleStudentDailyPosts = studentDailyPosts.filter((post) => {
+    const authorEmail = post.authorEmail.toLowerCase();
+    return authorEmail === currentUserEmail || friendEmails.includes(authorEmail);
+  });
+  const friendDailyFeedPosts = visibleStudentDailyPosts.filter((post) => {
+    const authorEmail = post.authorEmail.toLowerCase();
+    return authorEmail !== currentUserEmail && isLiveDailyPost(post, nowTimestamp);
   });
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
-    (post) => post.authorEmail.toLowerCase() !== (user.googleProfile?.email?.toLowerCase() ?? ""),
+    (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
@@ -1393,9 +1450,14 @@ export default function Page() {
   );
   const currentUserWeeklyDump =
     authoredWeeklyDumps.find((post) => post.weekKey === currentSundayKey) ??
-    authoredWeeklyDumps.find((post) => post.id === `weekly-dump-${user.googleProfile?.email?.toLowerCase() ?? ""}-${currentSundayKey}`) ??
+    authoredWeeklyDumps.find((post) => post.id === `weekly-dump-${currentUserEmail}-${currentSundayKey}`) ??
     authoredWeeklyDumps[0] ??
     null;
+  const currentUserProfilePosts = studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === currentUserEmail);
+  const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
+  const selectedProfilePosts = selectedProfileEmail
+    ? studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
+    : [];
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const totalComments = Object.values(interactions).reduce((sum, item) => sum + item.comments.length, 0);
@@ -1432,16 +1494,16 @@ export default function Page() {
   });
   const citySpotlightName = liveProfile.city || "Lodz";
   const citySnapshot = {
-    mostPostedSpot: friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
+    mostPostedSpot: friendDailyFeedPosts[0]?.title ?? friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
     mostLikedFood: foodSpotCounts[0]?.name ?? "most-liked food loading",
     hottestNeighbourhood: liveProfile.city || "Lodz",
     hiddenGem: favoritePlaces[0]?.name ?? "new hidden gem loading",
   };
   const friendFoodMoments = [
-    ...friendWeeklyDumps.slice(0, 3).map((post) => ({
+    ...friendDailyFeedPosts.slice(0, 3).map((post) => ({
       id: post.id,
-      title: `${post.authorName} posted a dump`,
-      detail: post.body || "new food photos this week",
+      title: `${post.authorName} posted ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
+      detail: post.body || "fresh food photos just landed",
     })),
     ...friendAccounts
       .flatMap((account) =>
@@ -1552,14 +1614,13 @@ export default function Page() {
       detail: `${post.type} • ${post.createdAt}`,
       postId: post.id,
     })),
-    ...visibleStudentWeeklyDumps
-      .filter((post) => post.authorEmail !== user.googleProfile?.email)
+    ...friendDailyFeedPosts
       .slice(0, 6)
       .map((post) => ({
         id: `friend-dump-${post.id}`,
         kind: "friend_dump" as const,
-        title: `${post.authorName} posted a sunday dump`,
-        detail: `weekly food dump • ${post.createdAt}`,
+        title: `${post.authorName} posted a food drop`,
+        detail: `live for 24h • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
         postId: post.id,
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
@@ -1580,6 +1641,7 @@ export default function Page() {
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const hasLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail);
     const isStudentPost = post.authorRole === "student";
+    const isSundayDump = post.type === "weekly-dump";
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const showPostBody = Boolean(post.body.trim()) && (!isStudentPost || post.body.trim() !== profileMeta);
@@ -1603,9 +1665,24 @@ export default function Page() {
           <div className="flex-1">
             <p className="font-semibold text-[#2C1A0E]">{isStudentPost ? post.authorName : "crumbz"}</p>
             <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-              {isStudentPost ? `weekly food dump • ${post.createdAt}` : `${post.type} • ${post.createdAt}`}
+              {isStudentPost
+                ? isSundayDump
+                  ? `sunday dump • ${post.createdAt}`
+                  : `food drop • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`
+                : `${post.type} • ${post.createdAt}`}
             </p>
           </div>
+          {isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail ? (
+            <Button
+              radius="full"
+              size="sm"
+              variant="flat"
+              className="bg-white text-[#2C1A0E]"
+              onPress={() => setSelectedProfileEmail(post.authorEmail)}
+            >
+              profile
+            </Button>
+          ) : null}
           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
@@ -2707,6 +2784,9 @@ export default function Page() {
       createdAt: editingPostId
         ? posts.find((post) => post.id === editingPostId)?.createdAt ?? formatNow()
         : formatNow(),
+      createdAtIso: editingPostId
+        ? posts.find((post) => post.id === editingPostId)?.createdAtIso ?? new Date().toISOString()
+        : new Date().toISOString(),
       mediaKind: composer.mediaKind,
       mediaUrls: composer.mediaUrls,
       videoRatio: composer.videoRatio,
@@ -2757,6 +2837,7 @@ export default function Page() {
       cta: "sunday dump",
       type: "weekly-dump",
       createdAt: currentUserWeeklyDump?.createdAt ?? formatNow(),
+      createdAtIso: currentUserWeeklyDump?.createdAtIso ?? new Date().toISOString(),
       mediaKind: "carousel",
       mediaUrls: activeWeeklyDumpMediaUrls,
       videoRatio: "4:5",
@@ -3017,7 +3098,88 @@ export default function Page() {
     }
   };
 
+  const handleDailyPostFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+
+    const remainingSlots = 4 - dailyPostMediaUrls.length;
+    if (remainingSlots <= 0) {
+      setDailyPostNotice("this drop is full. post it or swap a photo first.");
+      setDailyPostInputKey((current) => current + 1);
+      return;
+    }
+
+    setIsUploadingDailyPost(true);
+    setDailyPostNotice("uploading your food drop...");
+
+    try {
+      const uploadResults = await uploadMediaFiles(files, {
+        mediaKind: "carousel",
+        maxFiles: remainingSlots,
+        skipSizeLimit: true,
+        setNotice: setDailyPostNotice,
+      });
+
+      if (!uploadResults?.length) return;
+
+      setDailyPostMediaUrls((current) => [...current, ...uploadResults].slice(0, 4));
+      setDailyPostNotice("your food drop is loaded.");
+      setDailyPostInputKey((current) => current + 1);
+    } finally {
+      setIsUploadingDailyPost(false);
+    }
+  };
+
+  const submitDailyPost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
+    if (!authorEmail) return;
+
+    if (isUploadingDailyPost) {
+      setDailyPostNotice("your photos are still uploading. wait a sec, then post.");
+      return;
+    }
+
+    if (!dailyPostMediaUrls.length) {
+      setDailyPostNotice("add at least one photo for today’s drop.");
+      return;
+    }
+
+    const firstName = user.profile.fullName.split(" ")[0] || user.profile.username || "friend";
+    const createdAtIso = new Date().toISOString();
+    const caption = dailyPostCaption.trim();
+    const nextPost: AppPost = {
+      id: `daily-post-${Date.now()}`,
+      title: `${firstName}'s food drop`,
+      body: caption,
+      type: "story",
+      cta: "live now",
+      createdAt: formatNow(),
+      createdAtIso,
+      mediaKind: dailyPostMediaUrls.length > 1 ? "carousel" : "photo",
+      mediaUrls: dailyPostMediaUrls,
+      videoRatio: "4:5",
+      authorRole: "student",
+      authorName: user.profile.fullName,
+      authorEmail,
+      schoolName: user.profile.schoolName,
+      weekKey: "",
+    };
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPosts((current) => [nextPost, ...current]);
+    syncSharedState({
+      nextPosts: [nextPost, ...posts],
+      nextInteractions: interactions,
+    });
+    setDailyPostCaption("");
+    setDailyPostMediaUrls([]);
+    setDailyPostNotice("your 24-hour food drop is live.");
+    setDailyPostInputKey((current) => current + 1);
+  };
+
   const weeklyDumpTileCount = Math.max(4, activeWeeklyDumpMediaUrls.length + (activeWeeklyDumpMediaUrls.length < 7 ? 1 : 0));
+  const dailyPostTileCount = Math.max(4, dailyPostMediaUrls.length + (dailyPostMediaUrls.length < 4 ? 1 : 0));
 
   const addComment = (event: FormEvent<HTMLFormElement>, postId: string) => {
     event.preventDefault();
@@ -4071,6 +4233,7 @@ export default function Page() {
                                           type: composer.type,
                                           cta: composer.cta,
                                           createdAt: "preview",
+                                          createdAtIso: new Date().toISOString(),
                                           mediaKind: composer.mediaKind,
                                           mediaUrls: composer.mediaUrls,
                                           videoRatio: composer.videoRatio,
@@ -4438,6 +4601,23 @@ export default function Page() {
                   </div>
                 </CardBody>
               </Card>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">24 hour feed</p>
+                    <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">what your friends posted today</h3>
+                  </div>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendDailyFeedPosts.length} live</Chip>
+                </div>
+                {friendDailyFeedPosts.length ? (
+                  friendDailyFeedPosts.map(renderFeedCard)
+                ) : (
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                    <CardBody className="p-5 text-sm text-[#2C1A0E]">once your friends post today, their food drops land here for 24 hours.</CardBody>
+                  </Card>
+                )}
+              </div>
 
               {shouldShowSundayDumpFeed ? (
                 <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
@@ -4901,9 +5081,14 @@ export default function Page() {
                           @{friend.profile.username}
                           {friend.profile.schoolName ? ` • ${friend.profile.schoolName}` : ""}
                         </p>
-                        <Button radius="full" variant="flat" className="mt-3 bg-white text-[#2C1A0E]" onPress={() => removeFriend(friendEmail)}>
-                          remove friend
-                        </Button>
+                        <div className="mt-3 flex gap-2">
+                          <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => setSelectedProfileEmail(friendEmail)}>
+                            view profile
+                          </Button>
+                          <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => removeFriend(friendEmail)}>
+                            remove friend
+                          </Button>
+                        </div>
                       </div>
                     );
                   })
@@ -4931,6 +5116,109 @@ export default function Page() {
                     log out
                   </Button>
                 </div>
+              </CardBody>
+            </Card>
+
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <CardBody className="gap-4 p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">post</p>
+                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
+                      your food drop
+                    </h2>
+                    <p className="text-sm text-[#6c7289]">post from your profile. it stays live in your friends&apos; feed for 24 hours.</p>
+                  </div>
+                  <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{dailyPostMediaUrls.length}/4</Chip>
+                </div>
+
+                <form className="space-y-4" onSubmit={submitDailyPost}>
+                  <div className="grid grid-cols-4 gap-3">
+                    {Array.from({ length: dailyPostTileCount }, (_, index) => {
+                      const showAddTile = dailyPostMediaUrls.length < 4 && index === 0;
+                      const imageIndex = dailyPostMediaUrls.length < 4 ? index - 1 : index;
+                      const imageUrl = dailyPostMediaUrls[imageIndex];
+
+                      if (showAddTile) {
+                        return (
+                          <button
+                            key="daily-post-add-tile"
+                            type="button"
+                            aria-label="add food drop photos"
+                            disabled={dailyPostMediaUrls.length >= 4 || isUploadingDailyPost}
+                            onClick={() => dailyPostInputRef.current?.click()}
+                            className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
+                          >
+                            +
+                          </button>
+                        );
+                      }
+
+                      if (imageUrl) {
+                        return (
+                          <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={imageUrl} alt={`food drop photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                          </div>
+                        );
+                      }
+
+                      return <div key={`daily-post-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
+                    })}
+                  </div>
+                  <Textarea
+                    placeholder="what did you try?"
+                    value={dailyPostCaption}
+                    onValueChange={setDailyPostCaption}
+                    classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
+                  />
+                  <input
+                    ref={dailyPostInputRef}
+                    key={dailyPostInputKey}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                    multiple
+                    disabled={dailyPostMediaUrls.length >= 4}
+                    onChange={(event) => {
+                      void handleDailyPostFiles(event.target.files);
+                    }}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-3">
+                    {dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : <div className="flex-1" />}
+                    <Button
+                      type="submit"
+                      radius="full"
+                      size="lg"
+                      isDisabled={isUploadingDailyPost}
+                      className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                    >
+                      →
+                    </Button>
+                  </div>
+                </form>
+              </CardBody>
+            </Card>
+
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+              <CardBody className="gap-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your feed</p>
+                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
+                      your food drops
+                    </h2>
+                  </div>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserProfilePosts.length}</Chip>
+                </div>
+
+                {currentUserProfilePosts.length ? (
+                  <div className="grid gap-4">
+                    {currentUserProfilePosts.map(renderFeedCard)}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6c7289]">post your first food drop from feed and it’ll live here as your personal archive.</p>
+                )}
               </CardBody>
             </Card>
 
@@ -5136,13 +5424,48 @@ export default function Page() {
                 ))
               ) : (
                 <div className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm text-[#2C1A0E]">
-                  no notifications yet. friend requests, admin drops, and sunday dumps will show up here.
+                  no notifications yet. friend requests, food drops, admin posts, and sunday dumps will show up here.
                 </div>
               )}
             </div>
           </motion.aside>
         </div>
       ) : null}
+
+      <Modal isOpen={Boolean(selectedProfileEmail && selectedProfileAccount)} onOpenChange={(open) => !open && setSelectedProfileEmail(null)} size="full">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-start justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend profile</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                    {selectedProfileAccount?.profile.fullName || "friend"}
+                  </p>
+                  <p className="mt-2 text-sm text-[#2C1A0E]">
+                    @{selectedProfileAccount?.profile.username || "crumbz-user"}
+                    {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+                {selectedProfilePosts.length ? (
+                  <div className="space-y-4">
+                    {selectedProfilePosts.map(renderFeedCard)}
+                  </div>
+                ) : (
+                  <div className="rounded-[22px] bg-white p-4 text-sm text-[#2C1A0E]">
+                    no food drops on this profile yet.
+                  </div>
+                )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
 
       <Modal isOpen={dareReminderModalOpen} onOpenChange={setDareReminderModalOpen} placement="bottom-center">
         <ModalContent>
