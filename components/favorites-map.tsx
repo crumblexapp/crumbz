@@ -294,7 +294,7 @@ export default function FavoritesMap({
         {cityName}
       </div>
 
-      <div className="h-[640px] w-full overflow-hidden sm:h-[820px]">
+      <div className="h-[440px] w-full overflow-hidden sm:h-[540px]">
         <MapContainer
           center={effectiveCenter}
           zoom={13}
