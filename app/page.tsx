@@ -3101,28 +3101,20 @@ export default function Page() {
   const handleDailyPostFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
-    const remainingSlots = 4 - dailyPostMediaUrls.length;
-    if (remainingSlots <= 0) {
-      setDailyPostNotice("this drop is full. post it or swap a photo first.");
-      setDailyPostInputKey((current) => current + 1);
-      return;
-    }
-
     setIsUploadingDailyPost(true);
-    setDailyPostNotice("uploading your food drop...");
+    setDailyPostNotice("uploading your post...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
-        mediaKind: "carousel",
-        maxFiles: remainingSlots,
-        skipSizeLimit: true,
+        mediaKind: "photo",
+        maxFiles: 1,
         setNotice: setDailyPostNotice,
       });
 
       if (!uploadResults?.length) return;
 
-      setDailyPostMediaUrls((current) => [...current, ...uploadResults].slice(0, 4));
-      setDailyPostNotice("your food drop is loaded.");
+      setDailyPostMediaUrls([uploadResults[0]]);
+      setDailyPostNotice("your photo is ready.");
       setDailyPostInputKey((current) => current + 1);
     } finally {
       setIsUploadingDailyPost(false);
@@ -3150,14 +3142,14 @@ export default function Page() {
     const caption = dailyPostCaption.trim();
     const nextPost: AppPost = {
       id: `daily-post-${Date.now()}`,
-      title: `${firstName}'s food drop`,
+      title: `${firstName}'s post`,
       body: caption,
       type: "story",
       cta: "live now",
       createdAt: formatNow(),
       createdAtIso,
-      mediaKind: dailyPostMediaUrls.length > 1 ? "carousel" : "photo",
-      mediaUrls: dailyPostMediaUrls,
+      mediaKind: "photo",
+      mediaUrls: [dailyPostMediaUrls[0]],
       videoRatio: "4:5",
       authorRole: "student",
       authorName: user.profile.fullName,
@@ -3174,12 +3166,11 @@ export default function Page() {
     });
     setDailyPostCaption("");
     setDailyPostMediaUrls([]);
-    setDailyPostNotice("your 24-hour food drop is live.");
+    setDailyPostNotice("your post is live for 24 hours.");
     setDailyPostInputKey((current) => current + 1);
   };
 
   const weeklyDumpTileCount = Math.max(4, activeWeeklyDumpMediaUrls.length + (activeWeeklyDumpMediaUrls.length < 7 ? 1 : 0));
-  const dailyPostTileCount = Math.max(4, dailyPostMediaUrls.length + (dailyPostMediaUrls.length < 4 ? 1 : 0));
 
   const addComment = (event: FormEvent<HTMLFormElement>, postId: string) => {
     event.preventDefault();
@@ -4602,22 +4593,7 @@ export default function Page() {
                 </CardBody>
               </Card>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">24 hour feed</p>
-                    <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">what your friends posted today</h3>
-                  </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendDailyFeedPosts.length} live</Chip>
-                </div>
-                {friendDailyFeedPosts.length ? (
-                  friendDailyFeedPosts.map(renderFeedCard)
-                ) : (
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                    <CardBody className="p-5 text-sm text-[#2C1A0E]">once your friends post today, their food drops land here for 24 hours.</CardBody>
-                  </Card>
-                )}
-              </div>
+              {friendDailyFeedPosts.length ? <div className="space-y-4">{friendDailyFeedPosts.map(renderFeedCard)}</div> : null}
 
               {shouldShowSundayDumpFeed ? (
                 <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
@@ -5125,47 +5101,30 @@ export default function Page() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">post</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      your food drop
+                      make a post
                     </h2>
                     <p className="text-sm text-[#6c7289]">post from your profile. it stays live in your friends&apos; feed for 24 hours.</p>
                   </div>
-                  <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{dailyPostMediaUrls.length}/4</Chip>
                 </div>
 
                 <form className="space-y-4" onSubmit={submitDailyPost}>
-                  <div className="grid grid-cols-4 gap-3">
-                    {Array.from({ length: dailyPostTileCount }, (_, index) => {
-                      const showAddTile = dailyPostMediaUrls.length < 4 && index === 0;
-                      const imageIndex = dailyPostMediaUrls.length < 4 ? index - 1 : index;
-                      const imageUrl = dailyPostMediaUrls[imageIndex];
-
-                      if (showAddTile) {
-                        return (
-                          <button
-                            key="daily-post-add-tile"
-                            type="button"
-                            aria-label="add food drop photos"
-                            disabled={dailyPostMediaUrls.length >= 4 || isUploadingDailyPost}
-                            onClick={() => dailyPostInputRef.current?.click()}
-                            className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
-                          >
-                            +
-                          </button>
-                        );
-                      }
-
-                      if (imageUrl) {
-                        return (
-                          <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={imageUrl} alt={`food drop photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
-                          </div>
-                        );
-                      }
-
-                      return <div key={`daily-post-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
-                    })}
-                  </div>
+                  <button
+                    type="button"
+                    aria-label="add post photo"
+                    disabled={isUploadingDailyPost}
+                    onClick={() => dailyPostInputRef.current?.click()}
+                    className="flex h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
+                  >
+                    {dailyPostMediaUrls[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="text-center">
+                        <div className="text-5xl leading-none">+</div>
+                        <p className="mt-3 text-sm font-medium">add your post photo</p>
+                      </div>
+                    )}
+                  </button>
                   <Textarea
                     placeholder="what did you try?"
                     value={dailyPostCaption}
@@ -5177,8 +5136,7 @@ export default function Page() {
                     key={dailyPostInputKey}
                     type="file"
                     accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                    multiple
-                    disabled={dailyPostMediaUrls.length >= 4}
+                    disabled={isUploadingDailyPost}
                     onChange={(event) => {
                       void handleDailyPostFiles(event.target.files);
                     }}
