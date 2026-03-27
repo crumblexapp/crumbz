@@ -1360,12 +1360,18 @@ export default function Page() {
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
-  const cityBreakdown = accounts.reduce<Record<string, number>>((acc, account) => {
+  const nonAdminAccounts = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL);
+  const nonAdminEmailSet = new Set(
+    nonAdminAccounts
+      .map((account) => account.googleProfile?.email?.toLowerCase() ?? "")
+      .filter(Boolean),
+  );
+  const cityBreakdown = nonAdminAccounts.reduce<Record<string, number>>((acc, account) => {
     const key = account.profile.city || "unknown";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
-  const totalSignups = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL).length;
+  const totalSignups = nonAdminAccounts.length;
   const sortedCityBreakdown = Object.entries(cityBreakdown).sort(([, a], [, b]) => b - a);
   const allFoodSpots = Object.values(fallbackFavoritePlacesByCity).flat();
   const foodSpotCounts = allFoodSpots
@@ -1451,8 +1457,11 @@ export default function Page() {
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
   const studentDailyPosts = posts
     .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump")
+    .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const studentWeeklyDumps = posts.filter((post) => post.authorRole === "student" && post.type === "weekly-dump");
+  const studentWeeklyDumps = posts
+    .filter((post) => post.authorRole === "student" && post.type === "weekly-dump")
+    .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()));
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
     return authorEmail === currentUserEmail || friendEmails.includes(authorEmail);
@@ -1489,14 +1498,35 @@ export default function Page() {
     : [];
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
-  const totalComments = Object.values(interactions).reduce((sum, item) => sum + item.comments.length, 0);
-  const totalShares = Object.values(interactions).reduce((sum, item) => sum + item.shares.length, 0);
-  const totalLikes = Object.values(interactions).reduce((sum, item) => sum + item.likes.length, 0);
+  const validPostIds = new Set(posts.map((post) => post.id));
+  const filteredInteractions = Object.fromEntries(
+    Object.entries(interactions).map(([postId, bucket]) => [
+      postId,
+      {
+        comments: bucket.comments.filter((comment) => nonAdminEmailSet.has(comment.authorEmail.toLowerCase())),
+        shares: bucket.shares.filter((share) => nonAdminEmailSet.has(share.authorEmail.toLowerCase())),
+        likes: bucket.likes.filter((like) => nonAdminEmailSet.has(like.authorEmail.toLowerCase())),
+      },
+    ]),
+  );
+  const totalComments = Object.entries(filteredInteractions)
+    .filter(([postId]) => validPostIds.has(postId))
+    .reduce((sum, [, item]) => sum + item.comments.length, 0);
+  const totalShares = Object.entries(filteredInteractions)
+    .filter(([postId]) => validPostIds.has(postId))
+    .reduce((sum, [, item]) => sum + item.shares.length, 0);
+  const totalLikes = Object.entries(filteredInteractions)
+    .filter(([postId]) => validPostIds.has(postId))
+    .reduce((sum, [, item]) => sum + item.likes.length, 0);
   const uniqueCommenters = new Set(
-    Object.values(interactions).flatMap((item) => item.comments.map((comment) => comment.authorEmail)),
+    Object.entries(filteredInteractions)
+      .filter(([postId]) => validPostIds.has(postId))
+      .flatMap(([, item]) => item.comments.map((comment) => comment.authorEmail)),
   ).size;
   const uniqueSharers = new Set(
-    Object.values(interactions).flatMap((item) => item.shares.map((share) => share.authorEmail)),
+    Object.entries(filteredInteractions)
+      .filter(([postId]) => validPostIds.has(postId))
+      .flatMap(([, item]) => item.shares.map((share) => share.authorEmail)),
   ).size;
   const normalizedFriendQuery = friendQuery.trim().replace(/^@+/, "").toLowerCase();
   const exactFriendMatch = accounts.find((account) => {
@@ -3688,7 +3718,8 @@ export default function Page() {
   }
 
   if (isAdmin) {
-    const recentActivity = Object.entries(interactions)
+    const recentActivity = Object.entries(filteredInteractions)
+      .filter(([postId]) => validPostIds.has(postId))
       .flatMap(([postId, bucket]) => [
         ...bucket.likes.map((like) => ({ kind: "like", postId, label: `${like.authorName} liked`, detail: "post liked", createdAt: like.createdAt })),
         ...bucket.comments.map((comment) => ({ kind: "comment", postId, label: `${comment.authorName} commented`, detail: comment.text, createdAt: comment.createdAt })),
