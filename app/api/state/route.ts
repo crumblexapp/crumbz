@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { requireVerifiedIdentity } from "@/lib/google-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,6 +9,16 @@ const STATE_ROW_ID = "crumbz-app-state";
 const ACCOUNTS_ROW_ID = "crumbz-accounts-state";
 const ANNOUNCEMENTS_META_KEY = "__announcements";
 const DARE_META_KEY = "__dare";
+
+type JsonRecord = Record<string, unknown>;
+
+function normalizeEmail(value: unknown) {
+  return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+function normalizeObjectArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item && typeof item === "object")) : [];
+}
 
 function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
   const interactions =
@@ -33,6 +44,156 @@ function mergeInteractionsAndAnnouncements(rawInteractions: unknown, rawAnnounce
     ...interactions,
     [ANNOUNCEMENTS_META_KEY]: Array.isArray(rawAnnouncements) ? rawAnnouncements : [],
     [DARE_META_KEY]: rawDare && typeof rawDare === "object" ? rawDare : {},
+  };
+}
+
+function sortPosts(posts: JsonRecord[]) {
+  return [...posts].sort((a, b) => {
+    const aTime = Date.parse(String(a.createdAtIso ?? a.createdAt ?? ""));
+    const bTime = Date.parse(String(b.createdAtIso ?? b.createdAt ?? ""));
+
+    if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+      return String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""));
+    }
+
+    return bTime - aTime;
+  });
+}
+
+function normalizeInteractionsMap(rawInteractions: unknown) {
+  if (!rawInteractions || typeof rawInteractions !== "object" || Array.isArray(rawInteractions)) {
+    return {} as Record<string, { comments: JsonRecord[]; shares: JsonRecord[]; likes: JsonRecord[] }>;
+  }
+
+  return Object.fromEntries(
+    Object.entries(rawInteractions).map(([postId, bucket]) => {
+      const safeBucket = bucket && typeof bucket === "object" && !Array.isArray(bucket) ? (bucket as JsonRecord) : {};
+
+      return [
+        postId,
+        {
+          comments: normalizeObjectArray(safeBucket.comments),
+          shares: normalizeObjectArray(safeBucket.shares),
+          likes: normalizeObjectArray(safeBucket.likes),
+        },
+      ];
+    }),
+  );
+}
+
+function dedupeByKey<T extends JsonRecord>(items: T[], getKey: (item: T) => string) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = getKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
+  const currentPosts = normalizeObjectArray(currentPostsRaw);
+  const proposedPosts = normalizeObjectArray(proposedPostsRaw);
+  const preservedPosts = currentPosts.filter((post) => normalizeEmail(post.authorEmail) !== verifiedEmail);
+  const preservedIds = new Set(preservedPosts.map((post) => String(post.id ?? "")).filter(Boolean));
+  const nextOwnPosts = proposedPosts.filter(
+    (post) =>
+      normalizeEmail(post.authorEmail) === verifiedEmail &&
+      post.authorRole === "student" &&
+      typeof post.id === "string" &&
+      !preservedIds.has(post.id),
+  );
+
+  return sortPosts([...preservedPosts, ...nextOwnPosts]);
+}
+
+function mergeInteractionsForUser(currentRaw: unknown, proposedRaw: unknown, verifiedEmail: string) {
+  const current = normalizeInteractionsMap(currentRaw);
+  const proposed = normalizeInteractionsMap(proposedRaw);
+  const postIds = new Set([...Object.keys(current), ...Object.keys(proposed)]);
+
+  return Object.fromEntries(
+    Array.from(postIds).map((postId) => {
+      const currentBucket = current[postId] ?? { comments: [], shares: [], likes: [] };
+      const proposedBucket = proposed[postId] ?? { comments: [], shares: [], likes: [] };
+
+      const preservedComments = currentBucket.comments.filter((comment) => normalizeEmail(comment.authorEmail) !== verifiedEmail);
+      const preservedCommentIds = new Set(preservedComments.map((comment) => String(comment.id ?? "")).filter(Boolean));
+      const nextOwnComments = dedupeByKey(
+        proposedBucket.comments
+          .filter(
+            (comment) =>
+              normalizeEmail(comment.authorEmail) === verifiedEmail &&
+              typeof comment.id === "string" &&
+              !preservedCommentIds.has(comment.id),
+          )
+          .map((comment) => {
+            const nextComment = { ...comment };
+            delete nextComment.hidden;
+            return nextComment;
+          }),
+        (comment) => String(comment.id ?? ""),
+      );
+
+      const preservedShares = currentBucket.shares.filter((share) => normalizeEmail(share.authorEmail) !== verifiedEmail);
+      const nextOwnShares = dedupeByKey(
+        proposedBucket.shares.filter((share) => normalizeEmail(share.authorEmail) === verifiedEmail),
+        (share) => String(share.id ?? `${share.authorEmail}-${share.platform}-${share.createdAt}`),
+      );
+
+      const preservedLikes = currentBucket.likes.filter((like) => normalizeEmail(like.authorEmail) !== verifiedEmail);
+      const proposedOwnLikes = proposedBucket.likes.filter((like) => normalizeEmail(like.authorEmail) === verifiedEmail);
+      const nextOwnLikes = proposedOwnLikes.length ? [proposedOwnLikes[proposedOwnLikes.length - 1]] : [];
+
+      return [
+        postId,
+        {
+          comments: [...preservedComments, ...nextOwnComments],
+          shares: [...preservedShares, ...nextOwnShares],
+          likes: [...preservedLikes, ...nextOwnLikes],
+        },
+      ];
+    }),
+  );
+}
+
+function mergeDareForUser(currentRaw: unknown, proposedRaw: unknown, verifiedEmail: string) {
+  const current = currentRaw && typeof currentRaw === "object" && !Array.isArray(currentRaw) ? { ...(currentRaw as JsonRecord) } : {};
+  const proposed = proposedRaw && typeof proposedRaw === "object" && !Array.isArray(proposedRaw) ? (proposedRaw as JsonRecord) : {};
+
+  const currentAccepted = Array.isArray(current.acceptedEmails) ? current.acceptedEmails.filter((email): email is string => typeof email === "string") : [];
+  const proposedAccepted = Array.isArray(proposed.acceptedEmails) ? proposed.acceptedEmails.filter((email): email is string => typeof email === "string") : [];
+  const nextAcceptedEmails = [
+    ...new Set([
+      ...currentAccepted.filter((email) => email.toLowerCase() !== verifiedEmail),
+      ...(proposedAccepted.some((email) => email.toLowerCase() === verifiedEmail) ? [verifiedEmail] : []),
+    ]),
+  ];
+
+  const currentReminders = Array.isArray(current.reminderEmails) ? current.reminderEmails.filter((email): email is string => typeof email === "string") : [];
+  const proposedReminders = Array.isArray(proposed.reminderEmails) ? proposed.reminderEmails.filter((email): email is string => typeof email === "string") : [];
+  const nextReminderEmails = [
+    ...new Set([
+      ...currentReminders.filter((email) => email.toLowerCase() !== verifiedEmail),
+      ...(proposedReminders.some((email) => email.toLowerCase() === verifiedEmail) ? [verifiedEmail] : []),
+    ]),
+  ];
+
+  const currentSubmissions = normalizeObjectArray(current.submissions);
+  const preservedSubmissions = currentSubmissions.filter((submission) => normalizeEmail(submission.authorEmail) !== verifiedEmail);
+  const preservedSubmissionIds = new Set(preservedSubmissions.map((submission) => String(submission.id ?? "")).filter(Boolean));
+  const nextOwnSubmissions = normalizeObjectArray(proposed.submissions).filter(
+    (submission) =>
+      normalizeEmail(submission.authorEmail) === verifiedEmail &&
+      typeof submission.id === "string" &&
+      !preservedSubmissionIds.has(submission.id),
+  );
+
+  return {
+    ...current,
+    acceptedEmails: nextAcceptedEmails,
+    reminderEmails: nextReminderEmails,
+    submissions: [...preservedSubmissions, ...nextOwnSubmissions],
   };
 }
 
@@ -100,6 +261,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const { error: authError, identity } = await requireVerifiedIdentity(request);
+  if (authError || !identity) {
+    return authError;
+  }
+
   const body = (await request.json().catch(() => null)) as
     | {
         accounts?: unknown;
@@ -123,34 +289,31 @@ export async function POST(request: Request) {
   };
 
   if ("posts" in (body ?? {})) {
-    updates.posts = body?.posts ?? [];
+    updates.posts = identity.isAdmin
+      ? body?.posts ?? []
+      : mergePostsForUser(stateData?.posts, body?.posts, identity.email);
   }
 
-  if (supportsAnnouncements) {
-    if ("interactions" in (body ?? {})) {
-      updates.interactions = body?.interactions ?? {};
-    }
+  if ("announcements" in (body ?? {}) && !identity.isAdmin) {
+    return NextResponse.json({ ok: false, message: "only the admin account can change announcements." }, { status: 403 });
+  }
 
-    if ("announcements" in (body ?? {})) {
-      updates.announcements = body?.announcements ?? [];
-    }
+  const nextInteractions = "interactions" in (body ?? {})
+    ? (identity.isAdmin ? body?.interactions ?? {} : mergeInteractionsForUser(fallbackMeta.interactions, body?.interactions, identity.email))
+    : fallbackMeta.interactions;
+  const nextDare = "dare" in (body ?? {})
+    ? (identity.isAdmin ? body?.dare ?? fallbackMeta.dare : mergeDareForUser(fallbackMeta.dare, body?.dare, identity.email))
+    : fallbackMeta.dare;
+  const nextAnnouncements = "announcements" in (body ?? {})
+    ? body?.announcements ?? []
+    : supportsAnnouncements
+      ? stateData?.announcements ?? []
+      : fallbackMeta.announcements;
 
-    if ("interactions" in (body ?? {}) || "dare" in (body ?? {})) {
-      updates.interactions = mergeInteractionsAndAnnouncements(
-        "interactions" in (body ?? {}) ? body?.interactions ?? {} : stateData?.interactions ?? {},
-        "announcements" in (body ?? {}) ? body?.announcements ?? stateData?.announcements ?? [] : stateData?.announcements ?? [],
-        "dare" in (body ?? {}) ? body?.dare ?? fallbackMeta.dare : fallbackMeta.dare,
-      );
-    }
-  } else {
-    const nextInteractions =
-      "interactions" in (body ?? {}) ? body?.interactions ?? {} : fallbackMeta.interactions;
-    const nextAnnouncements =
-      "announcements" in (body ?? {}) ? body?.announcements ?? [] : fallbackMeta.announcements;
-    const nextDare = "dare" in (body ?? {}) ? body?.dare ?? {} : fallbackMeta.dare;
-
-    if ("interactions" in (body ?? {}) || "announcements" in (body ?? {}) || "dare" in (body ?? {})) {
-      updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements, nextDare);
+  if ("interactions" in (body ?? {}) || "announcements" in (body ?? {}) || "dare" in (body ?? {})) {
+    updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements, nextDare);
+    if (supportsAnnouncements && "announcements" in (body ?? {})) {
+      updates.announcements = nextAnnouncements;
     }
   }
 

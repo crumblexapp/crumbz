@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { requireVerifiedIdentity } from "@/lib/google-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -152,6 +153,11 @@ function mergeDareIntoInteractions(rawInteractions: unknown, rawDare: unknown) {
 }
 
 export async function POST(request: Request) {
+  const { error: authError, identity } = await requireVerifiedIdentity(request);
+  if (authError || !identity) {
+    return authError;
+  }
+
   const body = (await request.json().catch(() => null)) as
     | {
         action?: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
@@ -190,6 +196,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "missing account payload" }, { status: 400 });
     }
 
+    if (!identity.isAdmin && email !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only update your own account." }, { status: 403 });
+    }
+
     nextAccounts = [...accounts.filter((item) => getEmail(item) !== email), account];
     nextUser = account;
   }
@@ -199,6 +209,10 @@ export async function POST(request: Request) {
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!currentEmail || !targetEmail) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only send requests from your own account." }, { status: 403 });
     }
 
     const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
@@ -240,6 +254,10 @@ export async function POST(request: Request) {
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!currentEmail || !targetEmail) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only accept requests from your own account." }, { status: 403 });
     }
 
     const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
@@ -285,6 +303,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
     }
 
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only decline requests from your own account." }, { status: 403 });
+    }
+
     const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
     const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
     if (!hasCurrent || !hasTarget) {
@@ -324,6 +346,10 @@ export async function POST(request: Request) {
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!currentEmail || !targetEmail) {
       return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only remove friends from your own account." }, { status: 403 });
     }
 
     const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
@@ -366,6 +392,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "missing email" }, { status: 400 });
     }
 
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only update your own favorites." }, { status: 403 });
+    }
+
     nextAccounts = accounts.map((account) => {
       if (getEmail(account) !== currentEmail) return account;
 
@@ -405,6 +435,10 @@ export async function POST(request: Request) {
   }
 
   if (action === "delete_account") {
+    if (!identity.isAdmin) {
+      return NextResponse.json({ ok: false, message: "only the admin account can delete users." }, { status: 403 });
+    }
+
     const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
     if (!targetEmail) {
       return NextResponse.json({ ok: false, message: "missing target email" }, { status: 400 });

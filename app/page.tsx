@@ -28,6 +28,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
 
 const STORAGE_KEY = "crumbz-active-user-v1";
+const GOOGLE_ID_TOKEN_KEY = "crumbz-google-id-token-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
@@ -493,6 +494,31 @@ function readUser(): StoredUser {
   }
 
   return normalized;
+}
+
+function readGoogleIdToken() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(GOOGLE_ID_TOKEN_KEY) ?? "";
+}
+
+function persistGoogleIdToken(token: string) {
+  if (typeof window === "undefined" || !token) return;
+  window.localStorage.setItem(GOOGLE_ID_TOKEN_KEY, token);
+}
+
+function clearGoogleIdToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(GOOGLE_ID_TOKEN_KEY);
+}
+
+function getAuthenticatedHeaders(headers: Record<string, string> = {}) {
+  const token = readGoogleIdToken();
+  return token
+    ? {
+        ...headers,
+        Authorization: `Bearer ${token}`,
+      }
+    : headers;
 }
 
 function readAccounts() {
@@ -981,7 +1007,9 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
   const response = await fetch("/api/account", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      ...getAuthenticatedHeaders({
+        "Content-Type": "application/json",
+      }),
     },
     body: JSON.stringify(payload),
   });
@@ -1808,7 +1836,9 @@ export default function Page() {
       method: "POST",
       cache: "no-store",
       headers: {
-        "Content-Type": "application/json",
+        ...getAuthenticatedHeaders({
+          "Content-Type": "application/json",
+        }),
       },
       body: JSON.stringify({
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
@@ -1903,6 +1933,7 @@ export default function Page() {
       if (!user.signedIn) return;
 
       persistUser(defaultUser);
+      clearGoogleIdToken();
       setFullName(null);
       setUsername(null);
       setCity(null);
@@ -2123,7 +2154,13 @@ export default function Page() {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: async (response: GoogleCredentialResponse) => {
-          const profile = response.credential ? parseJwtCredential(response.credential) : null;
+          if (!response.credential) {
+            setError("google sign-in didn’t come through. try again.");
+            return;
+          }
+
+          persistGoogleIdToken(response.credential);
+          const profile = parseJwtCredential(response.credential);
           if (!profile) {
             setError("google sign-in didn’t come through. try again.");
             return;
@@ -2342,6 +2379,7 @@ export default function Page() {
     }
 
     persistUser(defaultUser);
+    clearGoogleIdToken();
     setFullName(null);
     setUsername(null);
     setCity(null);
@@ -3005,7 +3043,9 @@ export default function Page() {
     const response = await fetch("/api/upload-url", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        ...getAuthenticatedHeaders({
+          "Content-Type": "application/json",
+        }),
       },
       body: JSON.stringify({
         files: filePayloads.map((file) => ({
