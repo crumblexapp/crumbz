@@ -485,7 +485,7 @@ function readUser(): StoredUser {
   };
 
   if (normalized.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" && !normalized.profile.username) {
-    normalized.profile.username = "josheats";
+    normalized.profile.username = "joeydoesntsharefood";
   }
 
   if (typeof normalized.profile.isStudent !== "boolean") {
@@ -692,7 +692,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
     };
 
     if (normalized.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" && !normalized.profile.username) {
-      normalized.profile.username = "josheats";
+      normalized.profile.username = "joeydoesntsharefood";
     }
 
     if (typeof normalized.profile.isStudent !== "boolean") {
@@ -1623,7 +1623,7 @@ export default function Page() {
       .map((post) => ({
         id: `friend-dump-${post.id}`,
         kind: "friend_dump" as const,
-        title: `${post.authorName} posted a food drop`,
+        title: `${post.authorName} posted`,
         detail: `live for 24h • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
         postId: post.id,
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
@@ -1672,7 +1672,7 @@ export default function Page() {
               {isStudentPost
                 ? isSundayDump
                   ? `sunday dump • ${post.createdAt}`
-                  : `food drop • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`
+                  : `post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`
                 : `${post.type} • ${post.createdAt}`}
             </p>
           </div>
@@ -1841,7 +1841,7 @@ export default function Page() {
         setDareHydrated(true);
         setAnnouncements([]);
         setSeenNotificationIds(readSeenNotifications());
-        setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
+        setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
         hasLoadedDataRef.current = true;
       });
     });
@@ -2182,7 +2182,7 @@ export default function Page() {
               fullName: currentUser.profile.fullName || profile.name,
               username:
                 currentUser.profile.username ||
-                (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""),
+                (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""),
             },
           };
           const result = await mutateAccountState({
@@ -2197,7 +2197,7 @@ export default function Page() {
           }
           persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
           setFullName(profile.name);
-          setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "josheats" : ""));
+          setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
           setIsStudent(null);
         },
         auto_select: false,
@@ -3504,7 +3504,7 @@ export default function Page() {
               <Input
                 label="username"
                 labelPlacement="outside"
-                placeholder="josheats"
+                placeholder="joeydoesntsharefood"
                 radius="lg"
                 value={usernameValue}
                 onValueChange={setUsername}
@@ -5233,7 +5233,7 @@ export default function Page() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your feed</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      your food drops
+                      your posts
                     </h2>
                   </div>
                   <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserProfilePosts.length}</Chip>
@@ -5244,7 +5244,7 @@ export default function Page() {
                     {currentUserProfilePosts.map(renderFeedCard)}
                   </div>
                 ) : (
-                  <p className="text-sm text-[#6c7289]">post your first food drop from feed and it’ll live here as your personal archive.</p>
+                  <p className="text-sm text-[#6c7289]">post your first photo and it’ll live here as your personal archive.</p>
                 )}
               </CardBody>
             </Card>
@@ -5417,7 +5417,7 @@ export default function Page() {
                 ))
               ) : (
                 <div className="rounded-[22px] border border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm text-[#2C1A0E]">
-                  no notifications yet. friend requests, food drops, admin posts, and sunday dumps will show up here.
+                  no notifications yet. friend requests, posts, admin posts, and sunday dumps will show up here.
                 </div>
               )}
             </div>
@@ -5451,7 +5451,7 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="rounded-[22px] bg-white p-4 text-sm text-[#2C1A0E]">
-                    no food drops on this profile yet.
+                    no posts on this profile yet.
                   </div>
                 )}
               </ModalBody>
