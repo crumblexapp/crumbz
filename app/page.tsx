@@ -1920,14 +1920,15 @@ export default function Page() {
 
           if (!serverHasState) {
             void seedAccountsToBackend(nextAccounts).catch(() => undefined);
-            syncSharedState({
-              nextPosts,
-              nextInteractions: nextInteractions,
-              nextDare,
-            });
+            setAccounts(normalizeAccounts(payload.accounts));
+            setPosts([]);
+            setInteractions({});
+            setDare(normalizeDareState(payload.dare));
+            setDareHydrated(true);
+            setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           } else {
             setAccounts(normalizeAccounts(payload.accounts));
-            setPosts(mergePostsPreferLocal(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
+            setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
             setInteractions(normalizeInteractions(payload.interactions));
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
@@ -2143,15 +2144,11 @@ export default function Page() {
 
           if (!serverHasState) {
             const localAccounts = readAccounts();
-            const localPosts = readPosts();
-            const localInteractions = readInteractions();
             void seedAccountsToBackend(localAccounts).catch(() => undefined);
-            syncSharedState({
-              nextPosts: localPosts,
-              nextInteractions: localInteractions,
-              nextDare: readDare(),
-              nextAnnouncements: announcements,
-            });
+            setPosts([]);
+            setInteractions({});
+            setDare(normalizeDareState(payload.dare));
+            setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
             return;
           }
 
