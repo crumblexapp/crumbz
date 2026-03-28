@@ -1551,10 +1551,29 @@ export default function Page() {
     return username === normalizedFriendQuery;
   });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
+  const favoriteActivities = liveProfile.favoriteActivities ?? [];
   const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
   const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
   const profileLikedSpots = favoritePlaceIds
-    .map((placeId) => favoritePlaces.find((place) => place.id === placeId) ?? allFoodSpots.find((place) => place.id === placeId) ?? null)
+    .map(
+      (placeId) =>
+        favoritePlaces.find((place) => place.id === placeId) ??
+        allFoodSpots.find((place) => place.id === placeId) ??
+        (() => {
+          const activity = favoriteActivities.find((item) => item.placeId === placeId) ?? null;
+          if (!activity) return null;
+
+          return {
+            id: activity.placeId,
+            name: activity.placeName,
+            kind: activity.placeKind,
+            lat: activity.lat,
+            lon: activity.lon,
+            address: activity.placeAddress,
+          } satisfies FavoritePlace;
+        })() ??
+        null,
+    )
     .filter((place): place is FavoritePlace => Boolean(place));
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
