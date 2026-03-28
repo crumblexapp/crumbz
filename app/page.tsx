@@ -1057,6 +1057,36 @@ function getSundayKey(date: Date) {
   return copy.toISOString().slice(0, 10);
 }
 
+function isCurrentWeeklyDump(post: AppPost, currentSundayKey: string) {
+  if (post.type !== "weekly-dump") return false;
+  if (post.weekKey === currentSundayKey) return true;
+  return post.id.endsWith(`-${currentSundayKey}`);
+}
+
+function pruneExpiredWeeklyDumps(posts: AppPost[], interactions: InteractionsMap, currentSundayKey: string) {
+  const expiredDumpIds = new Set(
+    posts
+      .filter((post) => post.authorRole === "student" && post.type === "weekly-dump" && !isCurrentWeeklyDump(post, currentSundayKey))
+      .map((post) => post.id),
+  );
+
+  if (!expiredDumpIds.size) {
+    return {
+      posts,
+      interactions,
+      changed: false,
+    };
+  }
+
+  return {
+    posts: posts.filter((post) => !expiredDumpIds.has(post.id)),
+    interactions: Object.fromEntries(
+      Object.entries(interactions).filter(([postId]) => !expiredDumpIds.has(postId)),
+    ),
+    changed: true,
+  };
+}
+
 function getInteractionBucket(interactions: InteractionsMap, postId: string) {
   return interactions[postId] ?? { comments: [], shares: [], likes: [] };
 }
@@ -1459,12 +1489,17 @@ export default function Page() {
   const nowTimestamp = Date.now();
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
+  const today = new Date();
+  const canSubmitWeeklyDumpToday = isSunday(today);
+  const shouldShowSundayDumpFeed = canSubmitWeeklyDumpToday;
+  const currentSundayKey = getSundayKey(today);
   const studentDailyPosts = posts
     .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump")
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const studentWeeklyDumps = posts
     .filter((post) => post.authorRole === "student" && post.type === "weekly-dump")
+    .filter((post) => isCurrentWeeklyDump(post, currentSundayKey))
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()));
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
@@ -1481,11 +1516,7 @@ export default function Page() {
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
-  const today = new Date();
-  const canSubmitWeeklyDumpToday = isSunday(today);
-  const shouldShowSundayDumpFeed = canSubmitWeeklyDumpToday;
   const shouldShowAdminPosts = adminPosts.length > 0;
-  const currentSundayKey = getSundayKey(today);
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -2186,6 +2217,21 @@ export default function Page() {
 
     return () => window.clearTimeout(timeout);
   }, [dare, posts, interactions]);
+
+  useEffect(() => {
+    if (!user.signedIn) return;
+
+    const pruned = pruneExpiredWeeklyDumps(posts, interactions, currentSundayKey);
+    if (!pruned.changed) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPosts(pruned.posts);
+    setInteractions(pruned.interactions);
+    syncSharedState({
+      nextPosts: pruned.posts,
+      nextInteractions: pruned.interactions,
+    });
+  }, [currentSundayKey, interactions, posts, user.signedIn]);
 
   useEffect(() => {
     if (!user.signedIn) return;
