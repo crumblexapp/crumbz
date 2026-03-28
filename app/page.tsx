@@ -1028,11 +1028,6 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
     | null;
 
   if (!response.ok || !data?.ok) {
-    if (response.status === 401) {
-      clearGoogleIdToken();
-      persistUser(defaultUser);
-    }
-
     throw new Error(data?.message ?? "account update failed");
   }
 
@@ -2580,8 +2575,8 @@ export default function Page() {
           persistUser(result.user as StoredUser);
         }
       })
-      .catch(() => {
-        setFavoritePlacesError("saving that spot didn’t stick. try again.");
+      .catch((error) => {
+        setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
       });
   };
 
