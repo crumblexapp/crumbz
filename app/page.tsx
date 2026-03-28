@@ -1897,11 +1897,13 @@ export default function Page() {
     nextInteractions,
     nextDare,
     nextAnnouncements,
+    deletePostId,
   }: {
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
     nextDare?: DareState;
     nextAnnouncements?: AppAnnouncement[];
+    deletePostId?: string;
   }) => {
     if (!ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined)) {
       return;
@@ -1920,6 +1922,7 @@ export default function Page() {
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
         ...(nextDare ? { dare: nextDare } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
+        ...(deletePostId ? { deletePostId } : {}),
       }),
     })
       .then(async (response) => {
@@ -3036,8 +3039,7 @@ export default function Page() {
     setPosts(nextPosts);
     setInteractions(nextInteractions);
     syncSharedState({
-      nextPosts,
-      nextInteractions,
+      deletePostId: postId,
     });
 
     if (editingPostId === postId) {

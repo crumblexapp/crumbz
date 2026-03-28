@@ -273,6 +273,7 @@ export async function POST(request: Request) {
         interactions?: unknown;
         dare?: unknown;
         announcements?: unknown;
+        deletePostId?: string;
       }
     | null;
 
@@ -287,6 +288,29 @@ export async function POST(request: Request) {
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+
+  const deletePostId = body?.deletePostId?.trim() ?? "";
+  if (deletePostId) {
+    if (!identity.isAdmin) {
+      return NextResponse.json({ ok: false, message: "only the admin account can delete posts here." }, { status: 403 });
+    }
+
+    const nextPosts = normalizeObjectArray(stateData?.posts).filter((post) => String(post.id ?? "") !== deletePostId);
+    const currentMeta = splitInteractionsAndAnnouncements(stateData?.interactions);
+    const nextInteractions = { ...currentMeta.interactions };
+    delete nextInteractions[deletePostId];
+
+    updates.posts = sortPosts(nextPosts);
+    updates.interactions = mergeInteractionsAndAnnouncements(
+      nextInteractions,
+      supportsAnnouncements ? stateData?.announcements ?? [] : currentMeta.announcements,
+      currentMeta.dare,
+    );
+
+    if (supportsAnnouncements) {
+      updates.announcements = stateData?.announcements ?? [];
+    }
+  }
 
   if ("posts" in (body ?? {})) {
     updates.posts = identity.isAdmin
