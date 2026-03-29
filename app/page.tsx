@@ -599,6 +599,37 @@ function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, server
   };
 }
 
+function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: StoredUser[]) {
+  const localByEmail = new Map(
+    localAccounts
+      .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", account] as const)
+      .filter(([email]) => Boolean(email)),
+  );
+
+  const mergedAccounts = serverAccounts.map((account) => {
+    const email = account.googleProfile?.email?.toLowerCase() ?? "";
+    const localAccount = localByEmail.get(email);
+    if (!localAccount) return account;
+
+    return {
+      ...account,
+      signedIn: account.signedIn || localAccount.signedIn,
+      profile: {
+        ...account.profile,
+        bio: localAccount.profile.bio || account.profile.bio || "",
+      },
+    };
+  });
+
+  const knownEmails = new Set(mergedAccounts.map((account) => account.googleProfile?.email?.toLowerCase() ?? "").filter(Boolean));
+  const localOnlyAccounts = localAccounts.filter((account) => {
+    const email = account.googleProfile?.email?.toLowerCase() ?? "";
+    return email && !knownEmails.has(email);
+  });
+
+  return [...mergedAccounts, ...localOnlyAccounts];
+}
+
 function removeUserFromInteractions(interactions: InteractionsMap, targetEmail: string, deletedPostIds: Set<string>) {
   const normalizedTargetEmail = targetEmail.toLowerCase();
 
@@ -2041,14 +2072,14 @@ export default function Page() {
 
           if (!serverHasState) {
             void seedAccountsToBackend(nextAccounts).catch(() => undefined);
-            setAccounts(normalizeAccounts(payload.accounts));
+            setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
             setPosts([]);
             setInteractions({});
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           } else {
-            setAccounts(normalizeAccounts(payload.accounts));
+            setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
             setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
             setInteractions(normalizeInteractions(payload.interactions));
             setDare(normalizeDareState(payload.dare));
@@ -2288,7 +2319,7 @@ export default function Page() {
             return;
           }
 
-          setAccounts(normalizeAccounts(payload.accounts));
+          setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current));
           const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
           const shouldPreserveLocalPosts = Date.now() - lastSharedStateMutationAtRef.current < 5000;
           setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
