@@ -5405,19 +5405,15 @@ export default function Page() {
                   </Button>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="w-[8.5rem] shrink-0 space-y-3">
+                <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
+                  <div className="flex justify-start">
                     <Avatar
                       src={user.googleProfile?.picture}
                       name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
                       className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
                     />
-                    <div className="space-y-1">
-                      <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
-                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                    </div>
                   </div>
-                  <div className="min-w-0 flex-[0.95] space-y-5 pt-2">
+                  <div className="min-w-0 pt-2">
                     <div className="grid grid-cols-3 gap-1 text-center">
                       <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
@@ -5440,13 +5436,17 @@ export default function Page() {
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
                       </button>
                     </div>
-
-                    <p className="max-w-[18rem] text-sm text-[#6c7289]">
-                      {profileLikedSpots.length
-                        ? `${profileLikedSpots.length} saved food spots and counting.`
-                        : "start posting and saving spots to build your crumbz profile."}
-                    </p>
                   </div>
+
+                  <div className="space-y-1">
+                    <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
+                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                  </div>
+                  <p className="max-w-[18rem] text-sm text-[#6c7289]">
+                    {profileLikedSpots.length
+                      ? `${profileLikedSpots.length} saved food spots and counting.`
+                      : "start posting and saving spots to build your crumbz profile."}
+                  </p>
                 </div>
               </CardBody>
             </Card>
