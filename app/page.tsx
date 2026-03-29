@@ -1346,6 +1346,8 @@ export default function Page() {
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
+  const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
+  const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
     title: "",
@@ -1527,6 +1529,12 @@ export default function Page() {
     null;
   const studentUserPosts = [...studentDailyPosts, ...studentWeeklyDumps].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserProfilePosts = studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === currentUserEmail);
+  const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
+    .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const selectedOwnPost = selectedOwnPostId
+    ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
+    : null;
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfilePosts = selectedProfileEmail
     ? studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
@@ -1799,7 +1807,9 @@ export default function Page() {
             <p className="font-semibold text-[#2C1A0E]">
               {isSundayDump && isStudentPost ? authorUsername : isStudentPost ? post.authorName : "crumbz"}
             </p>
-            {!isSundayDump ? (
+            {isSundayDump && isStudentPost ? (
+              profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
+            ) : !isSundayDump ? (
               <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                 {isStudentPost ? `post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}` : `${post.type} • ${post.createdAt}`}
               </p>
@@ -5382,18 +5392,49 @@ export default function Page() {
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-              <CardBody className="gap-3 p-5">
+              <CardBody className="gap-5 p-5">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-3">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
-                    <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{user.profile.fullName}</p>
-                    <p className="text-sm text-[#2C1A0E]">@{user.profile.username}</p>
-                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                    <p className="text-sm text-[#2C1A0E]">{favoritePlaceIds.length} favorite food spots</p>
+                  <div className="flex items-start gap-4">
+                    <Avatar
+                      src={user.googleProfile?.picture}
+                      name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
+                      className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                    />
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        {user.profile.fullName}
+                      </p>
+                      <p className="text-base font-semibold text-[#6c7289]">@{user.profile.username}</p>
+                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                    </div>
                   </div>
                   <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
                     log out
                   </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center">
+                    <p className="text-2xl font-semibold text-[#2C1A0E]">{currentUserAllPosts.length}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">posts</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setProfileDrawer("followers")}
+                    className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center"
+                  >
+                    <p className="text-2xl font-semibold text-[#2C1A0E]">{liveProfile.friends.length}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">followers</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProfileDrawer("favorites")}
+                    className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center"
+                  >
+                    <p className="text-2xl font-semibold text-[#2C1A0E]">{profileLikedSpots.length}</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">favorites</p>
+                  </button>
                 </div>
               </CardBody>
             </Card>
@@ -5465,18 +5506,47 @@ export default function Page() {
               <CardBody className="gap-4 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your feed</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      your posts
+                      your archive
                     </h2>
                   </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserProfilePosts.length}</Chip>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserAllPosts.length}</Chip>
                 </div>
 
-                {currentUserProfilePosts.length ? (
-                  <div className="grid gap-4">
-                    {currentUserProfilePosts.map(renderFeedCard)}
-                  </div>
+                {currentUserAllPosts.length ? (
+                  currentUserAllPosts.length >= 3 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {currentUserAllPosts.map((post) => (
+                        <button
+                          key={post.id}
+                          type="button"
+                          onClick={() => setSelectedOwnPostId(post.id)}
+                          className="group relative aspect-square overflow-hidden rounded-[20px] bg-[#FFF7E8]"
+                        >
+                          {post.mediaUrls[0] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={post.mediaUrls[0]} alt={post.title} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
+                          ) : (
+                            <div className="flex h-full w-full items-end bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-3 text-left">
+                              <p className="line-clamp-3 font-[family-name:var(--font-young-serif)] text-[1.3rem] leading-none text-[#2C1A0E]">
+                                {post.type === "weekly-dump" ? post.body || "sunday dump" : post.title}
+                              </p>
+                            </div>
+                          )}
+                          <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent_0%,_rgba(44,26,14,0.68)_100%)] px-3 py-2 text-left">
+                            <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-white">
+                              {post.type === "weekly-dump" ? "sunday dump" : "post"}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {currentUserAllPosts.map(renderFeedCard)}
+                    </div>
+                  )
                 ) : (
                   <p className="text-sm text-[#6c7289]">post your first photo and it’ll live here as your personal archive.</p>
                 )}
@@ -5688,6 +5758,111 @@ export default function Page() {
                     no posts on this profile yet.
                   </div>
                 )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={Boolean(profileDrawer)} onOpenChange={(open) => !open && setProfileDrawer(null)} placement="bottom-center">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                    {profileDrawer === "followers" ? "your followers" : "your favorites"}
+                  </p>
+                  <p className="mt-2 text-sm text-[#6c7289]">
+                    {profileDrawer === "followers"
+                      ? "your crumbz circle lives here."
+                      : "the spots you’ve saved most recently."}
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="pb-6">
+                {profileDrawer === "followers" ? (
+                  liveProfile.friends.length ? (
+                    <div className="grid gap-3">
+                      {liveProfile.friends.map((friendEmail) => {
+                        const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
+                        if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
+
+                        return (
+                          <button
+                            key={friendEmail}
+                            type="button"
+                            onClick={() => {
+                              setProfileDrawer(null);
+                              setSelectedProfileEmail(friendEmail);
+                            }}
+                            className="flex items-center gap-3 rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-left"
+                          >
+                            <Avatar src={friend.googleProfile?.picture} name={friend.profile.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-[#2C1A0E]">{friend.profile.fullName}</p>
+                              <p className="truncate text-sm text-[#6c7289]">@{friend.profile.username}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-[22px] bg-[#FFF7E8] p-4 text-sm text-[#2C1A0E]">
+                      no followers yet.
+                    </div>
+                  )
+                ) : profileLikedSpots.length ? (
+                  <div className="grid gap-3">
+                    {profileLikedSpots.map((place) => (
+                      <button
+                        key={place.id}
+                        type="button"
+                        onClick={() => {
+                          setProfileDrawer(null);
+                          setStudentTab("favorites");
+                          setHighlightedFavoritePlaceId(place.id);
+                          setFavoritePlaces((current) => [place, ...current.filter((item) => item.id !== place.id)].slice(0, 24));
+                        }}
+                        className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-left"
+                      >
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{place.kind}</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{place.name}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[22px] bg-[#FFF7E8] p-4 text-sm text-[#2C1A0E]">
+                    no favorites yet.
+                  </div>
+                )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={Boolean(selectedOwnPost)} onOpenChange={(open) => !open && setSelectedOwnPostId(null)} size="full">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your post</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                    @{user.profile.username}
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
               </ModalBody>
             </>
           )}
