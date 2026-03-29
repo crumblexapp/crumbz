@@ -5531,7 +5531,13 @@ export default function Page() {
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
-                    {liveProfile.bio ? <p className="max-w-[14rem] pt-1 text-sm leading-6 text-[#6c7289]">{liveProfile.bio}</p> : null}
+                    {liveProfile.bio ? (
+                      <div className="max-w-[14rem] overflow-x-auto overflow-y-hidden pt-1 [scrollbar-width:none]">
+                        <p className="whitespace-pre text-sm leading-6 text-[#6c7289] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                          {liveProfile.bio}
+                        </p>
+                      </div>
+                    ) : null}
                     <button type="button" onClick={() => setBioModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
                       <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
