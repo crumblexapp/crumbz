@@ -5532,8 +5532,8 @@ export default function Page() {
                     <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
                     {liveProfile.bio ? (
-                      <div className="max-w-[14rem] overflow-x-auto overflow-y-hidden pt-1 [scrollbar-width:none]">
-                        <p className="whitespace-pre text-sm leading-6 text-[#6c7289] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="max-w-[14rem] overflow-x-auto pt-1 [scrollbar-width:none]">
+                        <p className="whitespace-pre py-1 text-sm leading-6 text-[#6c7289] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                           {liveProfile.bio}
                         </p>
                       </div>
