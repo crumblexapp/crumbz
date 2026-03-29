@@ -2526,6 +2526,8 @@ export default function Page() {
   const addFriend = (friendEmail: string) => {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
     if (user.profile.friends.includes(friendEmail) || user.profile.outgoingFriendRequests.includes(friendEmail)) return;
+    if (!ensureAuthenticatedSession()) return;
+
     void mutateAccountState({
       action: "send_friend_request",
       currentEmail: user.googleProfile?.email ?? "",
@@ -2538,14 +2540,15 @@ export default function Page() {
         }
         setFriendQuery("");
       })
-      .catch(() => {
-        setError("friend request didn’t stick. try again.");
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "friend request didn’t stick. try again.");
       });
   };
 
   const acceptFriendRequest = (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
+    if (!ensureAuthenticatedSession()) return;
 
     void mutateAccountState({
       action: "accept_friend_request",
@@ -2558,14 +2561,15 @@ export default function Page() {
           persistUser(result.user as StoredUser);
         }
       })
-      .catch(() => {
-        setError("accepting that friend request failed. try once more.");
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "accepting that friend request failed. try once more.");
       });
   };
 
   const declineFriendRequest = (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
+    if (!ensureAuthenticatedSession()) return;
 
     void mutateAccountState({
       action: "decline_friend_request",
@@ -2578,14 +2582,15 @@ export default function Page() {
           persistUser(result.user as StoredUser);
         }
       })
-      .catch(() => {
-        setError("declining that request failed. try again.");
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "declining that request failed. try again.");
       });
   };
 
   const removeFriend = (friendEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
+    if (!ensureAuthenticatedSession()) return;
 
     void mutateAccountState({
       action: "remove_friend",
@@ -2598,8 +2603,8 @@ export default function Page() {
           persistUser(result.user as StoredUser);
         }
       })
-      .catch(() => {
-        setError("removing that friend failed. try again.");
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "removing that friend failed. try again.");
       });
   };
 
