@@ -5419,14 +5419,14 @@ export default function Page() {
                   </div>
                   <div className="min-w-0 flex-1 space-y-5 pt-2">
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="flex min-w-0 flex-col items-center">
+                      <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("followers")}
-                        className="flex min-w-0 flex-col items-center rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
@@ -5434,7 +5434,7 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("favorites")}
-                        className="flex min-w-0 flex-col items-center rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
