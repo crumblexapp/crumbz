@@ -5405,8 +5405,8 @@ export default function Page() {
                   </Button>
                 </div>
 
-                <div className="flex items-start gap-4">
-                  <div className="w-[9rem] shrink-0 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-[8.5rem] shrink-0 space-y-3">
                     <Avatar
                       src={user.googleProfile?.picture}
                       name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
@@ -5417,19 +5417,19 @@ export default function Page() {
                       <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1 space-y-4">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div>
+                  <div className="min-w-0 flex-1 space-y-4 pl-1">
+                    <div className="flex flex-wrap items-start gap-3 text-center sm:flex-nowrap">
+                      <div className="min-w-[4.5rem]">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
-                        <p className="mt-1 text-[0.85rem] text-[#6c7289]">posts</p>
+                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
                       </div>
-                      <button type="button" onClick={() => setProfileDrawer("followers")} className="rounded-[18px] px-1 py-1">
+                      <button type="button" onClick={() => setProfileDrawer("followers")} className="min-w-[5.5rem] rounded-[18px] px-1 py-1">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                        <p className="mt-1 text-[0.85rem] text-[#6c7289]">followers</p>
+                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
                       </button>
-                      <button type="button" onClick={() => setProfileDrawer("favorites")} className="rounded-[18px] px-1 py-1">
+                      <button type="button" onClick={() => setProfileDrawer("favorites")} className="min-w-[5.5rem] rounded-[18px] px-1 py-1">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                        <p className="mt-1 text-[0.85rem] text-[#6c7289]">favorites</p>
+                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
                       </button>
                     </div>
 
