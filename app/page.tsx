@@ -5417,23 +5417,31 @@ export default function Page() {
                       <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1 space-y-4 pt-2">
-                    <div className="flex items-start justify-start gap-6 text-center">
-                      <div className="min-w-[4.5rem]">
+                  <div className="min-w-0 flex-1 space-y-5 pt-2">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="flex min-w-0 flex-col items-center">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
                       </div>
-                      <button type="button" onClick={() => setProfileDrawer("followers")} className="min-w-[5.5rem] rounded-[18px] px-1 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDrawer("followers")}
+                        className="flex min-w-0 flex-col items-center rounded-[18px] px-1 py-1 text-center"
+                      >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
                       </button>
-                      <button type="button" onClick={() => setProfileDrawer("favorites")} className="min-w-[5.5rem] rounded-[18px] px-1 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDrawer("favorites")}
+                        className="flex min-w-0 flex-col items-center rounded-[18px] px-1 py-1 text-center"
+                      >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
                       </button>
                     </div>
 
-                    <p className="max-w-[16rem] text-sm text-[#6c7289]">
+                    <p className="max-w-[18rem] text-sm text-[#6c7289]">
                       {profileLikedSpots.length
                         ? `${profileLikedSpots.length} saved food spots and counting.`
                         : "start posting and saving spots to build your crumbz profile."}
