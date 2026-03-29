@@ -5405,7 +5405,7 @@ export default function Page() {
                   </Button>
                 </div>
 
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3">
                   <div className="w-[8.5rem] shrink-0 space-y-3">
                     <Avatar
                       src={user.googleProfile?.picture}
@@ -5417,8 +5417,8 @@ export default function Page() {
                       <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1 space-y-5 pt-2">
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="min-w-0 flex-[0.95] space-y-5 pt-2">
+                    <div className="grid grid-cols-3 gap-1 text-center">
                       <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
