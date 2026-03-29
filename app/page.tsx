@@ -5393,48 +5393,59 @@ export default function Page() {
           <section className="mt-6 space-y-4">
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-5 p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <Avatar
-                      src={user.googleProfile?.picture}
-                      name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
-                      className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
-                    />
-                    <div className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">profile</p>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        {user.profile.fullName}
-                      </p>
-                      <p className="text-base font-semibold text-[#6c7289]">@{user.profile.username}</p>
-                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                    </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                      @{user.profile.username}
+                    </p>
+                    <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
                   </div>
                   <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
                     log out
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center">
-                    <p className="text-2xl font-semibold text-[#2C1A0E]">{currentUserAllPosts.length}</p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">posts</p>
+                <div className="flex items-start gap-4">
+                  <Avatar
+                    src={user.googleProfile?.picture}
+                    name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
+                    className="h-24 w-24 shrink-0 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                  />
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">posts</p>
+                      </div>
+                      <button type="button" onClick={() => setProfileDrawer("followers")} className="rounded-[18px] px-1 py-1">
+                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">followers</p>
+                      </button>
+                      <button type="button" onClick={() => setProfileDrawer("favorites")} className="rounded-[18px] px-1 py-1">
+                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">favorites</p>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
+                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                      <p className="text-sm text-[#6c7289]">
+                        {profileLikedSpots.length
+                          ? `${profileLikedSpots.length} saved food spots and counting.`
+                          : "start posting and saving spots to build your crumbz profile."}
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setProfileDrawer("followers")}
-                    className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center"
-                  >
-                    <p className="text-2xl font-semibold text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">followers</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProfileDrawer("favorites")}
-                    className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-center"
-                  >
-                    <p className="text-2xl font-semibold text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#6c7289]">favorites</p>
-                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={() => setProfileDrawer("followers")}>
+                    open followers
+                  </Button>
+                  <Button radius="full" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => setProfileDrawer("favorites")}>
+                    open favorites
+                  </Button>
                 </div>
               </CardBody>
             </Card>
