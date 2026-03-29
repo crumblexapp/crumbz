@@ -5776,11 +5776,11 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={Boolean(profileDrawer)} onOpenChange={(open) => !open && setProfileDrawer(null)} placement="bottom-center">
-        <ModalContent>
+      <Modal isOpen={Boolean(profileDrawer)} onOpenChange={(open) => !open && setProfileDrawer(null)} size="full" scrollBehavior="inside">
+        <ModalContent className="bg-[#fffaf2]">
           {(onClose) => (
             <>
-              <ModalHeader className="flex items-center justify-between">
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0] bg-[#fffaf2]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
                     {profileDrawer === "followers" ? "your followers" : "your favorites"}
@@ -5795,7 +5795,7 @@ export default function Page() {
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="pb-6">
+              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
                 {profileDrawer === "followers" ? (
                   liveProfile.friends.length ? (
                     <div className="grid gap-3">
