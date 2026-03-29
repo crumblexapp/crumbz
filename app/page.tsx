@@ -5406,46 +5406,39 @@ export default function Page() {
                 </div>
 
                 <div className="flex items-start gap-4">
-                  <Avatar
-                    src={user.googleProfile?.picture}
-                    name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
-                    className="h-24 w-24 shrink-0 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
-                  />
+                  <div className="w-[9rem] shrink-0 space-y-3">
+                    <Avatar
+                      src={user.googleProfile?.picture}
+                      name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
+                      className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                    />
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
+                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                    </div>
+                  </div>
                   <div className="min-w-0 flex-1 space-y-4">
                     <div className="grid grid-cols-3 gap-3 text-center">
                       <div>
-                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
+                        <p className="text-[1.45rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 text-sm text-[#6c7289]">posts</p>
                       </div>
                       <button type="button" onClick={() => setProfileDrawer("followers")} className="rounded-[18px] px-1 py-1">
-                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
+                        <p className="text-[1.45rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
                         <p className="mt-1 text-sm text-[#6c7289]">followers</p>
                       </button>
                       <button type="button" onClick={() => setProfileDrawer("favorites")} className="rounded-[18px] px-1 py-1">
-                        <p className="text-[1.9rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
+                        <p className="text-[1.45rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
                         <p className="mt-1 text-sm text-[#6c7289]">favorites</p>
                       </button>
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
-                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
-                      <p className="text-sm text-[#6c7289]">
-                        {profileLikedSpots.length
-                          ? `${profileLikedSpots.length} saved food spots and counting.`
-                          : "start posting and saving spots to build your crumbz profile."}
-                      </p>
-                    </div>
+                    <p className="text-sm text-[#6c7289]">
+                      {profileLikedSpots.length
+                        ? `${profileLikedSpots.length} saved food spots and counting.`
+                        : "start posting and saving spots to build your crumbz profile."}
+                    </p>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={() => setProfileDrawer("followers")}>
-                    open followers
-                  </Button>
-                  <Button radius="full" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => setProfileDrawer("favorites")}>
-                    open favorites
-                  </Button>
                 </div>
               </CardBody>
             </Card>
