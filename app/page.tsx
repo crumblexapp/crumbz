@@ -1760,8 +1760,10 @@ export default function Page() {
     const isStudentPost = post.authorRole === "student";
     const isSundayDump = post.type === "weekly-dump";
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
+    const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const showPostBody = Boolean(post.body.trim()) && (!isStudentPost || post.body.trim() !== profileMeta);
+    const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
 
     return (
       <Card
@@ -1770,43 +1772,50 @@ export default function Page() {
         className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
         <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
-          <Avatar
-            src={
-              isStudentPost
-                ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
-                : adminProfilePicture
-            }
-            name={isStudentPost ? post.authorName : "C"}
-            className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
-          />
+          {canOpenProfile ? (
+            <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
+              <Avatar
+                src={
+                  isStudentPost
+                    ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
+                    : adminProfilePicture
+                }
+                name={isStudentPost ? post.authorName : "C"}
+                className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
+              />
+            </button>
+          ) : (
+            <Avatar
+              src={
+                isStudentPost
+                  ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
+                  : adminProfilePicture
+              }
+              name={isStudentPost ? post.authorName : "C"}
+              className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
+            />
+          )}
           <div className="flex-1">
-            <p className="font-semibold text-[#2C1A0E]">{isStudentPost ? post.authorName : "crumbz"}</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-              {isStudentPost
-                ? isSundayDump
-                  ? `sunday dump • ${post.createdAt}`
-                  : `post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`
-                : `${post.type} • ${post.createdAt}`}
+            <p className="font-semibold text-[#2C1A0E]">
+              {isSundayDump && isStudentPost ? authorUsername : isStudentPost ? post.authorName : "crumbz"}
             </p>
+            {!isSundayDump ? (
+              <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                {isStudentPost ? `post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}` : `${post.type} • ${post.createdAt}`}
+              </p>
+            ) : null}
           </div>
-          {isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail ? (
-            <Button
-              radius="full"
-              size="sm"
-              variant="flat"
-              className="bg-white text-[#2C1A0E]"
-              onPress={() => setSelectedProfileEmail(post.authorEmail)}
-            >
-              profile
-            </Button>
-          ) : null}
           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
-          <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
-            <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
-            {showPostBody ? <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p> : null}
-          </div>
+          {isSundayDump ? (
+            showPostBody ? <p className="text-base leading-7 text-[#2C1A0E]">{post.body}</p> : null
+          ) : (
+            <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
+              <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+              {showPostBody ? <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p> : null}
+            </div>
+          )}
 
           {post.mediaKind !== "none" ? (
             post.mediaUrls.length ? (
