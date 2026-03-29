@@ -1377,7 +1377,9 @@ export default function Page() {
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const liveAccount =
-    accounts.find((account) => account.googleProfile?.email === user.googleProfile?.email) ?? null;
+    accounts.find(
+      (account) => account.googleProfile?.email?.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
+    ) ?? null;
   const liveProfile = liveAccount?.profile ?? user.profile;
   const needsOnboarding =
     user.signedIn &&
@@ -5453,7 +5455,7 @@ export default function Page() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-[family-name:var(--font-young-serif)] text-[1.85rem] leading-none text-[#2C1A0E]">
-                      @{user.profile.username}
+                      @{liveProfile.username}
                     </p>
                     <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
                   </div>
@@ -5466,7 +5468,7 @@ export default function Page() {
                   <div className="flex justify-start">
                     <Avatar
                       src={user.googleProfile?.picture}
-                      name={user.profile.fullName || user.googleProfile?.name || "crumbz"}
+                      name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
                       className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
                     />
                   </div>
@@ -5496,8 +5498,8 @@ export default function Page() {
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
-                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                    <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
+                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
                     {liveProfile.bio ? <p className="max-w-[14rem] pt-1 text-sm leading-6 text-[#6c7289]">{liveProfile.bio}</p> : null}
                     <button type="button" onClick={() => setBioModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
                       <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
