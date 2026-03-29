@@ -2540,7 +2540,17 @@ export default function Page() {
         setBioModalOpen(false);
       })
       .catch(() => {
-        setBioSaveNotice("bio didn’t save. try once more.");
+        const currentEmail = nextUser.googleProfile?.email?.toLowerCase();
+        const nextAccounts =
+          currentEmail && accountsRef.current.some((account) => account.googleProfile?.email?.toLowerCase() === currentEmail)
+            ? accountsRef.current.map((account) =>
+                account.googleProfile?.email?.toLowerCase() === currentEmail ? nextUser : account,
+              )
+            : [...accountsRef.current, nextUser];
+
+        setAccounts(nextAccounts);
+        persistUser(nextUser);
+        setBioModalOpen(false);
       })
       .finally(() => {
         setIsSavingBio(false);
