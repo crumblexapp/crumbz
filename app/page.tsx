@@ -259,6 +259,7 @@ type StoredUser = {
     fullName: string;
     username: string;
     city: string;
+    bio?: string;
     isStudent: boolean | null;
     schoolName: string;
     friends: string[];
@@ -448,6 +449,7 @@ const defaultUser: StoredUser = {
     fullName: "",
     username: "",
     city: "",
+    bio: "",
     isStudent: null,
     schoolName: "",
     friends: [],
@@ -689,6 +691,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         fullName: typeof candidate.profile?.fullName === "string" ? candidate.profile.fullName : "",
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
+        bio: typeof candidate.profile?.bio === "string" ? candidate.profile.bio : "",
         schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
         friends: Array.isArray(candidate.profile?.friends) ? candidate.profile.friends.filter((item): item is string => typeof item === "string") : [],
         incomingFriendRequests: Array.isArray(candidate.profile?.incomingFriendRequests)
@@ -1303,6 +1306,10 @@ export default function Page() {
   const [city, setCity] = useState<string | null>(null);
   const [isStudent, setIsStudent] = useState<boolean | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  const [bioDraft, setBioDraft] = useState("");
+  const [bioModalOpen, setBioModalOpen] = useState(false);
+  const [bioSaveNotice, setBioSaveNotice] = useState("");
+  const [isSavingBio, setIsSavingBio] = useState(false);
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
@@ -1393,6 +1400,12 @@ export default function Page() {
     ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
     : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
   const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
+
+  useEffect(() => {
+    if (!bioModalOpen) return;
+    setBioDraft((liveProfile.bio ?? "").slice(0, 180));
+    setBioSaveNotice("");
+  }, [bioModalOpen, liveProfile.bio]);
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
@@ -2476,6 +2489,7 @@ export default function Page() {
         fullName: trimmedName,
         username: trimmedUsername,
         city: trimmedCity,
+        bio: user.profile.bio ?? "",
         isStudent: isStudentValue,
         schoolName: isStudentValue ? trimmedSchool : "",
         friends: user.profile.friends,
@@ -2497,6 +2511,39 @@ export default function Page() {
       })
       .catch(() => {
         setError("profile save didn’t stick. try once more.");
+      });
+  };
+
+  const saveProfileBio = () => {
+    const sourceUser = liveAccount ?? user;
+    const nextBio = bioDraft.trim().slice(0, 180);
+    const nextUser = {
+      ...sourceUser,
+      signedIn: true,
+      googleProfile: user.googleProfile ?? sourceUser.googleProfile,
+      profile: {
+        ...sourceUser.profile,
+        bio: nextBio,
+      },
+    };
+
+    setIsSavingBio(true);
+    setBioSaveNotice("");
+
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextUser,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        persistUser((result.user as StoredUser | null) ?? nextUser);
+        setBioModalOpen(false);
+      })
+      .catch(() => {
+        setBioSaveNotice("bio didn’t save. try once more.");
+      })
+      .finally(() => {
+        setIsSavingBio(false);
       });
   };
 
@@ -5395,7 +5442,7 @@ export default function Page() {
               <CardBody className="gap-5 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                    <p className="font-[family-name:var(--font-young-serif)] text-[1.85rem] leading-none text-[#2C1A0E]">
                       @{user.profile.username}
                     </p>
                     <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
@@ -5441,12 +5488,12 @@ export default function Page() {
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-[#2C1A0E]">{user.profile.fullName}</p>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(user.profile.city, user.profile.schoolName)}</p>
+                    {liveProfile.bio ? <p className="max-w-[14rem] pt-1 text-sm leading-6 text-[#6c7289]">{liveProfile.bio}</p> : null}
+                    <button type="button" onClick={() => setBioModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
+                      <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
+                    </button>
                   </div>
-                  <p className="max-w-[18rem] text-sm text-[#6c7289]">
-                    {profileLikedSpots.length
-                      ? `${profileLikedSpots.length} saved food spots and counting.`
-                      : "start posting and saving spots to build your crumbz profile."}
-                  </p>
                 </div>
               </CardBody>
             </Card>
@@ -5852,6 +5899,48 @@ export default function Page() {
                     no favorites yet.
                   </div>
                 )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={bioModalOpen} onOpenChange={setBioModalOpen} placement="center">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">your bio</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">totally optional. keep it under 180 characters.</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-6 pt-5">
+                <Textarea
+                  placeholder="tell people a little about your food taste, vibe, or favorite spots"
+                  value={bioDraft}
+                  maxLength={180}
+                  onValueChange={(value) => {
+                    setBioDraft(value.slice(0, 180));
+                    if (bioSaveNotice) setBioSaveNotice("");
+                  }}
+                  classNames={{ inputWrapper: "rounded-[18px] bg-white shadow-none border border-[#FFF0D0]", input: "text-[#2C1A0E] min-h-[7rem]" }}
+                />
+                <div className="flex items-center justify-between text-sm text-[#6c7289]">
+                  <p>{bioDraft.length}/180</p>
+                  {bioSaveNotice ? <p>{bioSaveNotice}</p> : null}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                    maybe later
+                  </Button>
+                  <Button radius="full" className="bg-[#2C1A0E] text-white" isLoading={isSavingBio} onPress={saveProfileBio}>
+                    save bio
+                  </Button>
+                </div>
               </ModalBody>
             </>
           )}

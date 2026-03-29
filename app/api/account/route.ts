@@ -21,6 +21,7 @@ type StoredUser = {
     fullName: string;
     username: string;
     city: string;
+    bio?: string;
     isStudent: boolean | null;
     schoolName: string;
     friends: string[];
@@ -46,6 +47,7 @@ function normalizeAccount(account: StoredUser) {
     ...account,
     profile: {
       ...account.profile,
+      bio: account.profile.bio ?? "",
       friends: account.profile.friends ?? [],
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],
       outgoingFriendRequests: account.profile.outgoingFriendRequests ?? [],
