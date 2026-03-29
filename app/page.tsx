@@ -5415,7 +5415,7 @@ export default function Page() {
                   </div>
                   <div className="min-w-0 pt-2">
                     <div className="grid grid-cols-3 gap-1 text-center">
-                      <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start">
+                      <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center">
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
                       </div>
