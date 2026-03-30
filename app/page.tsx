@@ -4950,7 +4950,11 @@ export default function Page() {
                     <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Button radius="full" className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]">
+                    <Button
+                      radius="full"
+                      className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
+                      onPress={() => setNotificationsOpen(true)}
+                    >
                       remind me
                     </Button>
                     <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
