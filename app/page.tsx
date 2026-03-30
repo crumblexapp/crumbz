@@ -621,13 +621,7 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
     };
   });
 
-  const knownEmails = new Set(mergedAccounts.map((account) => account.googleProfile?.email?.toLowerCase() ?? "").filter(Boolean));
-  const localOnlyAccounts = localAccounts.filter((account) => {
-    const email = account.googleProfile?.email?.toLowerCase() ?? "";
-    return email && !knownEmails.has(email);
-  });
-
-  return [...mergedAccounts, ...localOnlyAccounts];
+  return mergedAccounts;
 }
 
 function removeUserFromInteractions(interactions: InteractionsMap, targetEmail: string, deletedPostIds: Set<string>) {
