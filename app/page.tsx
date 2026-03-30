@@ -3210,6 +3210,10 @@ export default function Page() {
   };
 
   const deleteUserFromAdmin = (targetEmail: string) => {
+    if (!ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the user again.")) {
+      return;
+    }
+
     if (typeof window !== "undefined") {
       const confirmed = window.confirm("delete this user from the backend and wipe their posts, likes, comments, shares, and friend links?");
       if (!confirmed) return;
@@ -3230,8 +3234,8 @@ export default function Page() {
         setInteractions((current) => removeUserFromInteractions(current, targetEmail, deletedPostIds));
         setAdminActionNotice("user deleted from backend. if they come back with google, they’ll need to sign up again.");
       })
-      .catch(() => {
-        setAdminActionNotice("that delete didn’t stick. try again.");
+      .catch((error: unknown) => {
+        setAdminActionNotice(error instanceof Error ? error.message : "that delete didn’t stick. try again.");
       });
   };
 
