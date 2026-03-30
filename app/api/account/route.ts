@@ -202,6 +202,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "you can only update your own account." }, { status: 403 });
     }
 
+    const normalizedUsername = account.profile.username.trim().toLowerCase();
+    if (normalizedUsername) {
+      const usernameOwner = accounts.find(
+        (item) => item.profile.username.trim().toLowerCase() === normalizedUsername && getEmail(item) !== email,
+      );
+
+      if (usernameOwner) {
+        return NextResponse.json({ ok: false, message: "that username is already taken. pick another one." }, { status: 409 });
+      }
+
+      account.profile.username = normalizedUsername;
+    }
+
     nextAccounts = [...accounts.filter((item) => getEmail(item) !== email), account];
     nextUser = account;
   }

@@ -1512,6 +1512,13 @@ export default function Page() {
   const userManagementRows = [...accounts]
     .filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL)
     .sort((a, b) => (b.signedIn ? 1 : 0) - (a.signedIn ? 1 : 0));
+  const duplicateUsernames = userManagementRows.reduce<Record<string, number>>((acc, account) => {
+    const username = account.profile.username.trim().toLowerCase();
+    if (!username) return acc;
+    acc[username] = (acc[username] ?? 0) + 1;
+    return acc;
+  }, {});
+  const duplicateUsernameCount = Object.values(duplicateUsernames).filter((count) => count > 1).length;
   const accountByEmail = new Map(
     accounts
       .filter((account) => account.googleProfile?.email)
@@ -4654,7 +4661,10 @@ export default function Page() {
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">user management</p>
                           <p className="mt-1 text-sm text-[#2C1A0E]">who signed up, where they’re from, and whether they’re active right now.</p>
                         </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{userManagementRows.length} users</Chip>
+                        <div className="flex items-center gap-2">
+                          {duplicateUsernameCount ? <Chip className="bg-[#FFE1D6] text-[#B3261E]">{duplicateUsernameCount} username duplicate{duplicateUsernameCount === 1 ? "" : "s"}</Chip> : null}
+                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{userManagementRows.length} users</Chip>
+                        </div>
                       </div>
                       <div className="grid gap-2">
                         {userManagementRows.length ? (
@@ -4667,6 +4677,9 @@ export default function Page() {
                                 </p>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
+                                {account.profile.username && duplicateUsernames[account.profile.username.trim().toLowerCase()] > 1 ? (
+                                  <Chip className="bg-[#FFE1D6] text-[#B3261E]">duplicate username</Chip>
+                                ) : null}
                                 <Chip className="bg-white text-[#2C1A0E]">{account.signedIn ? "active" : "saved"}</Chip>
                                 <Button radius="full" color="danger" variant="flat" className="bg-white text-[#B3261E]" onPress={() => deleteUserFromAdmin(account.googleProfile?.email ?? "")}>
                                   delete
