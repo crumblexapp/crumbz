@@ -1335,6 +1335,9 @@ export default function Page() {
   const [bioModalOpen, setBioModalOpen] = useState(false);
   const [bioSaveNotice, setBioSaveNotice] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
+  const [profileQrOpen, setProfileQrOpen] = useState(false);
+  const [profileShareUrl, setProfileShareUrl] = useState("");
+  const [profileShareNotice, setProfileShareNotice] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -1434,6 +1437,21 @@ export default function Page() {
     setBioDraft((liveProfile.bio ?? "").slice(0, 180));
     setBioSaveNotice("");
   }, [bioModalOpen, liveProfile.bio]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !liveProfile.username) return;
+    setProfileShareUrl(`${window.location.origin}/?profile=${encodeURIComponent(liveProfile.username.trim().toLowerCase())}`);
+  }, [liveProfile.username]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user.signedIn || !accounts.length) return;
+    const usernameParam = new URLSearchParams(window.location.search).get("profile")?.trim().toLowerCase();
+    if (!usernameParam) return;
+
+    const matchedAccount = accounts.find((account) => account.profile.username.trim().toLowerCase() === usernameParam);
+    if (!matchedAccount?.googleProfile?.email) return;
+    setSelectedProfileEmail(matchedAccount.googleProfile.email);
+  }, [accounts, user.signedIn]);
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = adminAccount?.googleProfile?.picture;
@@ -1587,6 +1605,14 @@ export default function Page() {
   const selectedProfilePosts = selectedProfileEmail
     ? studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
     : [];
+  const selectedProfileEmailLower = selectedProfileEmail?.toLowerCase() ?? "";
+  const selectedProfileIsOwn = Boolean(selectedProfileEmailLower && selectedProfileEmailLower === currentUserEmail);
+  const selectedProfileIsFriend = Boolean(selectedProfileEmailLower && liveProfile.friends.includes(selectedProfileEmailLower));
+  const selectedProfileRequestPending = Boolean(selectedProfileEmailLower && liveProfile.outgoingFriendRequests.includes(selectedProfileEmailLower));
+  const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && liveProfile.incomingFriendRequests.includes(selectedProfileEmailLower));
+  const profileQrImageUrl = profileShareUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=24&data=${encodeURIComponent(profileShareUrl)}`
+    : "";
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -2590,6 +2616,51 @@ export default function Page() {
       .finally(() => {
         setIsSavingBio(false);
       });
+  };
+
+  const copyProfileLink = async () => {
+    if (!profileShareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(profileShareUrl);
+      setProfileShareNotice("profile link copied.");
+    } catch {
+      window.prompt("copy your profile link", profileShareUrl);
+      setProfileShareNotice("copy your profile link from the prompt.");
+    }
+  };
+
+  const shareProfile = async () => {
+    if (!profileShareUrl) return;
+
+    const sharePayload = {
+      title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
+      text: `scan or open ${liveProfile.username}'s crumbz profile`,
+      url: profileShareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(sharePayload);
+        setProfileShareNotice("share sheet opened.");
+        return;
+      }
+    } catch {
+      setProfileShareNotice("sharing didn’t go through. try the copy link button.");
+      return;
+    }
+
+    await copyProfileLink();
+  };
+
+  const closeSelectedProfile = () => {
+    setSelectedProfileEmail(null);
+
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("profile")) return;
+    url.searchParams.delete("profile");
+    window.history.replaceState({}, "", url.toString());
   };
 
   const signOut = () => {
@@ -5582,6 +5653,17 @@ export default function Page() {
                       <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileQrOpen(true);
+                        setProfileShareNotice("");
+                      }}
+                      className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]"
+                    >
+                      <span>share profile</span>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">qr</span>
+                    </button>
                   </div>
                 </div>
               </CardBody>
@@ -5877,7 +5959,7 @@ export default function Page() {
         </div>
       ) : null}
 
-      <Modal isOpen={Boolean(selectedProfileEmail && selectedProfileAccount)} onOpenChange={(open) => !open && setSelectedProfileEmail(null)} size="full">
+      <Modal isOpen={Boolean(selectedProfileEmail && selectedProfileAccount)} onOpenChange={(open) => !open && closeSelectedProfile()} size="full">
         <ModalContent>
           {(onClose) => (
             <>
@@ -5892,11 +5974,36 @@ export default function Page() {
                     {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
                   </p>
                 </div>
-                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                <Button
+                  radius="full"
+                  variant="light"
+                  className="text-[#2C1A0E]"
+                  onPress={() => {
+                    closeSelectedProfile();
+                    onClose();
+                  }}
+                >
                   close
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+                {!selectedProfileIsOwn ? (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {selectedProfileIsFriend ? (
+                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">already in your circle</Chip>
+                    ) : selectedProfileIncomingRequest ? (
+                      <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => selectedProfileEmail && acceptFriendRequest(selectedProfileEmail)}>
+                        accept request
+                      </Button>
+                    ) : selectedProfileRequestPending ? (
+                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">request pending</Chip>
+                    ) : (
+                      <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => selectedProfileEmail && addFriend(selectedProfileEmail)}>
+                        add to circle
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
                 {selectedProfilePosts.length ? (
                   <div className="space-y-4">
                     {selectedProfilePosts.map(renderFeedCard)}
@@ -5988,6 +6095,55 @@ export default function Page() {
                     no favorites yet.
                   </div>
                 )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={profileQrOpen} onOpenChange={setProfileQrOpen} placement="center">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">share your profile</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">scan the qr or send the link to open your crumbz profile.</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="items-center gap-4 bg-[#fffaf2] pb-6 pt-5">
+                <div className="w-full rounded-[28px] border border-[#FFF0D0] bg-white p-5 text-center shadow-[0_18px_40px_rgba(254,138,1,0.08)]">
+                  <div className="mx-auto flex w-fit items-center gap-3 rounded-full bg-[#FFF7E8] px-4 py-2">
+                    <Avatar src={user.googleProfile?.picture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-[#2C1A0E]">{liveProfile.fullName || "crumbz user"}</p>
+                      <p className="text-sm text-[#6c7289]">@{liveProfile.username}</p>
+                    </div>
+                  </div>
+                  {profileQrImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profileQrImageUrl} alt={`QR code for @${liveProfile.username}`} className="mx-auto mt-4 h-64 w-64 rounded-[24px] border border-[#FFF0D0] bg-white p-3" />
+                  ) : (
+                    <div className="mx-auto mt-4 flex h-64 w-64 items-center justify-center rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] text-sm text-[#6c7289]">
+                      qr code loading...
+                    </div>
+                  )}
+                  <div className="mt-4 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
+                    <p className="truncate">{profileShareUrl}</p>
+                  </div>
+                </div>
+                {profileShareNotice ? <p className="text-sm text-[#2C1A0E]">{profileShareNotice}</p> : null}
+                <div className="flex w-full items-center justify-end gap-2">
+                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={copyProfileLink}>
+                    copy link
+                  </Button>
+                  <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={shareProfile}>
+                    share
+                  </Button>
+                </div>
               </ModalBody>
             </>
           )}
