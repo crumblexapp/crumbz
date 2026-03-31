@@ -5661,8 +5661,8 @@ export default function Page() {
                       }}
                       className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]"
                     >
-                      <span>share profile</span>
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">qr</span>
+                      <span>share</span>
+                      <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">↗</span>
                     </button>
                   </div>
                 </div>
