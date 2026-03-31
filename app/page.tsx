@@ -1335,6 +1335,7 @@ export default function Page() {
   const [bioModalOpen, setBioModalOpen] = useState(false);
   const [bioSaveNotice, setBioSaveNotice] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
+  const [socialActionNotice, setSocialActionNotice] = useState("");
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
@@ -2637,6 +2638,7 @@ export default function Page() {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
     if (user.profile.friends.includes(friendEmail) || user.profile.outgoingFriendRequests.includes(friendEmail)) return;
     if (!ensureAuthenticatedSession()) return;
+    setSocialActionNotice("");
 
     void mutateAccountState({
       action: "send_friend_request",
@@ -2649,9 +2651,12 @@ export default function Page() {
           persistUser(result.user as StoredUser);
         }
         setFriendQuery("");
+        setSocialActionNotice("friend request sent.");
       })
       .catch((error) => {
-        setError(error instanceof Error ? error.message : "friend request didn’t stick. try again.");
+        const message = error instanceof Error ? error.message : "friend request didn’t stick. try again.";
+        setError(message);
+        setSocialActionNotice(message);
       });
   };
 
@@ -2659,6 +2664,7 @@ export default function Page() {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
     if (!ensureAuthenticatedSession()) return;
+    setSocialActionNotice("");
 
     void mutateAccountState({
       action: "accept_friend_request",
@@ -2670,9 +2676,12 @@ export default function Page() {
         if (result.user) {
           persistUser(result.user as StoredUser);
         }
+        setSocialActionNotice("friend added to your circle.");
       })
       .catch((error) => {
-        setError(error instanceof Error ? error.message : "accepting that friend request failed. try once more.");
+        const message = error instanceof Error ? error.message : "accepting that friend request failed. try once more.";
+        setError(message);
+        setSocialActionNotice(message);
       });
   };
 
@@ -2680,6 +2689,7 @@ export default function Page() {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
     if (!ensureAuthenticatedSession()) return;
+    setSocialActionNotice("");
 
     void mutateAccountState({
       action: "decline_friend_request",
@@ -2691,9 +2701,12 @@ export default function Page() {
         if (result.user) {
           persistUser(result.user as StoredUser);
         }
+        setSocialActionNotice("friend request declined.");
       })
       .catch((error) => {
-        setError(error instanceof Error ? error.message : "declining that request failed. try again.");
+        const message = error instanceof Error ? error.message : "declining that request failed. try again.";
+        setError(message);
+        setSocialActionNotice(message);
       });
   };
 
@@ -2701,6 +2714,7 @@ export default function Page() {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
     if (!ensureAuthenticatedSession()) return;
+    setSocialActionNotice("");
 
     void mutateAccountState({
       action: "remove_friend",
@@ -2712,9 +2726,12 @@ export default function Page() {
         if (result.user) {
           persistUser(result.user as StoredUser);
         }
+        setSocialActionNotice("friend removed.");
       })
       .catch((error) => {
-        setError(error instanceof Error ? error.message : "removing that friend failed. try again.");
+        const message = error instanceof Error ? error.message : "removing that friend failed. try again.";
+        setError(message);
+        setSocialActionNotice(message);
       });
   };
 
@@ -5387,12 +5404,17 @@ export default function Page() {
 
         {studentTab === "social" ? (
           <section className="mt-6 space-y-4">
+            {socialActionNotice ? (
+              <Card className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_12px_30px_rgba(254,138,1,0.08)]">
+                <CardBody className="p-4 text-sm text-[#2C1A0E]">{socialActionNotice}</CardBody>
+              </Card>
+            ) : null}
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend requests</p>
                 {liveProfile.incomingFriendRequests.length ? (
                   liveProfile.incomingFriendRequests.map((requestEmail) => {
-                    const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
+                    const requester = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
                     if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
                     return (
@@ -5465,7 +5487,7 @@ export default function Page() {
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your people</p>
                 {liveProfile.friends.length ? (
                   liveProfile.friends.map((friendEmail) => {
-                    const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
+                    const friend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === friendEmail.toLowerCase());
                     if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
                     return (
