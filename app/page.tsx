@@ -3300,12 +3300,16 @@ export default function Page() {
       weekKey: "",
     };
 
+    const nextPosts = editingPostId
+      ? posts.map((post) => (post.id === editingPostId ? nextPost : post))
+      : [nextPost, ...posts];
+
     lastSharedStateMutationAtRef.current = Date.now();
-    setPosts((current) =>
-      editingPostId
-        ? current.map((post) => (post.id === editingPostId ? nextPost : post))
-        : [nextPost, ...current],
-    );
+    setPosts(nextPosts);
+    syncSharedState({
+      nextPosts,
+      nextInteractions: interactions,
+    });
     resetComposer();
   };
 
