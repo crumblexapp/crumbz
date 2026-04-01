@@ -100,27 +100,53 @@ async function writeAccounts(accounts: StoredUser[]) {
 }
 
 async function readSharedState() {
-  return supabaseServer
+  const primary = await supabaseServer
     .from("app_state")
     .select("posts, interactions, announcements")
     .eq("id", STATE_ROW_ID)
     .maybeSingle();
+
+  if (!primary.error) {
+    return {
+      data: primary.data,
+      error: null,
+      supportsAnnouncements: true,
+    };
+  }
+
+  const fallback = await supabaseServer
+    .from("app_state")
+    .select("posts, interactions")
+    .eq("id", STATE_ROW_ID)
+    .maybeSingle();
+
+  return {
+    data: fallback.data,
+    error: fallback.error,
+    supportsAnnouncements: false,
+  };
 }
 
 async function writeSharedState(payload: {
   posts: unknown;
   interactions: unknown;
   announcements: unknown;
+  supportsAnnouncements: boolean;
 }) {
+  const nextRow: Record<string, unknown> = {
+    id: STATE_ROW_ID,
+    posts: payload.posts,
+    interactions: payload.interactions,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (payload.supportsAnnouncements) {
+    nextRow.announcements = payload.announcements;
+  }
+
   return supabaseServer
     .from("app_state")
-    .upsert({
-      id: STATE_ROW_ID,
-      posts: payload.posts,
-      interactions: payload.interactions,
-      announcements: payload.announcements,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "id" });
+    .upsert(nextRow, { onConflict: "id" });
 }
 
 function getMediaPath(url: string) {
@@ -485,12 +511,13 @@ export async function POST(request: Request) {
 
     const savedAccounts = Array.isArray(savedData?.accounts) ? (savedData.accounts as StoredUser[]).map(normalizeAccount) : nextAccounts;
 
-    const { data: sharedState } = await readSharedState().catch(() => ({ data: null }));
-    const posts = Array.isArray(sharedState?.posts) ? (sharedState.posts as Array<Record<string, unknown>>) : [];
+    const { data: sharedState, supportsAnnouncements } = await readSharedState().catch(() => ({ data: null, supportsAnnouncements: false }));
+    const sharedStateRow = sharedState as { posts?: unknown; interactions?: unknown; announcements?: unknown } | null;
+    const posts = Array.isArray(sharedStateRow?.posts) ? (sharedStateRow.posts as Array<Record<string, unknown>>) : [];
     const deletedPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() === targetEmail);
     const deletedPostIds = new Set(deletedPosts.map((post) => String(post.id ?? "")));
     const nextPosts = posts.filter((post) => String(post.authorEmail ?? "").toLowerCase() !== targetEmail);
-    const { interactions: currentInteractions, dare } = splitDareFromInteractions(sharedState?.interactions);
+    const { interactions: currentInteractions, dare } = splitDareFromInteractions(sharedStateRow?.interactions);
 
     const nextInteractions = Object.fromEntries(
       Object.entries(currentInteractions)
@@ -543,7 +570,8 @@ export async function POST(request: Request) {
             }
           : {},
       ),
-      announcements: sharedState?.announcements ?? [],
+      announcements: sharedStateRow?.announcements ?? [],
+      supportsAnnouncements,
     }).catch(() => undefined);
 
     const mediaPaths = deletedPosts
