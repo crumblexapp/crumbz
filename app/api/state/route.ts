@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
-import { sendWebPushNotification, webPushEnabled } from "@/lib/web-push";
+import { sendPushToEmails } from "@/lib/push-notifications";
+import { webPushEnabled } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,11 +13,6 @@ const ANNOUNCEMENTS_META_KEY = "__announcements";
 const DARE_META_KEY = "__dare";
 
 type JsonRecord = Record<string, unknown>;
-type PushSubscriptionRow = {
-  endpoint: string;
-  subscription: unknown;
-};
-
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.toLowerCase() : "";
 }
@@ -192,34 +188,93 @@ async function syncPlaceReviewTables(rawPosts: unknown) {
 }
 
 async function sendAnnouncementPush(announcement: { id: string; title: string; body: string }) {
-  if (!webPushEnabled) return null;
+  if (!webPushEnabled) return;
 
-  const { data, error } = await supabaseServer.from("push_subscriptions").select("endpoint, subscription");
-  if (error) return error;
+  const { data, error } = await supabaseServer.from("push_subscriptions").select("author_email");
+  if (error) return;
 
-  const expiredEndpoints: string[] = [];
-  const rows = (data ?? []) as PushSubscriptionRow[];
+  await sendPushToEmails(
+    (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean),
+    {
+      title: announcement.title,
+      body: announcement.body,
+      url: "/",
+      tag: announcement.id,
+    },
+  );
+}
 
-  await Promise.all(
-    rows.map(async (row) => {
-      const result = await sendWebPushNotification(row.subscription as never, {
-        title: announcement.title,
-        body: announcement.body,
-        url: "/",
-        tag: announcement.id,
-      });
+async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, accountsRaw: unknown) {
+  if (!webPushEnabled) return;
 
-      if (!result.ok && result.reason === "expired") {
-        expiredEndpoints.push(row.endpoint);
-      }
-    }),
+  const previousIds = new Set(
+    normalizeObjectArray(previousPosts)
+      .map((post) => String(post.id ?? ""))
+      .filter(Boolean),
+  );
+  const accounts = normalizeObjectArray(accountsRaw);
+  const accountByEmail = new Map(
+    accounts
+      .map((account) => [normalizeEmail(account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord).email : ""), account] as const)
+      .filter(([email]) => Boolean(email)),
   );
 
-  if (expiredEndpoints.length) {
-    await supabaseServer.from("push_subscriptions").delete().in("endpoint", expiredEndpoints);
-  }
+  const newStudentPosts = normalizeObjectArray(rawPosts).filter((post) => {
+    const postId = String(post.id ?? "");
+    return Boolean(postId) && !previousIds.has(postId) && post.authorRole === "student" && post.type !== "weekly-dump";
+  });
 
-  return null;
+  await Promise.all(
+    newStudentPosts.map(async (post) => {
+      const authorEmail = normalizeEmail(post.authorEmail);
+      if (!authorEmail) return;
+      const authorAccount = accountByEmail.get(authorEmail);
+      const friendEmails = Array.isArray(authorAccount?.profile && typeof authorAccount.profile === "object" ? (authorAccount.profile as JsonRecord).friends : [])
+        ? ((authorAccount?.profile as { friends?: string[] }).friends ?? []).map((email) => email.toLowerCase())
+        : [];
+      if (!friendEmails.length) return;
+
+      await sendPushToEmails(friendEmails, {
+        title: `${normalizeText(post.authorName) || "your friend"} posted`,
+        body: normalizeText(post.taggedPlaceName)
+          ? `${normalizeText(post.taggedPlaceName)} is on their feed now.`
+          : "something new landed in crumbz.",
+        url: "/",
+        tag: `post-${String(post.id)}`,
+      });
+    }),
+  );
+}
+
+async function sendAdminPostPush(rawPosts: unknown, previousPosts: unknown) {
+  if (!webPushEnabled) return;
+
+  const previousIds = new Set(
+    normalizeObjectArray(previousPosts)
+      .map((post) => String(post.id ?? ""))
+      .filter(Boolean),
+  );
+  const newAdminPosts = normalizeObjectArray(rawPosts).filter((post) => {
+    const postId = String(post.id ?? "");
+    return Boolean(postId) && !previousIds.has(postId) && post.authorRole !== "student";
+  });
+
+  if (!newAdminPosts.length) return;
+
+  const { data, error } = await supabaseServer.from("push_subscriptions").select("author_email");
+  if (error) return;
+  const emails = (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean);
+
+  await Promise.all(
+    newAdminPosts.map((post) =>
+      sendPushToEmails(emails, {
+        title: `crumbz posted ${normalizeText(post.title) || "something new"}`,
+        body: normalizeText(post.body) || "open crumbz to see the new drop.",
+        url: "/",
+        tag: `admin-post-${String(post.id)}`,
+      }),
+    ),
+  );
 }
 
 function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
@@ -409,7 +464,9 @@ export async function POST(request: Request) {
     | null;
 
   const { data: currentData, error: currentError, supportsAnnouncements } = await readAppState();
+  const { data: currentAccountData } = await readAccountState();
   const stateData = currentData as { accounts?: unknown; posts?: unknown; interactions?: unknown; announcements?: unknown } | null;
+  const accountState = currentAccountData as { accounts?: unknown } | null;
   const fallbackMeta = splitInteractionsAndAnnouncements(stateData?.interactions);
 
   if (currentError) {
@@ -525,6 +582,14 @@ export async function POST(request: Request) {
       title: String(newestAnnouncement.title ?? "crumbz"),
       body: String(newestAnnouncement.body ?? "something new dropped."),
     });
+  }
+
+  if ("posts" in updates && !identity.isAdmin) {
+    await sendFriendPostPush(nextRow.posts, stateData?.posts, accountState?.accounts ?? stateData?.accounts ?? []);
+  }
+
+  if ("posts" in updates && identity.isAdmin) {
+    await sendAdminPostPush(nextRow.posts, stateData?.posts);
   }
 
   return NextResponse.json({ ok: true });

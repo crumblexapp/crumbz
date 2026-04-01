@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
+import { sendPushToEmails } from "@/lib/push-notifications";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -180,6 +181,10 @@ function mergeDareIntoInteractions(rawInteractions: unknown, rawDare: unknown) {
   };
 }
 
+function getPublicName(account: StoredUser | null) {
+  return account?.profile.fullName || account?.profile.username || account?.googleProfile?.name || "someone";
+}
+
 export async function POST(request: Request) {
   const { error: authError, identity } = await requireVerifiedIdentity(request);
   if (authError || !identity) {
@@ -216,6 +221,9 @@ export async function POST(request: Request) {
 
   let nextAccounts = [...accounts];
   let nextUser: StoredUser | null = null;
+  let pendingPush:
+    | { emails: string[]; title: string; body: string; tag: string }
+    | null = null;
 
   if (action === "upsert_account") {
     const account = body?.account ? normalizeAccount(body.account) : null;
@@ -288,6 +296,14 @@ export async function POST(request: Request) {
 
       return account;
     });
+
+    const sender = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    pendingPush = {
+      emails: [targetEmail],
+      title: `${getPublicName(sender)} sent you a friend request`,
+      body: "open crumbz to accept or decline it.",
+      tag: `friend-request-${currentEmail}-${targetEmail}`,
+    };
   }
 
   if (action === "accept_friend_request") {
@@ -473,6 +489,22 @@ export async function POST(request: Request) {
       nextUser = next;
       return next;
     });
+
+    const actor = nextAccounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const actorFriends = actor?.profile.friends ?? [];
+    const addedFavoritePlace =
+      body?.favoritePlace && typeof body.favoritePlace === "object" && typeof body.favoritePlace.name === "string"
+        ? body.favoritePlace.name
+        : "a new food spot";
+
+    if (actorFriends.length && addedFavoritePlace) {
+      pendingPush = {
+        emails: actorFriends,
+        title: `${getPublicName(actor)} saved ${addedFavoritePlace}`,
+        body: "check the map to see what they added.",
+        tag: `favorite-${currentEmail}-${Date.now()}`,
+      };
+    }
   }
 
   if (action === "delete_account") {
@@ -598,6 +630,15 @@ export async function POST(request: Request) {
   const savedAccounts = Array.isArray(savedData?.accounts) ? (savedData.accounts as StoredUser[]).map(normalizeAccount) : nextAccounts;
   if (action !== "upsert_account" && nextUser) {
     nextUser = savedAccounts.find((account) => getEmail(account) === getEmail(nextUser as StoredUser)) ?? nextUser;
+  }
+
+  if (pendingPush) {
+    await sendPushToEmails(pendingPush.emails, {
+      title: pendingPush.title,
+      body: pendingPush.body,
+      url: "/",
+      tag: pendingPush.tag,
+    });
   }
 
   return NextResponse.json({
