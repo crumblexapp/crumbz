@@ -1653,6 +1653,7 @@ export default function Page() {
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
   const adminStoryPosts = adminPosts.filter((post) => post.type === "story").slice(0, 8);
+  const adminStorySequence = [...adminStoryPosts].reverse();
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
@@ -1670,9 +1671,10 @@ export default function Page() {
   const selectedOwnPost = selectedOwnPostId
     ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
     : null;
-  const selectedStoryPost = selectedStoryPostId
-    ? adminStoryPosts.find((post) => post.id === selectedStoryPostId) ?? null
-    : null;
+  const selectedStoryPostIndex = selectedStoryPostId
+    ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
+    : -1;
+  const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfilePosts = selectedProfileEmail
     ? studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
@@ -1788,16 +1790,18 @@ export default function Page() {
       )
       .filter((item): item is { id: string; title: string; detail: string; city: string; place: FavoritePlace } => Boolean(item)),
   ].slice(0, 4);
-  const storyRailItems = adminStoryPosts.length
-    ? adminStoryPosts.map((post) => ({
-        id: post.id,
-        postId: post.id,
-        label: "crumbz",
-        detail: post.title,
-        picture: adminProfilePicture,
-        ring: "#F5A623",
-        badge: "live",
-      }))
+  const storyRailItems = adminStorySequence.length
+    ? [
+        {
+          id: "crumbz-story-rail",
+          postId: adminStorySequence[0]?.id ?? null,
+          label: "crumbz",
+          detail: adminStorySequence.length > 1 ? `${adminStorySequence.length} stories` : adminStorySequence[0]?.title ?? "live",
+          picture: adminProfilePicture,
+          ring: "#F5A623",
+          badge: "live",
+        },
+      ]
     : [
         {
           id: "crumbz-placeholder",
@@ -2456,6 +2460,22 @@ export default function Page() {
 
     return () => window.clearInterval(interval);
   }, [announcements, user.signedIn]);
+
+  useEffect(() => {
+    if (!selectedStoryPost || selectedStoryPost.mediaKind === "video") return;
+
+    const timeout = window.setTimeout(() => {
+      const nextIndex = selectedStoryPostIndex + 1;
+      if (nextIndex < 0 || nextIndex >= adminStorySequence.length) {
+        setSelectedStoryPostId(null);
+        return;
+      }
+
+      setSelectedStoryPostId(adminStorySequence[nextIndex].id);
+    }, 5000);
+
+    return () => window.clearTimeout(timeout);
+  }, [adminStorySequence, selectedStoryPost, selectedStoryPostIndex]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -3268,6 +3288,23 @@ export default function Page() {
       return [place, ...next].slice(0, 24);
     });
     setStudentTab("favorites");
+  };
+
+  const openStorySequence = (postId?: string | null) => {
+    if (!adminStorySequence.length) return;
+    setSelectedStoryPostId(postId && adminStorySequence.some((post) => post.id === postId) ? postId : adminStorySequence[0].id);
+  };
+
+  const showAdjacentStory = (direction: -1 | 1) => {
+    if (!adminStorySequence.length || selectedStoryPostIndex < 0) return;
+    const nextIndex = selectedStoryPostIndex + direction;
+
+    if (nextIndex < 0 || nextIndex >= adminStorySequence.length) {
+      setSelectedStoryPostId(null);
+      return;
+    }
+
+    setSelectedStoryPostId(adminStorySequence[nextIndex].id);
   };
 
   const resetComposer = (notice = "") => {
@@ -5249,7 +5286,7 @@ export default function Page() {
                     key={item.id}
                     type="button"
                     disabled={!item.postId}
-                    onClick={() => item.postId && setSelectedStoryPostId(item.postId)}
+                    onClick={() => openStorySequence(item.postId)}
                     className="min-w-[82px] text-center disabled:cursor-default"
                   >
                     <div
@@ -6427,6 +6464,18 @@ export default function Page() {
             <ModalBody className="flex min-h-[100dvh] items-center justify-center p-0">
               {selectedStoryPost ? (
                 <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-[#140d08]">
+                  <button
+                    type="button"
+                    aria-label="previous story"
+                    className="absolute inset-y-0 left-0 z-10 w-1/3"
+                    onClick={() => showAdjacentStory(-1)}
+                  />
+                  <button
+                    type="button"
+                    aria-label="next story"
+                    className="absolute inset-y-0 right-0 z-10 w-1/3"
+                    onClick={() => showAdjacentStory(1)}
+                  />
                   {selectedStoryPost.mediaKind === "video" && selectedStoryPost.mediaUrls[0] ? (
                     <video
                       src={selectedStoryPost.mediaUrls[0]}
@@ -6434,23 +6483,39 @@ export default function Page() {
                       autoPlay
                       playsInline
                       controls
+                      onEnded={() => showAdjacentStory(1)}
                     />
                   ) : selectedStoryPost.mediaUrls[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={selectedStoryPost.mediaUrls[0]} alt={selectedStoryPost.title} className="absolute inset-0 h-full w-full object-cover" />
                   ) : null}
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,13,8,0.62)_0%,rgba(20,13,8,0.18)_36%,rgba(20,13,8,0.55)_100%)]" />
-                  <div className="relative z-10 flex items-center justify-between gap-3 px-4 pb-3 pt-[calc(1rem+env(safe-area-inset-top))]">
-                    <div className="flex items-center gap-3">
-                      <Avatar src={adminProfilePicture} name="crumbz" className="h-11 w-11 bg-[#F5A623] text-white" />
-                      <div>
-                        <p className="text-sm font-semibold text-white">crumbz</p>
-                        <p className="text-xs uppercase tracking-[0.18em] text-white/70">story • {selectedStoryPost.createdAt}</p>
+                  <div className="relative z-10 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+                    <div className="mb-4 grid grid-cols-1 gap-2">
+                      <div className="flex gap-1">
+                        {adminStorySequence.map((post, index) => (
+                          <span key={post.id} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+                            <span
+                              className={`block h-full rounded-full ${index <= selectedStoryPostIndex ? "bg-white" : "bg-transparent"}`}
+                            />
+                          </span>
+                        ))}
                       </div>
                     </div>
-                    <Button radius="full" variant="light" className="min-w-0 bg-white/12 px-3 text-white" onPress={() => setSelectedStoryPostId(null)}>
-                      close
-                    </Button>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={adminProfilePicture} name="crumbz" className="h-11 w-11 bg-[#F5A623] text-white" />
+                        <div>
+                          <p className="text-sm font-semibold text-white">crumbz</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-white/70">
+                            story {selectedStoryPostIndex + 1} of {adminStorySequence.length} • {selectedStoryPost.createdAt}
+                          </p>
+                        </div>
+                      </div>
+                      <Button radius="full" variant="light" className="min-w-0 bg-white/12 px-3 text-white" onPress={() => setSelectedStoryPostId(null)}>
+                        close
+                      </Button>
+                    </div>
                   </div>
                   <div className="relative z-10 mt-auto space-y-3 px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-10 text-white">
                     <p className="font-[family-name:var(--font-young-serif)] text-[2.6rem] leading-none">{selectedStoryPost.title}</p>
