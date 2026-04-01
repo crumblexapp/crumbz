@@ -4878,6 +4878,7 @@ export default function Page() {
                               <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">all posts</p>
                               <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminPosts.length} total</Chip>
                             </div>
+                            {adminActionNotice ? <p className="text-sm text-[#2C1A0E]">{adminActionNotice}</p> : null}
                             {adminPosts.length ? (
                               adminPosts.map((post) => (
                                 <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
@@ -4903,20 +4904,20 @@ export default function Page() {
                                     </div>
                                   ) : null}
                                   <div className="mt-3 flex gap-2">
-                                    <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onPress={() => startEditingPost(post)}>
+                                    <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onClick={() => startEditingPost(post)}>
                                       edit
                                     </Button>
                                     {pendingDeletePostId === post.id ? (
                                       <>
-                                        <Button type="button" radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => setPendingDeletePostId(null)}>
+                                        <Button type="button" radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onClick={() => setPendingDeletePostId(null)}>
                                           cancel
                                         </Button>
-                                        <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
+                                        <Button type="button" radius="full" color="danger" variant="flat" onClick={() => deletePost(post.id)}>
                                           confirm delete
                                         </Button>
                                       </>
                                     ) : (
-                                      <Button type="button" radius="full" color="danger" variant="flat" onPress={() => setPendingDeletePostId(post.id)}>
+                                      <Button type="button" radius="full" color="danger" variant="flat" onClick={() => setPendingDeletePostId(post.id)}>
                                         delete
                                       </Button>
                                     )}
