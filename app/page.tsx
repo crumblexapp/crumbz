@@ -3997,29 +3997,14 @@ export default function Page() {
       return;
     }
 
-    if (!dailyPostTaggedPlace) {
-      setDailyPostNotice("tag the shop so friends can see where you ate.");
-      return;
-    }
-
-    if (!dailyPostTasteTag) {
-      setDailyPostNotice("pick whether it was fire, solid, or skip.");
-      return;
-    }
-
-    if (!dailyPostPriceTag) {
-      setDailyPostNotice("pick the price vibe too so friends know if it’s student friendly.");
-      return;
-    }
-
     const createdAtIso = new Date().toISOString();
     const caption = dailyPostCaption.trim();
     const nextPost: AppPost = {
       id: `daily-post-${Date.now()}`,
-      title: dailyPostTaggedPlace.name,
+      title: dailyPostTaggedPlace?.name || `${user.profile.fullName.split(" ")[0] || user.profile.username || "friend"}'s post`,
       body: caption,
       type: "story",
-      cta: "friend review",
+      cta: dailyPostTaggedPlace ? "friend review" : "live now",
       createdAt: formatNow(),
       createdAtIso,
       mediaKind: "photo",
@@ -4030,13 +4015,13 @@ export default function Page() {
       authorEmail,
       schoolName: user.profile.schoolName,
       weekKey: "",
-      taggedPlaceId: dailyPostTaggedPlace.id,
-      taggedPlaceName: dailyPostTaggedPlace.name,
-      taggedPlaceKind: dailyPostTaggedPlace.kind,
-      taggedPlaceAddress: dailyPostTaggedPlace.address,
-      taggedPlaceLat: dailyPostTaggedPlace.lat,
-      taggedPlaceLon: dailyPostTaggedPlace.lon,
-      taggedPlaceCity: dailyPostCity,
+      taggedPlaceId: dailyPostTaggedPlace?.id ?? "",
+      taggedPlaceName: dailyPostTaggedPlace?.name ?? "",
+      taggedPlaceKind: dailyPostTaggedPlace?.kind ?? "",
+      taggedPlaceAddress: dailyPostTaggedPlace?.address ?? "",
+      taggedPlaceLat: dailyPostTaggedPlace?.lat ?? null,
+      taggedPlaceLon: dailyPostTaggedPlace?.lon ?? null,
+      taggedPlaceCity: dailyPostTaggedPlace ? dailyPostCity : "",
       tasteTag: dailyPostTasteTag,
       priceTag: dailyPostPriceTag,
     };
@@ -6227,7 +6212,7 @@ export default function Page() {
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
                       make a post
                     </h2>
-                    <p className="text-sm text-[#6c7289]">drop a photo, tag the shop, and tell friends if it was worth it. it stays live for 24 hours.</p>
+                    <p className="text-sm text-[#6c7289]">drop a photo, add whatever context you want, and it stays live in your friends&apos; feed for 24 hours.</p>
                   </div>
                 </div>
 
@@ -6257,8 +6242,8 @@ export default function Page() {
                   />
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">tag the shop</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">search the place here, or start from the map with `post from here`.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">tag the shop <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
+                      <p className="mt-1 text-sm text-[#6c7289]">tag a spot if you want friends to see where this was.</p>
                     </div>
                     <Input
                       value={dailyPostPlaceQuery}
@@ -6307,8 +6292,8 @@ export default function Page() {
                   </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">how was it?</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">give friends the quick truth.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">how was it? <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
+                      <p className="mt-1 text-sm text-[#6c7289]">give friends the quick truth if you want.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {TASTE_TAG_OPTIONS.map((option) => (
@@ -6327,8 +6312,8 @@ export default function Page() {
                   </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">price vibe</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">this is where `student friendly` lives.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">price vibe <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
+                      <p className="mt-1 text-sm text-[#6c7289]">this is where `student friendly` lives if you want to add it.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {PRICE_TAG_OPTIONS.map((option) => (
