@@ -1121,13 +1121,6 @@ function getPostTimestamp(post: Pick<AppPost, "createdAtIso">) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function isLiveDailyPost(post: AppPost, nowTimestamp: number) {
-  if (post.authorRole !== "student" || post.type === "weekly-dump") return false;
-  const createdTimestamp = getPostTimestamp(post);
-  if (!createdTimestamp || createdTimestamp > nowTimestamp) return false;
-  return nowTimestamp - createdTimestamp < 24 * 60 * 60 * 1000;
-}
-
 function formatRelativePostTime(createdAtIso: string, fallback: string) {
   const timestamp = Date.parse(createdAtIso);
   if (Number.isNaN(timestamp)) return fallback;
@@ -1697,7 +1690,6 @@ export default function Page() {
   const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => post.authorRole !== "student");
-  const nowTimestamp = Date.now();
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
   const today = new Date();
@@ -1722,7 +1714,7 @@ export default function Page() {
   });
   const friendDailyFeedPosts = visibleStudentDailyPosts.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
-    return authorEmail !== currentUserEmail && isLiveDailyPost(post, nowTimestamp);
+    return authorEmail !== currentUserEmail;
   });
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
@@ -1981,7 +1973,7 @@ export default function Page() {
         id: `friend-dump-${post.id}`,
         kind: "friend_dump" as const,
         title: `${post.authorName} posted`,
-        detail: `live for 24h • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
+        detail: `feed post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
         postId: post.id,
         picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
       })),
@@ -4003,7 +3995,7 @@ export default function Page() {
       id: `daily-post-${Date.now()}`,
       title: dailyPostTaggedPlace?.name || `${user.profile.fullName.split(" ")[0] || user.profile.username || "friend"}'s post`,
       body: caption,
-      type: "story",
+      type: "chapter",
       cta: dailyPostTaggedPlace ? "friend review" : "live now",
       createdAt: formatNow(),
       createdAtIso,
@@ -4039,7 +4031,7 @@ export default function Page() {
     setDailyPostPlaceResults([]);
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
-    setDailyPostNotice("your post is live for 24 hours.");
+    setDailyPostNotice("your post is live.");
     setDailyPostInputKey((current) => current + 1);
   };
 
@@ -6212,7 +6204,7 @@ export default function Page() {
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
                       make a post
                     </h2>
-                    <p className="text-sm text-[#6c7289]">drop a photo, add whatever context you want, and it stays live in your friends&apos; feed for 24 hours.</p>
+                    <p className="text-sm text-[#6c7289]">drop a photo, add whatever context you want, and it stays in your profile and your friends&apos; feed.</p>
                   </div>
                 </div>
 
