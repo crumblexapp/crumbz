@@ -201,6 +201,15 @@ const defaultPosts: AppPost[] = [
     authorEmail: ADMIN_EMAIL,
     schoolName: "",
     weekKey: "",
+    taggedPlaceId: "",
+    taggedPlaceName: "",
+    taggedPlaceKind: "",
+    taggedPlaceAddress: "",
+    taggedPlaceLat: null,
+    taggedPlaceLon: null,
+    taggedPlaceCity: "",
+    tasteTag: "",
+    priceTag: "",
   },
   {
     id: "student-discount-soon",
@@ -218,6 +227,15 @@ const defaultPosts: AppPost[] = [
     authorEmail: ADMIN_EMAIL,
     schoolName: "",
     weekKey: "",
+    taggedPlaceId: "",
+    taggedPlaceName: "",
+    taggedPlaceKind: "",
+    taggedPlaceAddress: "",
+    taggedPlaceLat: null,
+    taggedPlaceLon: null,
+    taggedPlaceCity: "",
+    tasteTag: "",
+    priceTag: "",
   },
 ];
 
@@ -238,6 +256,15 @@ const fallbackFeedPosts: AppPost[] = [
     authorEmail: ADMIN_EMAIL,
     schoolName: "",
     weekKey: "",
+    taggedPlaceId: "",
+    taggedPlaceName: "",
+    taggedPlaceKind: "",
+    taggedPlaceAddress: "",
+    taggedPlaceLat: null,
+    taggedPlaceLon: null,
+    taggedPlaceCity: "",
+    tasteTag: "",
+    priceTag: "",
   },
 ];
 
@@ -296,6 +323,18 @@ type FavoriteActivity = {
   createdAt: string;
 };
 
+const TASTE_TAG_OPTIONS = [
+  { key: "fire", label: "fire" },
+  { key: "solid", label: "solid" },
+  { key: "skip", label: "skip" },
+] as const;
+
+const PRICE_TAG_OPTIONS = [
+  { key: "student-friendly", label: "student friendly" },
+  { key: "kinda-pricey", label: "kinda pricey" },
+  { key: "special-occasion", label: "special occasion" },
+] as const;
+
 type AppPost = {
   id: string;
   title: string;
@@ -312,6 +351,15 @@ type AppPost = {
   authorEmail: string;
   schoolName: string;
   weekKey: string;
+  taggedPlaceId: string;
+  taggedPlaceName: string;
+  taggedPlaceKind: string;
+  taggedPlaceAddress: string;
+  taggedPlaceLat: number | null;
+  taggedPlaceLon: number | null;
+  taggedPlaceCity: string;
+  tasteTag: "" | "fire" | "solid" | "skip";
+  priceTag: "" | "student-friendly" | "kinda-pricey" | "special-occasion";
 };
 
 const defaultPostFields = {
@@ -324,6 +372,15 @@ const defaultPostFields = {
   schoolName: "",
   weekKey: "",
   createdAtIso: "",
+  taggedPlaceId: "",
+  taggedPlaceName: "",
+  taggedPlaceKind: "",
+  taggedPlaceAddress: "",
+  taggedPlaceLat: null,
+  taggedPlaceLon: null,
+  taggedPlaceCity: "",
+  tasteTag: "",
+  priceTag: "",
 };
 
 function isStoryAspectRatio(width: number, height: number) {
@@ -620,6 +677,18 @@ function normalizePosts(posts: Partial<AppPost>[]) {
     authorEmail: typeof post.authorEmail === "string" ? post.authorEmail : ADMIN_EMAIL,
     schoolName: typeof post.schoolName === "string" ? post.schoolName : "",
     weekKey: typeof post.weekKey === "string" ? post.weekKey : "",
+    taggedPlaceId: typeof post.taggedPlaceId === "string" ? post.taggedPlaceId : "",
+    taggedPlaceName: typeof post.taggedPlaceName === "string" ? post.taggedPlaceName : "",
+    taggedPlaceKind: typeof post.taggedPlaceKind === "string" ? post.taggedPlaceKind : "",
+    taggedPlaceAddress: typeof post.taggedPlaceAddress === "string" ? post.taggedPlaceAddress : "",
+    taggedPlaceLat: typeof post.taggedPlaceLat === "number" ? post.taggedPlaceLat : null,
+    taggedPlaceLon: typeof post.taggedPlaceLon === "number" ? post.taggedPlaceLon : null,
+    taggedPlaceCity: typeof post.taggedPlaceCity === "string" ? post.taggedPlaceCity : "",
+    tasteTag: post.tasteTag === "fire" || post.tasteTag === "solid" || post.tasteTag === "skip" ? post.tasteTag : "",
+    priceTag:
+      post.priceTag === "student-friendly" || post.priceTag === "kinda-pricey" || post.priceTag === "special-occasion"
+        ? post.priceTag
+        : "",
   })) as AppPost[];
 }
 
@@ -1436,6 +1505,12 @@ export default function Page() {
   const [dailyPostNotice, setDailyPostNotice] = useState("");
   const [dailyPostCaption, setDailyPostCaption] = useState("");
   const [dailyPostMediaUrls, setDailyPostMediaUrls] = useState<string[]>([]);
+  const [dailyPostTaggedPlace, setDailyPostTaggedPlace] = useState<FavoritePlace | null>(null);
+  const [dailyPostPlaceQuery, setDailyPostPlaceQuery] = useState("");
+  const [dailyPostPlaceResults, setDailyPostPlaceResults] = useState<FavoritePlace[]>([]);
+  const [dailyPostPlaceSearchLoading, setDailyPostPlaceSearchLoading] = useState(false);
+  const [dailyPostTasteTag, setDailyPostTasteTag] = useState<AppPost["tasteTag"]>("");
+  const [dailyPostPriceTag, setDailyPostPriceTag] = useState<AppPost["priceTag"]>("");
   const [isUploadingDailyPost, setIsUploadingDailyPost] = useState(false);
   const [dailyPostInputKey, setDailyPostInputKey] = useState(0);
   const [weeklyDumpNotice, setWeeklyDumpNotice] = useState("");
@@ -1733,6 +1808,8 @@ export default function Page() {
   const favoriteActivities = liveProfile.favoriteActivities ?? [];
   const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
   const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
+  const dailyPostCity = liveProfile.city || currentFavoriteCity || "Warsaw";
+  const dailyPostCityCenter = cityCenters[normalizeCityKey(dailyPostCity)] ?? favoriteCityCenter;
   const profileLikedSpots = favoritePlaceIds
     .map(
       (placeId) =>
@@ -1982,7 +2059,27 @@ export default function Page() {
           ) : (
             <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
               <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+              {post.taggedPlaceName ? (
+                <button
+                  type="button"
+                  onClick={() => openPostPlace(post)}
+                  className="mt-3 flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                    <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                    {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                  </div>
+                  <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                </button>
+              ) : null}
               {showPostBody ? <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p> : null}
+              {post.tasteTag || post.priceTag ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
+                  {post.priceTag ? <Chip className="bg-white text-[#2C1A0E]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -2322,6 +2419,48 @@ export default function Page() {
       }
     }
   }, [currentFavoriteCity, favoritePlaces.length, favoritePlacesLoading, isAdmin, user.signedIn]);
+
+  useEffect(() => {
+    const query = dailyPostPlaceQuery.trim();
+
+    if (query.length < 2) {
+      setDailyPostPlaceResults([]);
+      setDailyPostPlaceSearchLoading(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setDailyPostPlaceSearchLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          city: dailyPostCity,
+          query,
+          lat: String(dailyPostCityCenter[0]),
+          lon: String(dailyPostCityCenter[1]),
+        });
+        const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
+        const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
+        const liveResults = (payload.places ?? []).slice(0, 8);
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(dailyPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+
+        setDailyPostPlaceResults((liveResults.length ? liveResults : fallbackResults).slice(0, 8));
+      } catch {
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(dailyPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+        setDailyPostPlaceResults(fallbackResults.slice(0, 8));
+      } finally {
+        setDailyPostPlaceSearchLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [dailyPostCity, dailyPostCityCenter, dailyPostPlaceQuery, favoritePlaces]);
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
@@ -3290,6 +3429,43 @@ export default function Page() {
     setStudentTab("favorites");
   };
 
+  const startPostFromPlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
+    setFavoriteViewCity(cityName);
+    setHighlightedFavoritePlaceId(place.id);
+    setFavoritePlaces((current) => {
+      const next = current.filter((item) => item.id !== place.id);
+      return [place, ...next].slice(0, 24);
+    });
+    setDailyPostTaggedPlace(place);
+    setDailyPostPlaceQuery("");
+    setDailyPostPlaceResults([]);
+    setDailyPostTasteTag("");
+    setDailyPostPriceTag("");
+    setDailyPostNotice(`posting from ${place.name}. add your photo and tell friends what you thought.`);
+    setStudentTab("profile");
+    window.setTimeout(() => {
+      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  };
+
+  const openPostPlace = (post: AppPost) => {
+    if (!post.taggedPlaceId || !post.taggedPlaceName) return;
+
+    const place: FavoritePlace = {
+      id: post.taggedPlaceId,
+      name: post.taggedPlaceName,
+      kind: post.taggedPlaceKind || "restaurant",
+      lat: post.taggedPlaceLat ?? dailyPostCityCenter[0],
+      lon: post.taggedPlaceLon ?? dailyPostCityCenter[1],
+      address: post.taggedPlaceAddress,
+    };
+
+    setFavoriteViewCity(post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
+    setHighlightedFavoritePlaceId(place.id);
+    setFavoritePlaces((current) => [place, ...current.filter((item) => item.id !== place.id)].slice(0, 24));
+    setStudentTab("favorites");
+  };
+
   const openStorySequence = (postId?: string | null) => {
     if (!adminStorySequence.length) return;
     setSelectedStoryPostId(postId && adminStorySequence.some((post) => post.id === postId) ? postId : adminStorySequence[0].id);
@@ -3369,6 +3545,15 @@ export default function Page() {
       authorEmail: ADMIN_EMAIL,
       schoolName: "",
       weekKey: "",
+      taggedPlaceId: "",
+      taggedPlaceName: "",
+      taggedPlaceKind: "",
+      taggedPlaceAddress: "",
+      taggedPlaceLat: null,
+      taggedPlaceLon: null,
+      taggedPlaceCity: "",
+      tasteTag: "",
+      priceTag: "",
     };
 
     const nextPosts = editingPostId
@@ -3429,6 +3614,15 @@ export default function Page() {
       authorEmail,
       schoolName: user.profile.schoolName,
       weekKey: currentSundayKey,
+      taggedPlaceId: "",
+      taggedPlaceName: "",
+      taggedPlaceKind: "",
+      taggedPlaceAddress: "",
+      taggedPlaceLat: null,
+      taggedPlaceLon: null,
+      taggedPlaceCity: "",
+      tasteTag: "",
+      priceTag: "",
     };
 
     lastSharedStateMutationAtRef.current = Date.now();
@@ -3803,15 +3997,29 @@ export default function Page() {
       return;
     }
 
-    const firstName = user.profile.fullName.split(" ")[0] || user.profile.username || "friend";
+    if (!dailyPostTaggedPlace) {
+      setDailyPostNotice("tag the shop so friends can see where you ate.");
+      return;
+    }
+
+    if (!dailyPostTasteTag) {
+      setDailyPostNotice("pick whether it was fire, solid, or skip.");
+      return;
+    }
+
+    if (!dailyPostPriceTag) {
+      setDailyPostNotice("pick the price vibe too so friends know if it’s student friendly.");
+      return;
+    }
+
     const createdAtIso = new Date().toISOString();
     const caption = dailyPostCaption.trim();
     const nextPost: AppPost = {
       id: `daily-post-${Date.now()}`,
-      title: `${firstName}'s post`,
+      title: dailyPostTaggedPlace.name,
       body: caption,
       type: "story",
-      cta: "live now",
+      cta: "friend review",
       createdAt: formatNow(),
       createdAtIso,
       mediaKind: "photo",
@@ -3822,6 +4030,15 @@ export default function Page() {
       authorEmail,
       schoolName: user.profile.schoolName,
       weekKey: "",
+      taggedPlaceId: dailyPostTaggedPlace.id,
+      taggedPlaceName: dailyPostTaggedPlace.name,
+      taggedPlaceKind: dailyPostTaggedPlace.kind,
+      taggedPlaceAddress: dailyPostTaggedPlace.address,
+      taggedPlaceLat: dailyPostTaggedPlace.lat,
+      taggedPlaceLon: dailyPostTaggedPlace.lon,
+      taggedPlaceCity: dailyPostCity,
+      tasteTag: dailyPostTasteTag,
+      priceTag: dailyPostPriceTag,
     };
 
     lastSharedStateMutationAtRef.current = Date.now();
@@ -3832,6 +4049,11 @@ export default function Page() {
     });
     setDailyPostCaption("");
     setDailyPostMediaUrls([]);
+    setDailyPostTaggedPlace(null);
+    setDailyPostPlaceQuery("");
+    setDailyPostPlaceResults([]);
+    setDailyPostTasteTag("");
+    setDailyPostPriceTag("");
     setDailyPostNotice("your post is live for 24 hours.");
     setDailyPostInputKey((current) => current + 1);
   };
@@ -5615,6 +5837,7 @@ export default function Page() {
                   mutualFansByPlace={mutualFansByPlace}
                   highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
+                  onPostFromPlace={(place) => startPostFromPlace(place, currentFavoriteCity)}
                   friends={friendAccounts.map((account) => ({
                     email: account.googleProfile?.email ?? account.profile.username,
                     name: account.profile.fullName,
@@ -5675,29 +5898,43 @@ export default function Page() {
                 {profileLikedSpots.length ? (
                   <div className="grid gap-3">
                     {profileLikedSpots.map((place) => (
-                      <button
-                        key={place.id}
-                        type="button"
-                        className="rounded-[22px] bg-[#FFF7E8] p-4 text-left"
-                        onClick={() => {
-                          setHighlightedFavoritePlaceId(place.id);
-                          setFavoritePlaces((current) => {
-                            const next = current.filter((item) => item.id !== place.id);
-                            return [place, ...next].slice(0, 24);
-                          });
-                        }}
-                      >
+                      <div key={place.id} className="rounded-[22px] bg-[#FFF7E8] p-4 text-left">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{place.kind}</p>
                             <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{place.name}</p>
                             <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
                           </div>
-                          <div className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
-                            liked
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">
+                              liked
+                            </div>
+                            <Button
+                              radius="full"
+                              size="sm"
+                              variant="light"
+                              className="bg-white text-[#2C1A0E]"
+                              onPress={() => {
+                                setHighlightedFavoritePlaceId(place.id);
+                                setFavoritePlaces((current) => {
+                                  const next = current.filter((item) => item.id !== place.id);
+                                  return [place, ...next].slice(0, 24);
+                                });
+                              }}
+                            >
+                              show me
+                            </Button>
+                            <Button
+                              radius="full"
+                              size="sm"
+                              className="bg-[#2C1A0E] text-white"
+                              onPress={() => startPostFromPlace(place, currentFavoriteCity)}
+                            >
+                              post from here
+                            </Button>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -5973,7 +6210,7 @@ export default function Page() {
               </CardBody>
             </Card>
 
-            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+            <Card id="daily-post-composer" className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -5981,7 +6218,7 @@ export default function Page() {
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
                       make a post
                     </h2>
-                    <p className="text-sm text-[#6c7289]">post from your profile. it stays live in your friends&apos; feed for 24 hours.</p>
+                    <p className="text-sm text-[#6c7289]">drop a photo, tag the shop, and tell friends if it was worth it. it stays live for 24 hours.</p>
                   </div>
                 </div>
 
@@ -6004,11 +6241,101 @@ export default function Page() {
                     )}
                   </button>
                   <Textarea
-                    placeholder="what did you try?"
+                    placeholder="what did you try? what should friends know?"
                     value={dailyPostCaption}
                     onValueChange={setDailyPostCaption}
                     classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
                   />
+                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">tag the shop</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">search the place here, or start from the map with `post from here`.</p>
+                    </div>
+                    <Input
+                      value={dailyPostPlaceQuery}
+                      onValueChange={(value) => {
+                        setDailyPostPlaceQuery(value);
+                        if (dailyPostNotice) setDailyPostNotice("");
+                      }}
+                      placeholder={`search in ${dailyPostCity}`}
+                      startContent={<span className="text-[#B56D19]">⌕</span>}
+                      classNames={{ inputWrapper: "rounded-[18px] bg-white shadow-none border border-[#f3e1cf]" }}
+                    />
+                    {dailyPostTaggedPlace ? (
+                      <div className="flex items-start justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{dailyPostTaggedPlace.kind}</p>
+                          <p className="mt-1 text-base font-semibold text-[#2C1A0E]">{dailyPostTaggedPlace.name}</p>
+                          <p className="mt-1 text-sm text-[#6c7289]">{dailyPostTaggedPlace.address}</p>
+                        </div>
+                        <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setDailyPostTaggedPlace(null)}>
+                          change
+                        </Button>
+                      </div>
+                    ) : null}
+                    {dailyPostPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">searching spots...</p> : null}
+                    {dailyPostPlaceResults.length ? (
+                      <div className="grid gap-2">
+                        {dailyPostPlaceResults.map((place) => (
+                          <button
+                            key={place.id}
+                            type="button"
+                            onClick={() => {
+                              setDailyPostTaggedPlace(place);
+                              setDailyPostPlaceQuery("");
+                              setDailyPostPlaceResults([]);
+                              if (dailyPostNotice) setDailyPostNotice("");
+                            }}
+                            className="rounded-[18px] bg-white px-4 py-3 text-left"
+                          >
+                            <p className="text-sm font-semibold text-[#2C1A0E]">{place.name}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#B56D19]">{place.kind}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">how was it?</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">give friends the quick truth.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {TASTE_TAG_OPTIONS.map((option) => (
+                        <Button
+                          key={option.key}
+                          type="button"
+                          radius="full"
+                          variant={dailyPostTasteTag === option.key ? "solid" : "flat"}
+                          className={dailyPostTasteTag === option.key ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => setDailyPostTasteTag(option.key)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">price vibe</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">this is where `student friendly` lives.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {PRICE_TAG_OPTIONS.map((option) => (
+                        <Button
+                          key={option.key}
+                          type="button"
+                          radius="full"
+                          variant={dailyPostPriceTag === option.key ? "solid" : "flat"}
+                          className={dailyPostPriceTag === option.key ? "bg-[#F5A623] text-white" : "bg-white text-[#2C1A0E]"}
+                          onPress={() => setDailyPostPriceTag(option.key)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                   <input
                     ref={dailyPostInputRef}
                     key={dailyPostInputKey}

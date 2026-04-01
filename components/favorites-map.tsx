@@ -122,6 +122,7 @@ export default function FavoritesMap({
   places,
   favoriteIds,
   onToggleFavorite,
+  onPostFromPlace,
   friends,
   highlightedPlaceId,
 }: {
@@ -130,6 +131,7 @@ export default function FavoritesMap({
   favoriteIds: string[];
   mutualFansByPlace: Record<string, unknown>;
   onToggleFavorite: (place: FavoritePlace) => void;
+  onPostFromPlace?: (place: FavoritePlace) => void;
   cityName: string;
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
@@ -369,6 +371,16 @@ export default function FavoritesMap({
               <span className="text-2xl">♥</span>
             </button>
           </div>
+
+          {onPostFromPlace ? (
+            <button
+              type="button"
+              onClick={() => onPostFromPlace(selectedPreviewPlace)}
+              className="mt-4 w-full rounded-full bg-[#2b1530] px-4 py-3 text-sm font-semibold text-white"
+            >
+              post from here
+            </button>
+          ) : null}
 
           {selectedMutualFans.length ? (
             <div className="mt-4 inline-flex items-center gap-3 rounded-full bg-[#edf5ff] px-3 py-2">
