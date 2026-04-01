@@ -2452,7 +2452,7 @@ export default function Page() {
     }
 
     const refresh = async () => {
-      if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("Notification" in window)) {
         setPushSupported(false);
         setPushPermission("unsupported");
         setPushEnabled(false);
@@ -2469,6 +2469,13 @@ export default function Page() {
 
       try {
         const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+        if (!("pushManager" in registration)) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          return;
+        }
+
+        setPushSupported(true);
         const subscription = await registration.pushManager.getSubscription();
         setPushEnabled(Boolean(subscription));
 
@@ -2476,6 +2483,7 @@ export default function Page() {
           await syncPushSubscriptionToBackend(subscription).catch(() => undefined);
         }
       } catch {
+        setPushSupported(false);
         setPushEnabled(false);
       }
     };
