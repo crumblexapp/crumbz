@@ -1436,6 +1436,7 @@ export default function Page() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
@@ -3251,6 +3252,7 @@ export default function Page() {
 
   const resetComposer = (notice = "") => {
     setEditingPostId(null);
+    setPendingDeletePostId(null);
     setStorageNotice(notice);
     setComposer({
       title: "",
@@ -3385,6 +3387,7 @@ export default function Page() {
   };
 
   const startEditingPost = (post: AppPost) => {
+    setPendingDeletePostId(null);
     setEditingPostId(post.id);
     setComposer({
       title: post.title,
@@ -3402,11 +3405,6 @@ export default function Page() {
   };
 
   const deletePost = (postId: string) => {
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm("delete this post only?");
-      if (!confirmed) return;
-    }
-
     if (!ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the post again.")) {
       return;
     }
@@ -3423,6 +3421,8 @@ export default function Page() {
       nextInteractions,
       deletePostId: postId,
     });
+    setPendingDeletePostId(null);
+    setAdminActionNotice("post deleted.");
 
     if (editingPostId === postId) {
       cancelEditingPost();
@@ -4868,6 +4868,7 @@ export default function Page() {
                                 {isUploadingMedia ? "uploading media..." : editingPostId ? "save changes" : "publish post"}
                               </Button>
                             </form>
+                            {adminActionNotice ? <p className="mt-3 text-sm text-[#2C1A0E]">{adminActionNotice}</p> : null}
                           </CardBody>
                         </Card>
 
@@ -4905,9 +4906,20 @@ export default function Page() {
                                     <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onPress={() => startEditingPost(post)}>
                                       edit
                                     </Button>
-                                    <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
-                                      delete
-                                    </Button>
+                                    {pendingDeletePostId === post.id ? (
+                                      <>
+                                        <Button type="button" radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => setPendingDeletePostId(null)}>
+                                          cancel
+                                        </Button>
+                                        <Button type="button" radius="full" color="danger" variant="flat" onPress={() => deletePost(post.id)}>
+                                          confirm delete
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button type="button" radius="full" color="danger" variant="flat" onPress={() => setPendingDeletePostId(post.id)}>
+                                        delete
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                               ))
