@@ -6053,7 +6053,7 @@ export default function Page() {
           </section>
         ) : null}
 
-        {selectedStoryPost ? null : (
+        {selectedStoryPost || notificationsOpen ? null : (
           <nav
             className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
             style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
@@ -6106,7 +6106,7 @@ export default function Page() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.25 }}
-            className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-[#FFF0D0] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)]"
+            className="absolute right-0 top-0 h-full w-full border-l border-[#FFF0D0] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)] sm:max-w-sm"
           >
             <div className="flex items-center justify-between">
               <div>
