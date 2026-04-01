@@ -3236,9 +3236,9 @@ export default function Page() {
     setStudentTab("favorites");
   };
 
-  const resetComposer = () => {
+  const resetComposer = (notice = "") => {
     setEditingPostId(null);
-    setStorageNotice("");
+    setStorageNotice(notice);
     setComposer({
       title: "",
       body: "",
@@ -3251,10 +3251,9 @@ export default function Page() {
     setComposerMediaInputKey((current) => current + 1);
   };
 
-  const createPost = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const publishComposerPost = () => {
     if (!composer.title.trim() || !composer.body.trim()) {
+      setStorageNotice("add a title and body first, then publish.");
       return;
     }
 
@@ -3310,7 +3309,12 @@ export default function Page() {
       nextPosts,
       nextInteractions: interactions,
     });
-    resetComposer();
+    resetComposer(editingPostId ? "post updated." : "post published.");
+  };
+
+  const createPost = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    publishComposerPost();
   };
 
   const submitWeeklyDump = (event: FormEvent<HTMLFormElement>) => {
@@ -4835,10 +4839,11 @@ export default function Page() {
                               ) : null}
                               {storageNotice ? <p className="text-sm text-[#F5A623]">{storageNotice}</p> : null}
                               <Button
-                                type="submit"
+                                type="button"
                                 radius="full"
                                 size="lg"
                                 isDisabled={isUploadingMedia}
+                                onPress={publishComposerPost}
                                 className="bg-[#F5A623] text-white disabled:opacity-60"
                               >
                                 {isUploadingMedia ? "uploading media..." : editingPostId ? "save changes" : "publish post"}
