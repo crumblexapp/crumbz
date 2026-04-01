@@ -4903,23 +4903,39 @@ export default function Page() {
                                       )}
                                     </div>
                                   ) : null}
-                                  <div className="mt-3 flex gap-2">
-                                    <Button type="button" radius="full" className="bg-white text-[#2C1A0E]" onClick={() => startEditingPost(post)}>
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingPost(post)}
+                                      className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                    >
                                       edit
-                                    </Button>
+                                    </button>
                                     {pendingDeletePostId === post.id ? (
                                       <>
-                                        <Button type="button" radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onClick={() => setPendingDeletePostId(null)}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPendingDeletePostId(null)}
+                                          className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                        >
                                           cancel
-                                        </Button>
-                                        <Button type="button" radius="full" color="danger" variant="flat" onClick={() => deletePost(post.id)}>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => deletePost(post.id)}
+                                          className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                        >
                                           confirm delete
-                                        </Button>
+                                        </button>
                                       </>
                                     ) : (
-                                      <Button type="button" radius="full" color="danger" variant="flat" onClick={() => setPendingDeletePostId(post.id)}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingDeletePostId(post.id)}
+                                        className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                      >
                                         delete
-                                      </Button>
+                                      </button>
                                     )}
                                   </div>
                                 </div>
