@@ -79,3 +79,14 @@ create table if not exists public.place_reviews (
 create index if not exists place_reviews_place_id_idx on public.place_reviews(place_id);
 create index if not exists place_reviews_author_email_idx on public.place_reviews(author_email);
 create index if not exists places_city_idx on public.places(city);
+
+create table if not exists public.push_subscriptions (
+  endpoint text primary key,
+  author_email text not null,
+  subscription jsonb not null,
+  user_agent text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_author_email_idx on public.push_subscriptions(author_email);

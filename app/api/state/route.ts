@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
+import { sendWebPushNotification, webPushEnabled } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,6 +12,10 @@ const ANNOUNCEMENTS_META_KEY = "__announcements";
 const DARE_META_KEY = "__dare";
 
 type JsonRecord = Record<string, unknown>;
+type PushSubscriptionRow = {
+  endpoint: string;
+  subscription: unknown;
+};
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.toLowerCase() : "";
@@ -184,6 +189,37 @@ async function syncPlaceReviewTables(rawPosts: unknown) {
     .not("post_id", "in", encodePostgrestIn(taggedPosts.map((post) => post.postId)));
 
   return deleteError;
+}
+
+async function sendAnnouncementPush(announcement: { id: string; title: string; body: string }) {
+  if (!webPushEnabled) return null;
+
+  const { data, error } = await supabaseServer.from("push_subscriptions").select("endpoint, subscription");
+  if (error) return error;
+
+  const expiredEndpoints: string[] = [];
+  const rows = (data ?? []) as PushSubscriptionRow[];
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const result = await sendWebPushNotification(row.subscription as never, {
+        title: announcement.title,
+        body: announcement.body,
+        url: "/",
+        tag: announcement.id,
+      });
+
+      if (!result.ok && result.reason === "expired") {
+        expiredEndpoints.push(row.endpoint);
+      }
+    }),
+  );
+
+  if (expiredEndpoints.length) {
+    await supabaseServer.from("push_subscriptions").delete().in("endpoint", expiredEndpoints);
+  }
+
+  return null;
 }
 
 function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
@@ -428,6 +464,18 @@ export async function POST(request: Request) {
     : supportsAnnouncements
       ? stateData?.announcements ?? []
       : fallbackMeta.announcements;
+  const currentAnnouncementIds = new Set(
+    normalizeObjectArray(supportsAnnouncements ? stateData?.announcements : fallbackMeta.announcements)
+      .map((announcement) => String(announcement.id ?? ""))
+      .filter(Boolean),
+  );
+  const newestAnnouncement = normalizeObjectArray(nextAnnouncements)[0] ?? null;
+  const shouldSendAnnouncementPush =
+    identity.isAdmin &&
+    "announcements" in (body ?? {}) &&
+    newestAnnouncement &&
+    typeof newestAnnouncement.id === "string" &&
+    !currentAnnouncementIds.has(newestAnnouncement.id);
 
   if ("interactions" in (body ?? {}) || "announcements" in (body ?? {}) || "dare" in (body ?? {})) {
     updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements, nextDare);
@@ -469,6 +517,14 @@ export async function POST(request: Request) {
     if (reviewSyncError && !reviewSyncError.message.includes('relation "public.places" does not exist') && !reviewSyncError.message.includes('relation "public.place_reviews" does not exist')) {
       return NextResponse.json({ ok: false, message: reviewSyncError.message }, { status: 500 });
     }
+  }
+
+  if (shouldSendAnnouncementPush) {
+    await sendAnnouncementPush({
+      id: String(newestAnnouncement.id),
+      title: String(newestAnnouncement.title ?? "crumbz"),
+      body: String(newestAnnouncement.body ?? "something new dropped."),
+    });
   }
 
   return NextResponse.json({ ok: true });

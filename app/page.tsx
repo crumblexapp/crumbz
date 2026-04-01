@@ -38,6 +38,7 @@ const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
@@ -636,6 +637,13 @@ function getAuthenticatedHeaders(headers: Record<string, string> = {}) {
         Authorization: `Bearer ${token}`,
       }
     : headers;
+}
+
+function decodeBase64Url(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const normalized = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(normalized);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
 function readAccounts() {
@@ -1468,6 +1476,11 @@ export default function Page() {
   const [socialActionNotice, setSocialActionNotice] = useState("");
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [pushNotice, setPushNotice] = useState("");
+  const [isUpdatingPush, setIsUpdatingPush] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [highlightedFavoritePlaceId, setHighlightedFavoritePlaceId] = useState<string | null>(null);
@@ -2185,6 +2198,92 @@ export default function Page() {
     return false;
   };
 
+  const syncPushSubscriptionToBackend = async (subscription: PushSubscription) => {
+    const response = await fetch("/api/push-subscriptions", {
+      method: "POST",
+      headers: getAuthenticatedHeaders({
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({ subscription }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? "push notifications didn’t connect.");
+    }
+  };
+
+  const enablePushNotifications = async () => {
+    if (!ensureAuthenticatedSession("sign in again first so we can turn on alerts for this account.")) {
+      return;
+    }
+
+    if (!pushSupported || !WEB_PUSH_PUBLIC_KEY) {
+      setPushNotice("this device doesn’t support web push here yet.");
+      return;
+    }
+
+    setIsUpdatingPush(true);
+    setPushNotice("");
+
+    try {
+      const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+
+      if (permission !== "granted") {
+        setPushNotice(permission === "denied" ? "notifications are blocked on this device right now." : "notification setup was skipped.");
+        setPushEnabled(false);
+        return;
+      }
+
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: decodeBase64Url(WEB_PUSH_PUBLIC_KEY),
+        }));
+
+      await syncPushSubscriptionToBackend(subscription);
+      setPushEnabled(true);
+      setPushNotice("real device alerts are on.");
+    } catch {
+      setPushNotice("notifications didn’t turn on. try again from the home-screen app.");
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
+  const disablePushNotifications = async () => {
+    if (!pushSupported) return;
+
+    setIsUpdatingPush(true);
+    setPushNotice("");
+
+    try {
+      const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await fetch("/api/push-subscriptions", {
+          method: "DELETE",
+          headers: getAuthenticatedHeaders({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        }).catch(() => undefined);
+        await subscription.unsubscribe().catch(() => undefined);
+      }
+
+      setPushEnabled(false);
+      setPushNotice("device alerts are off.");
+    } catch {
+      setPushNotice("couldn’t turn alerts off right now.");
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
   const syncSharedState = ({
     nextPosts,
     nextInteractions,
@@ -2344,6 +2443,45 @@ export default function Page() {
   useEffect(() => {
     authModeRef.current = authMode;
   }, [authMode]);
+
+  useEffect(() => {
+    if (!user.signedIn || isAdmin) {
+      setPushEnabled(false);
+      setPushNotice("");
+      return;
+    }
+
+    const refresh = async () => {
+      if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        setPushSupported(false);
+        setPushPermission("unsupported");
+        setPushEnabled(false);
+        return;
+      }
+
+      setPushSupported(Boolean(WEB_PUSH_PUBLIC_KEY));
+      setPushPermission(Notification.permission);
+
+      if (!WEB_PUSH_PUBLIC_KEY) {
+        setPushEnabled(false);
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+        const subscription = await registration.pushManager.getSubscription();
+        setPushEnabled(Boolean(subscription));
+
+        if (subscription) {
+          await syncPushSubscriptionToBackend(subscription).catch(() => undefined);
+        }
+      } catch {
+        setPushEnabled(false);
+      }
+    };
+
+    void refresh();
+  }, [isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
@@ -6191,6 +6329,27 @@ export default function Page() {
                       <span>share</span>
                       <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">↗</span>
                     </button>
+                    <div className="pt-2">
+                      <Button
+                        radius="full"
+                        size="sm"
+                        isLoading={isUpdatingPush}
+                        className={pushEnabled ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
+                        onPress={pushEnabled ? disablePushNotifications : enablePushNotifications}
+                      >
+                        {pushEnabled ? "notifications on" : "turn on notifications"}
+                      </Button>
+                      <p className="mt-2 text-sm text-[#6c7289]">
+                        {pushSupported
+                          ? pushEnabled
+                            ? "crumbz can now send real device alerts when a push goes out."
+                            : pushPermission === "denied"
+                              ? "notifications are blocked for crumbz on this device right now."
+                              : "turn this on from the home-screen app to get real device alerts."
+                          : "real device alerts aren’t available on this browser yet."}
+                      </p>
+                      {pushNotice ? <p className="mt-2 text-sm text-[#F5A623]">{pushNotice}</p> : null}
+                    </div>
                   </div>
                 </div>
               </CardBody>
