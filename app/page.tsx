@@ -43,6 +43,10 @@ const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const MAX_IMAGE_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+const STORY_MAX_VIDEO_FILE_SIZE_BYTES = 500 * 1024 * 1024;
+const STORY_MAX_IMAGE_FILE_SIZE_BYTES = 30 * 1024 * 1024;
+const STORY_RATIO = 9 / 16;
+const STORY_RATIO_TOLERANCE = 0.02;
 const cityOptions = [
   "Warsaw",
   "Kraków",
@@ -321,6 +325,55 @@ const defaultPostFields = {
   weekKey: "",
   createdAtIso: "",
 };
+
+function isStoryAspectRatio(width: number, height: number) {
+  return Math.abs(width / height - STORY_RATIO) <= STORY_RATIO_TOLERANCE;
+}
+
+function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("image load failed"));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+function readVideoMetadata(file: File): Promise<{ width: number; height: number; duration: number }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration,
+      });
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("video load failed"));
+    };
+
+    video.src = objectUrl;
+  });
+}
 
 function getDefaultDare(): DareState {
   const now = new Date();
@@ -3199,6 +3252,16 @@ export default function Page() {
       return;
     }
 
+    if (composer.type === "story" && composer.mediaKind === "none") {
+      setStorageNotice("stories need a photo or video.");
+      return;
+    }
+
+    if (composer.type === "story" && composer.mediaKind === "carousel") {
+      setStorageNotice("stories work with one vertical photo or one vertical video.");
+      return;
+    }
+
     if (composer.mediaKind !== "none" && !composer.mediaUrls.length) {
       setStorageNotice("add the media file first so students can actually see it.");
       return;
@@ -3366,6 +3429,7 @@ export default function Page() {
     files: FileList | null,
     options: {
       mediaKind: MediaKind;
+      postType?: PostType;
       maxFiles?: number;
       skipSizeLimit?: boolean;
       setNotice: (message: string) => void;
@@ -3374,19 +3438,38 @@ export default function Page() {
     if (!files?.length) return null;
 
     const fileList = Array.from(files);
+    const isStoryPost = options.postType === "story";
     if (options.maxFiles && fileList.length > options.maxFiles) {
       options.setNotice(`keep it to ${options.maxFiles} photos max in one dump.`);
       return null;
     }
 
-    const expectedTypes = options.mediaKind === "video" ? ACCEPTED_VIDEO_TYPES : ACCEPTED_IMAGE_TYPES;
+    const expectedTypes =
+      isStoryPost && options.mediaKind !== "video"
+        ? [".jpg", ".jpeg", ".png", "image/jpeg", "image/png"]
+        : options.mediaKind === "video"
+          ? ACCEPTED_VIDEO_TYPES
+          : ACCEPTED_IMAGE_TYPES;
     const hasInvalidFile = fileList.some((file) => !matchesAcceptedType(file, expectedTypes));
-    const maxFileSize = options.mediaKind === "video" ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_IMAGE_FILE_SIZE_BYTES;
+    const maxFileSize =
+      isStoryPost && options.mediaKind === "video"
+        ? STORY_MAX_VIDEO_FILE_SIZE_BYTES
+        : isStoryPost
+          ? STORY_MAX_IMAGE_FILE_SIZE_BYTES
+          : options.mediaKind === "video"
+            ? MAX_VIDEO_FILE_SIZE_BYTES
+            : MAX_IMAGE_FILE_SIZE_BYTES;
     const oversizedFile = options.skipSizeLimit ? null : fileList.find((file) => file.size > maxFileSize);
 
     if (hasInvalidFile) {
       options.setNotice(
-        options.mediaKind === "video" ? "videos need to be mp4 or mov." : "photos need to be jpg, jpeg, png, or heic.",
+        isStoryPost
+          ? options.mediaKind === "video"
+            ? "story videos need to be mp4 or mov."
+            : "story photos need to be jpg or png."
+          : options.mediaKind === "video"
+            ? "videos need to be mp4 or mov."
+            : "photos need to be jpg, jpeg, png, or heic.",
       );
       return null;
     }
@@ -3394,14 +3477,53 @@ export default function Page() {
     if (oversizedFile) {
       options.setNotice(
         options.mediaKind === "video"
-          ? `that video is ${formatFileSize(oversizedFile.size)}. keep videos under ${formatFileSize(MAX_VIDEO_FILE_SIZE_BYTES)} for now.`
-          : `that image is ${formatFileSize(oversizedFile.size)}. keep photos under ${formatFileSize(MAX_IMAGE_FILE_SIZE_BYTES)} for now.`,
+          ? `that video is ${formatFileSize(oversizedFile.size)}. keep ${isStoryPost ? "story videos" : "videos"} under ${formatFileSize(maxFileSize)}.`
+          : `that image is ${formatFileSize(oversizedFile.size)}. keep ${isStoryPost ? "story photos" : "photos"} under ${formatFileSize(maxFileSize)}.`,
       );
       return null;
     }
 
+    if (isStoryPost) {
+      if (options.mediaKind === "video") {
+        for (const file of fileList) {
+          try {
+            const metadata = await readVideoMetadata(file);
+            if (!isStoryAspectRatio(metadata.width, metadata.height)) {
+              options.setNotice("story videos need to be vertical 9:16, like 1080 x 1920.");
+              return null;
+            }
+
+            if (metadata.duration < 1 || metadata.duration > 60) {
+              options.setNotice("story videos need to be between 1 and 60 seconds.");
+              return null;
+            }
+          } catch {
+            options.setNotice("we couldn't read that video. try another mp4 or mov file.");
+            return null;
+          }
+        }
+      } else if (options.mediaKind === "photo") {
+        for (const file of fileList) {
+          try {
+            const dimensions = await readImageDimensions(file);
+            if (!isStoryAspectRatio(dimensions.width, dimensions.height)) {
+              options.setNotice("story photos need to be vertical 9:16, like 1080 x 1920.");
+              return null;
+            }
+          } catch {
+            options.setNotice("we couldn't read that image. try another jpg or png file.");
+            return null;
+          }
+        }
+      }
+    }
+
     const filePayloads = await Promise.all(
       fileList.map(async (file) => {
+        if (isStoryPost) {
+          return file;
+        }
+
         const isHeic =
           matchesAcceptedType(file, [".heic", ".heif"]) || ["image/heic", "image/heif"].includes(file.type.toLowerCase());
 
@@ -3488,6 +3610,7 @@ export default function Page() {
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: composer.mediaKind,
+        postType: composer.type,
         setNotice: setStorageNotice,
       });
 
@@ -4550,6 +4673,7 @@ export default function Page() {
                                   setComposer((current) => ({
                                     ...current,
                                     type: (typeof selected === "string" ? selected : "chapter") as PostType,
+                                    videoRatio: typeof selected === "string" && selected === "story" ? "9:16" : current.videoRatio,
                                   }));
                                 }}
                                 classNames={{
@@ -4560,6 +4684,9 @@ export default function Page() {
                                   <SelectItem key={type}>{type}</SelectItem>
                                 ))}
                               </Select>
+                              {composer.type === "story" ? (
+                                <p className="text-sm text-[#6c7289]">stories stay vertical. use a 9:16 file like 1080 x 1920. photos can be jpg or png up to 30mb. videos can be mp4 or mov up to 500mb and 1 to 60 seconds.</p>
+                              ) : null}
                               <Select
                                 label="media type"
                                 labelPlacement="outside"
@@ -4582,7 +4709,7 @@ export default function Page() {
                                   <SelectItem key={type}>{type}</SelectItem>
                                 ))}
                               </Select>
-                              {composer.mediaKind === "video" ? (
+                              {composer.mediaKind === "video" && composer.type !== "story" ? (
                                 <Select
                                   label="video ratio"
                                   labelPlacement="outside"
@@ -4603,6 +4730,8 @@ export default function Page() {
                                     <SelectItem key={ratio}>{ratio}</SelectItem>
                                   ))}
                                 </Select>
+                              ) : composer.mediaKind === "video" && composer.type === "story" ? (
+                                <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">story videos are locked to 9:16.</div>
                               ) : null}
                               <Input
                                 label="title"
@@ -4639,7 +4768,9 @@ export default function Page() {
                                     accept={
                                       composer.mediaKind === "video"
                                         ? ".mp4,.mov,video/mp4,video/quicktime"
-                                        : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                                        : composer.type === "story"
+                                          ? ".jpg,.jpeg,.png,image/jpeg,image/png"
+                                          : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
                                     }
                                     multiple={composer.mediaKind === "carousel"}
                                     onChange={(event) => {
