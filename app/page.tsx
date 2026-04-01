@@ -1640,6 +1640,7 @@ export default function Page() {
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
   const shouldShowAdminPosts = adminPosts.length > 0;
+  const adminStoryPosts = adminPosts.filter((post) => post.type === "story").slice(0, 8);
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -1771,15 +1772,25 @@ export default function Page() {
       )
       .filter((item): item is { id: string; title: string; detail: string; city: string; place: FavoritePlace } => Boolean(item)),
   ].slice(0, 4);
-  const storyRailItems = [
-    {
-      id: "crumbz",
-      label: "crumbz",
-      picture: adminProfilePicture,
-      ring: "#F5A623",
-      badge: "live",
-    },
-  ];
+  const storyRailItems = adminStoryPosts.length
+    ? adminStoryPosts.map((post) => ({
+        id: post.id,
+        label: "crumbz",
+        detail: post.title,
+        picture: adminProfilePicture,
+        ring: "#F5A623",
+        badge: "live",
+      }))
+    : [
+        {
+          id: "crumbz-placeholder",
+          label: "crumbz",
+          detail: "coming soon",
+          picture: adminProfilePicture,
+          ring: "#F5A623",
+          badge: "live",
+        },
+      ];
   const mutualFansByPlace = Object.fromEntries(
     favoritePlaces.map((place) => [
       place.id,
@@ -5174,7 +5185,7 @@ export default function Page() {
                         </span>
                       </div>
                     ) : null}
-                    <p className="mt-2 text-sm font-medium text-[#53627b]">coming soon</p>
+                    <p className="mt-2 max-w-[82px] truncate text-sm font-medium text-[#53627b]">{item.detail}</p>
                   </div>
                 ))}
               </div>
