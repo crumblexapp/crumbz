@@ -3419,11 +3419,17 @@ export default function Page() {
     setPosts(nextPosts);
     setInteractions(nextInteractions);
     syncSharedState({
+      nextPosts,
+      nextInteractions,
       deletePostId: postId,
     });
 
     if (editingPostId === postId) {
       cancelEditingPost();
+    }
+
+    if (selectedStoryPostId === postId) {
+      setSelectedStoryPostId(null);
     }
   };
 
