@@ -23,6 +23,7 @@ import {
   Textarea,
 } from "@heroui/react";
 import { motion } from "framer-motion";
+import QRCode from "qrcode";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
@@ -1338,6 +1339,7 @@ export default function Page() {
   const [profileQrOpen, setProfileQrOpen] = useState(false);
   const [profileShareUrl, setProfileShareUrl] = useState("");
   const [profileShareNotice, setProfileShareNotice] = useState("");
+  const [profileQrImageUrl, setProfileQrImageUrl] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -1610,9 +1612,6 @@ export default function Page() {
   const selectedProfileIsFriend = Boolean(selectedProfileEmailLower && liveProfile.friends.includes(selectedProfileEmailLower));
   const selectedProfileRequestPending = Boolean(selectedProfileEmailLower && liveProfile.outgoingFriendRequests.includes(selectedProfileEmailLower));
   const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && liveProfile.incomingFriendRequests.includes(selectedProfileEmailLower));
-  const profileQrImageUrl = profileShareUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=24&data=${encodeURIComponent(profileShareUrl)}`
-    : "";
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -2515,6 +2514,34 @@ export default function Page() {
     return () => window.clearTimeout(timeout);
   }, [isAdmin, user.signedIn]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!profileShareUrl) {
+      setProfileQrImageUrl("");
+      return;
+    }
+
+    void QRCode.toDataURL(profileShareUrl, {
+      width: 960,
+      margin: 2,
+      color: {
+        dark: "#000000",
+        light: "#FFFFFF",
+      },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setProfileQrImageUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileQrImageUrl("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profileShareUrl]);
+
   const finishOnboarding = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -2633,16 +2660,30 @@ export default function Page() {
   const shareProfile = async () => {
     if (!profileShareUrl) return;
 
-    const sharePayload = {
-      title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
-      text: `open ${liveProfile.username}'s crumbz profile`,
-      url: profileShareUrl,
-    };
-
     try {
+      if (navigator.share && profileQrImageUrl) {
+        const qrBlob = await fetch(profileQrImageUrl).then((response) => response.blob());
+        const qrFile = new File([qrBlob], `${liveProfile.username}-crumbz-qr.png`, { type: "image/png" });
+        const sharePayload = {
+          files: [qrFile],
+          title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
+          text: `scan this qr to open ${liveProfile.username}'s crumbz profile`,
+        };
+
+        if (navigator.canShare?.({ files: [qrFile] })) {
+          await navigator.share(sharePayload);
+          setProfileShareNotice("your phone share menu is open with the qr image. pick instagram or facebook, then finish the story or post there.");
+          return;
+        }
+      }
+
       if (navigator.share) {
-        await navigator.share(sharePayload);
-        setProfileShareNotice("your phone's share menu is open. pick instagram, facebook, messages, or anywhere else you want.");
+        await navigator.share({
+          title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
+          text: `open ${liveProfile.username}'s crumbz profile`,
+          url: profileShareUrl,
+        });
+        setProfileShareNotice("your phone share menu is open. if instagram or facebook doesn't take the qr image here, you can still share the profile link.");
         return;
       }
     } catch {
@@ -6102,19 +6143,18 @@ export default function Page() {
       </Modal>
 
       <Modal isOpen={profileQrOpen} onOpenChange={setProfileQrOpen} placement="center">
-        <ModalContent className="bg-[#fffaf2]">
+        <ModalContent className="max-h-[calc(100dvh-1.5rem)] overflow-hidden bg-[#fffaf2]">
           {(onClose) => (
             <>
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">share your profile</p>
-                  <p className="mt-2 text-sm text-[#6c7289]">scan the qr, copy the link, or open your phone share menu for instagram, facebook, messages, and more.</p>
                 </div>
                 <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="items-center gap-4 bg-[#fffaf2] pb-6 pt-5">
+              <ModalBody className="items-center gap-4 overflow-y-auto bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
                 <div className="w-full rounded-[28px] border border-[#FFF0D0] bg-white p-5 text-center shadow-[0_18px_40px_rgba(254,138,1,0.08)]">
                   <div className="mx-auto flex w-fit items-center gap-3 rounded-full bg-[#FFF7E8] px-4 py-2">
                     <Avatar src={user.googleProfile?.picture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
@@ -6131,6 +6171,12 @@ export default function Page() {
                       qr code loading...
                     </div>
                   )}
+                  <div className="mt-4 space-y-3">
+                    <Button radius="full" className="w-full bg-[#2C1A0E] text-white" onPress={shareProfile}>
+                      share qr image
+                    </Button>
+                    <p className="text-sm text-[#6c7289]">this opens your phone share menu so you can finish in instagram or facebook.</p>
+                  </div>
                   <div className="mt-4 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
                     <p className="truncate">{profileShareUrl}</p>
                   </div>
@@ -6139,9 +6185,6 @@ export default function Page() {
                 <div className="flex w-full items-center justify-end gap-2">
                   <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={copyProfileLink}>
                     copy link
-                  </Button>
-                  <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={shareProfile}>
-                    share from phone
                   </Button>
                 </div>
               </ModalBody>
