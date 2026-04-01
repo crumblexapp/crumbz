@@ -5130,6 +5130,15 @@ export default function Page() {
                                           authorEmail: ADMIN_EMAIL,
                                           schoolName: "",
                                           weekKey: "",
+                                          taggedPlaceId: "",
+                                          taggedPlaceName: "",
+                                          taggedPlaceKind: "",
+                                          taggedPlaceAddress: "",
+                                          taggedPlaceLat: null,
+                                          taggedPlaceLon: null,
+                                          taggedPlaceCity: "",
+                                          tasteTag: "",
+                                          priceTag: "",
                                         }}
                                       />
                                     </div>
