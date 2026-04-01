@@ -3,8 +3,12 @@ create table if not exists public.app_state (
   accounts jsonb not null default '[]'::jsonb,
   posts jsonb not null default '[]'::jsonb,
   interactions jsonb not null default '{}'::jsonb,
+  announcements jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.app_state
+add column if not exists announcements jsonb not null default '[]'::jsonb;
 
 insert into public.app_state (id)
 values ('crumbz-app-state')
