@@ -2219,7 +2219,7 @@ export default function Page() {
     }
 
     if (!pushSupported || !WEB_PUSH_PUBLIC_KEY) {
-      setPushNotice("this device doesn’t support web push here yet.");
+      setPushNotice("open crumbz from the latest home-screen app and try again.");
       return;
     }
 
@@ -6354,7 +6354,7 @@ export default function Page() {
                             : pushPermission === "denied"
                               ? "notifications are blocked for crumbz on this device right now."
                               : "turn this on from the home-screen app to get real device alerts."
-                          : "real device alerts aren’t available on this browser yet."}
+                          : "open the latest home-screen app from safari to turn on real device alerts."}
                       </p>
                       {pushNotice ? <p className="mt-2 text-sm text-[#F5A623]">{pushNotice}</p> : null}
                     </div>
