@@ -91,6 +91,101 @@ function dedupeByKey<T extends JsonRecord>(items: T[], getKey: (item: T) => stri
   });
 }
 
+function normalizeText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function buildTaggedReviewRows(rawPosts: unknown) {
+  return normalizeObjectArray(rawPosts)
+    .filter(
+      (post) =>
+        post.authorRole === "student" &&
+        typeof post.id === "string" &&
+        normalizeText(post.taggedPlaceId) &&
+        normalizeText(post.taggedPlaceName),
+    )
+    .map((post) => ({
+      postId: String(post.id),
+      placeId: normalizeText(post.taggedPlaceId),
+      placeName: normalizeText(post.taggedPlaceName),
+      placeKind: normalizeText(post.taggedPlaceKind),
+      placeAddress: normalizeText(post.taggedPlaceAddress),
+      placeCity: normalizeText(post.taggedPlaceCity),
+      placeLat: normalizeNumber(post.taggedPlaceLat),
+      placeLon: normalizeNumber(post.taggedPlaceLon),
+      authorEmail: normalizeEmail(post.authorEmail),
+      authorName: normalizeText(post.authorName),
+      caption: normalizeText(post.body),
+      tasteTag: normalizeText(post.tasteTag),
+      priceTag: normalizeText(post.priceTag),
+      photoUrl: Array.isArray(post.mediaUrls) ? post.mediaUrls.find((item): item is string => typeof item === "string") ?? null : null,
+      createdAt: normalizeText(post.createdAtIso) || new Date().toISOString(),
+    }))
+    .filter((post) => post.placeId && post.placeName && post.authorEmail);
+}
+
+function encodePostgrestIn(values: string[]) {
+  return `(${values.map((value) => `"${value.replace(/"/g, '\\"')}"`).join(",")})`;
+}
+
+async function syncPlaceReviewTables(rawPosts: unknown) {
+  const taggedPosts = buildTaggedReviewRows(rawPosts);
+  const timestamp = new Date().toISOString();
+
+  if (!taggedPosts.length) {
+    const { error } = await supabaseServer.from("place_reviews").delete().not("post_id", "is", null);
+    return error;
+  }
+
+  const placeRows = Array.from(
+    new Map(
+      taggedPosts.map((post) => [
+        post.placeId,
+        {
+          id: post.placeId,
+          name: post.placeName,
+          kind: post.placeKind,
+          address: post.placeAddress,
+          city: post.placeCity,
+          lat: post.placeLat,
+          lon: post.placeLon,
+          updated_at: timestamp,
+        },
+      ]),
+    ).values(),
+  );
+
+  const { error: placesError } = await supabaseServer.from("places").upsert(placeRows, { onConflict: "id" });
+  if (placesError) return placesError;
+
+  const reviewRows = taggedPosts.map((post) => ({
+    post_id: post.postId,
+    place_id: post.placeId,
+    author_email: post.authorEmail,
+    author_name: post.authorName,
+    caption: post.caption,
+    taste_tag: post.tasteTag,
+    price_tag: post.priceTag,
+    photo_url: post.photoUrl,
+    created_at: post.createdAt,
+    updated_at: timestamp,
+  }));
+
+  const { error: reviewsError } = await supabaseServer.from("place_reviews").upsert(reviewRows, { onConflict: "post_id" });
+  if (reviewsError) return reviewsError;
+
+  const { error: deleteError } = await supabaseServer
+    .from("place_reviews")
+    .delete()
+    .not("post_id", "in", encodePostgrestIn(taggedPosts.map((post) => post.postId)));
+
+  return deleteError;
+}
+
 function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
   const currentPosts = normalizeObjectArray(currentPostsRaw);
   const proposedPosts = normalizeObjectArray(proposedPostsRaw);
@@ -366,6 +461,14 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  }
+
+  if ("posts" in updates) {
+    const reviewSyncError = await syncPlaceReviewTables(nextRow.posts);
+
+    if (reviewSyncError && !reviewSyncError.message.includes('relation "public.places" does not exist') && !reviewSyncError.message.includes('relation "public.place_reviews" does not exist')) {
+      return NextResponse.json({ ok: false, message: reviewSyncError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });
