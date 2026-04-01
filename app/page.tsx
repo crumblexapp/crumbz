@@ -6053,42 +6053,44 @@ export default function Page() {
           </section>
         ) : null}
 
-        <nav
-          className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
-          style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
-        >
-          <div className="grid grid-cols-5 gap-1 text-center">
-            {[
-              { label: "Feed", key: "feed" },
-              { label: "Favorites", key: "favorites" },
-              { label: "Rewards", key: "rewards" },
-              { label: "Social", key: "social" },
-              { label: "Profile", key: "profile" },
-            ].map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
-                  studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
-                }`}
-                onClick={() => {
-                  if (item.key === "favorites") {
-                    setFavoriteViewCity(null);
-                    setHighlightedFavoritePlaceId(null);
-                  }
-                  setStudentTab(item.key as StudentTab);
-                }}
-              >
-                <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
-                  {renderStudentTabIcon(item.key as StudentTab, "h-6 w-6")}
-                </span>
-                <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </nav>
+        {selectedStoryPost ? null : (
+          <nav
+            className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
+            style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="grid grid-cols-5 gap-1 text-center">
+              {[
+                { label: "Feed", key: "feed" },
+                { label: "Favorites", key: "favorites" },
+                { label: "Rewards", key: "rewards" },
+                { label: "Social", key: "social" },
+                { label: "Profile", key: "profile" },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
+                    studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
+                  }`}
+                  onClick={() => {
+                    if (item.key === "favorites") {
+                      setFavoriteViewCity(null);
+                      setHighlightedFavoritePlaceId(null);
+                    }
+                    setStudentTab(item.key as StudentTab);
+                  }}
+                >
+                  <span className={`text-[24px] leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
+                    {renderStudentTabIcon(item.key as StudentTab, "h-6 w-6")}
+                  </span>
+                  <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
       </div>
 
       {notificationsOpen ? (
