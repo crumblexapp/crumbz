@@ -2635,18 +2635,18 @@ export default function Page() {
 
     const sharePayload = {
       title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
-      text: `scan or open ${liveProfile.username}'s crumbz profile`,
+      text: `open ${liveProfile.username}'s crumbz profile`,
       url: profileShareUrl,
     };
 
     try {
       if (navigator.share) {
         await navigator.share(sharePayload);
-        setProfileShareNotice("share sheet opened.");
+        setProfileShareNotice("your phone's share menu is open. pick instagram, facebook, messages, or anywhere else you want.");
         return;
       }
     } catch {
-      setProfileShareNotice("sharing didn’t go through. try the copy link button.");
+      setProfileShareNotice("the phone share menu didn’t open, so you can copy the link instead.");
       return;
     }
 
@@ -6108,7 +6108,7 @@ export default function Page() {
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">share your profile</p>
-                  <p className="mt-2 text-sm text-[#6c7289]">scan the qr or send the link to open your crumbz profile.</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">scan the qr, copy the link, or open your phone share menu for instagram, facebook, messages, and more.</p>
                 </div>
                 <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
                   close
@@ -6141,7 +6141,7 @@ export default function Page() {
                     copy link
                   </Button>
                   <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={shareProfile}>
-                    share
+                    share from phone
                   </Button>
                 </div>
               </ModalBody>
