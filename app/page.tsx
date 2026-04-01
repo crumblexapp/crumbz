@@ -653,6 +653,16 @@ function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, server
   };
 }
 
+function filterRecentDeletedPosts(posts: AppPost[], deletedPostIds: Set<string>) {
+  if (!deletedPostIds.size) return posts;
+  return posts.filter((post) => !deletedPostIds.has(post.id));
+}
+
+function filterRecentDeletedInteractions(interactions: InteractionsMap, deletedPostIds: Set<string>) {
+  if (!deletedPostIds.size) return interactions;
+  return Object.fromEntries(Object.entries(interactions).filter(([postId]) => !deletedPostIds.has(postId)));
+}
+
 function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: StoredUser[]) {
   const localByEmail = new Map(
     localAccounts
@@ -1460,6 +1470,7 @@ export default function Page() {
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
+  const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const liveAccount =
@@ -2418,10 +2429,19 @@ export default function Page() {
           }
 
           setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current));
-          const serverPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
-          const shouldPreserveLocalPosts = Date.now() - lastSharedStateMutationAtRef.current < 5000;
+          const now = Date.now();
+          const recentDeletedPostIds = new Set(
+            Array.from(recentlyDeletedPostIdsRef.current.entries())
+              .filter(([, deletedAt]) => now - deletedAt < 5000)
+              .map(([postId]) => postId),
+          );
+          recentlyDeletedPostIdsRef.current = new Map(
+            Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
+          );
+          const serverPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
+          const shouldPreserveLocalPosts = now - lastSharedStateMutationAtRef.current < 5000;
           setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
-          const serverInteractions = normalizeInteractions(payload.interactions);
+          const serverInteractions = filterRecentDeletedInteractions(normalizeInteractions(payload.interactions), recentDeletedPostIds);
           setInteractions((current) =>
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
           );
@@ -3409,6 +3429,7 @@ export default function Page() {
       return;
     }
 
+    recentlyDeletedPostIdsRef.current.set(postId, Date.now());
     const nextPosts = posts.filter((post) => post.id !== postId);
     const nextInteractions = { ...interactions };
     delete nextInteractions[postId];
