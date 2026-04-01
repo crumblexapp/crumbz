@@ -1439,6 +1439,7 @@ export default function Page() {
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
+  const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
     title: "",
@@ -1639,8 +1640,8 @@ export default function Page() {
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
-  const shouldShowAdminPosts = adminPosts.length > 0;
   const adminStoryPosts = adminPosts.filter((post) => post.type === "story").slice(0, 8);
+  const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -1656,6 +1657,9 @@ export default function Page() {
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const selectedOwnPost = selectedOwnPostId
     ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
+    : null;
+  const selectedStoryPost = selectedStoryPostId
+    ? adminStoryPosts.find((post) => post.id === selectedStoryPostId) ?? null
     : null;
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfilePosts = selectedProfileEmail
@@ -1775,6 +1779,7 @@ export default function Page() {
   const storyRailItems = adminStoryPosts.length
     ? adminStoryPosts.map((post) => ({
         id: post.id,
+        postId: post.id,
         label: "crumbz",
         detail: post.title,
         picture: adminProfilePicture,
@@ -1784,6 +1789,7 @@ export default function Page() {
     : [
         {
           id: "crumbz-placeholder",
+          postId: null,
           label: "crumbz",
           detail: "coming soon",
           picture: adminProfilePicture,
@@ -3206,6 +3212,13 @@ export default function Page() {
 
   const openPostNotification = (notificationId: string, postId: string) => {
     markNotificationSeen(notificationId);
+    const targetPost = posts.find((post) => post.id === postId) ?? null;
+    if (targetPost?.authorRole === "admin" && targetPost.type === "story") {
+      setSelectedStoryPostId(postId);
+      setNotificationsOpen(false);
+      return;
+    }
+
     setStudentTab("feed");
     setNotificationsOpen(false);
     window.setTimeout(() => {
@@ -5176,7 +5189,13 @@ export default function Page() {
             >
               <div className="flex gap-4 overflow-x-auto pb-2">
                 {storyRailItems.map((item) => (
-                  <div key={item.id} className="min-w-[82px] text-center">
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={!item.postId}
+                    onClick={() => item.postId && setSelectedStoryPostId(item.postId)}
+                    className="min-w-[82px] text-center disabled:cursor-default"
+                  >
                     <div
                       className="mx-auto rounded-full p-[3px] shadow-[0_10px_30px_rgba(44,26,14,0.08)]"
                       style={{ background: `linear-gradient(135deg, ${item.ring}, #f4f0e7)` }}
@@ -5195,7 +5214,7 @@ export default function Page() {
                       </div>
                     ) : null}
                     <p className="mt-2 max-w-[82px] truncate text-sm font-medium text-[#53627b]">{item.detail}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </motion.section>
@@ -5442,7 +5461,7 @@ export default function Page() {
                 </CardBody>
               </Card>
 
-              {shouldShowAdminPosts ? <div className="space-y-4">{adminPosts.map(renderFeedCard)}</div> : null}
+              {adminFeedPosts.length ? <div className="space-y-4">{adminFeedPosts.map(renderFeedCard)}</div> : null}
 
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[#eadffd] shadow-[0_18px_50px_rgba(123,79,255,0.16)]">
                 <CardBody className="flex-row items-center justify-between gap-4 p-5">
@@ -6340,6 +6359,49 @@ export default function Page() {
                 </div>
               </ModalBody>
             </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={Boolean(selectedStoryPost)} onOpenChange={(open) => !open && setSelectedStoryPostId(null)} size="full" hideCloseButton>
+        <ModalContent className="min-h-[100dvh] bg-[rgba(16,10,6,0.96)] shadow-none">
+          {() => (
+            <ModalBody className="flex min-h-[100dvh] items-center justify-center p-0">
+              {selectedStoryPost ? (
+                <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-[#140d08]">
+                  {selectedStoryPost.mediaKind === "video" && selectedStoryPost.mediaUrls[0] ? (
+                    <video
+                      src={selectedStoryPost.mediaUrls[0]}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      autoPlay
+                      playsInline
+                      controls
+                    />
+                  ) : selectedStoryPost.mediaUrls[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={selectedStoryPost.mediaUrls[0]} alt={selectedStoryPost.title} className="absolute inset-0 h-full w-full object-cover" />
+                  ) : null}
+                  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,13,8,0.62)_0%,rgba(20,13,8,0.18)_36%,rgba(20,13,8,0.55)_100%)]" />
+                  <div className="relative z-10 flex items-center justify-between gap-3 px-4 pb-3 pt-[calc(1rem+env(safe-area-inset-top))]">
+                    <div className="flex items-center gap-3">
+                      <Avatar src={adminProfilePicture} name="crumbz" className="h-11 w-11 bg-[#F5A623] text-white" />
+                      <div>
+                        <p className="text-sm font-semibold text-white">crumbz</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-white/70">story • {selectedStoryPost.createdAt}</p>
+                      </div>
+                    </div>
+                    <Button radius="full" variant="light" className="min-w-0 bg-white/12 px-3 text-white" onPress={() => setSelectedStoryPostId(null)}>
+                      close
+                    </Button>
+                  </div>
+                  <div className="relative z-10 mt-auto space-y-3 px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-10 text-white">
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2.6rem] leading-none">{selectedStoryPost.title}</p>
+                    {selectedStoryPost.body ? <p className="max-w-[18rem] text-base leading-7 text-white/88">{selectedStoryPost.body}</p> : null}
+                    <Chip className="w-fit bg-white/14 text-white">{selectedStoryPost.cta}</Chip>
+                  </div>
+                </div>
+              ) : null}
+            </ModalBody>
           )}
         </ModalContent>
       </Modal>
