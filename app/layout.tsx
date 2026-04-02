@@ -18,8 +18,11 @@ const youngSerif = localFont({
 export const metadata: Metadata = {
   title: "crumbz",
   description: "the feed that keeps you hungry.",
-  metadataBase: new URL("https://www.crumbz.pl"),
+  metadataBase: new URL("https://app.crumbz.pl"),
   applicationName: "crumbz",
+  alternates: {
+    canonical: "https://app.crumbz.pl",
+  },
   icons: {
     icon: "/brand/crumbz-home-icon.png",
     apple: "/brand/crumbz-home-icon.png",
