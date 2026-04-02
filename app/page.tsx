@@ -2043,7 +2043,7 @@ export default function Page() {
           )}
           <div className="flex-1">
             <p className="font-semibold text-[#2C1A0E]">
-              {isSundayDump && isStudentPost ? authorUsername : isStudentPost ? post.authorName : "crumbz"}
+              {isStudentPost ? authorUsername : "crumbz"}
             </p>
             {isSundayDump && isStudentPost ? (
               profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
