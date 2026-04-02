@@ -2008,6 +2008,8 @@ export default function Page() {
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const showPostBody = Boolean(post.body.trim()) && (!isStudentPost || post.body.trim() !== profileMeta);
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
+    const isFriendFeedCard = isStudentPost && !isSundayDump;
+    const ctaLabel = post.cta === "live now" ? "post" : post.cta;
 
     return (
       <Card
@@ -2047,16 +2049,16 @@ export default function Page() {
               profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
             ) : !isSundayDump ? (
               <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                {isStudentPost ? `post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}` : `${post.type} • ${post.createdAt}`}
+                {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
               </p>
             ) : null}
           </div>
-          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{post.cta}</Chip>
+          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
             showPostBody ? <p className="text-base leading-7 text-[#2C1A0E]">{post.body}</p> : null
-          ) : (
+          ) : isFriendFeedCard ? null : (
             <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
               <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
               {post.taggedPlaceName ? (
@@ -2091,6 +2093,30 @@ export default function Page() {
                 this post’s media needs one re-upload from the admin side.
               </div>
             )
+          ) : null}
+
+          {isFriendFeedCard && showPostBody ? <p className="text-base leading-7 text-[#2C1A0E]">{post.body}</p> : null}
+
+          {isFriendFeedCard && post.taggedPlaceName ? (
+            <button
+              type="button"
+              onClick={() => openPostPlace(post)}
+              className="flex w-full items-start justify-between gap-3 rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 text-left ring-1 ring-[#FFF0D0]"
+            >
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+              </div>
+              <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+            </button>
+          ) : null}
+
+          {isFriendFeedCard && (post.tasteTag || post.priceTag) ? (
+            <div className="flex flex-wrap gap-2">
+              {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
+              {post.priceTag ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
+            </div>
           ) : null}
 
           <div className="flex items-center gap-3">
