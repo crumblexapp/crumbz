@@ -9,7 +9,7 @@ if (!supabaseUrl || !anonKey) {
 
 export const supabaseBrowser = createClient(supabaseUrl, anonKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
   },
 });

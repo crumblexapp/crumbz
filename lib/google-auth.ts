@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase/server";
 
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
-const GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo";
 
 type VerifiedIdentity = {
   email: string;
@@ -31,36 +30,13 @@ async function verifyGoogleIdToken(idToken: string) {
     return cached;
   }
 
-  if (!GOOGLE_CLIENT_ID) {
+  const { data, error } = await supabaseServer.auth.getUser(idToken);
+  if (error || !data.user?.email) {
     return null;
   }
 
-  const response = await fetch(`${GOOGLE_TOKENINFO_URL}?id_token=${encodeURIComponent(idToken)}`, {
-    cache: "no-store",
-  }).catch(() => null);
-
-  if (!response?.ok) {
-    return null;
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        aud?: string;
-        email?: string;
-        email_verified?: string | boolean;
-        exp?: string;
-      }
-    | null;
-
-  const email = String(payload?.email ?? "").toLowerCase();
-  const audience = String(payload?.aud ?? "");
-  const isVerified = payload?.email_verified === true || payload?.email_verified === "true";
-  if (!email || audience !== GOOGLE_CLIENT_ID || !isVerified) {
-    return null;
-  }
-
-  const expiresAtFromPayload = Number(payload?.exp ?? 0) * 1000;
-  const expiresAt = expiresAtFromPayload || parseTokenExpiry(idToken) || Date.now() + 5 * 60 * 1000;
+  const email = String(data.user.email ?? "").toLowerCase();
+  const expiresAt = parseTokenExpiry(idToken) || Date.now() + 5 * 60 * 1000;
   const verifiedIdentity = {
     email,
     isAdmin: email === ADMIN_EMAIL,

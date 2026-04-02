@@ -29,7 +29,6 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
 
 const STORAGE_KEY = "crumbz-active-user-v1";
-const GOOGLE_ID_TOKEN_KEY = "crumbz-google-id-token-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
@@ -37,6 +36,7 @@ const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
+const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
@@ -607,30 +607,17 @@ function readUser(): StoredUser {
     normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
   }
 
-  if (normalized.signedIn && !readGoogleIdToken()) {
-    normalized.signedIn = false;
-  }
-
   return normalized;
 }
 
-function readGoogleIdToken() {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem(GOOGLE_ID_TOKEN_KEY) ?? "";
+async function getAuthAccessToken() {
+  const { data, error } = await supabaseBrowser.auth.getSession();
+  if (error) return "";
+  return data.session?.access_token ?? "";
 }
 
-function persistGoogleIdToken(token: string) {
-  if (typeof window === "undefined" || !token) return;
-  window.localStorage.setItem(GOOGLE_ID_TOKEN_KEY, token);
-}
-
-function clearGoogleIdToken() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(GOOGLE_ID_TOKEN_KEY);
-}
-
-function getAuthenticatedHeaders(headers: Record<string, string> = {}) {
-  const token = readGoogleIdToken();
+async function getAuthenticatedHeaders(headers: Record<string, string> = {}) {
+  const token = await getAuthAccessToken();
   return token
     ? {
         ...headers,
@@ -1090,6 +1077,11 @@ function persistUser(nextUser: StoredUser) {
   window.dispatchEvent(new Event("crumbz-user-change"));
 }
 
+function dispatchAuthExpired(message?: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT, { detail: { message } }));
+}
+
 function parseJwtCredential(credential: string): GoogleProfile | null {
   try {
     const payload = credential.split(".")[1];
@@ -1170,13 +1162,12 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
   favoritePlaceIds?: string[];
   favoritePlace?: FavoritePlace;
 }) {
+  const headers = await getAuthenticatedHeaders({
+    "Content-Type": "application/json",
+  });
   const response = await fetch("/api/account", {
     method: "POST",
-    headers: {
-      ...getAuthenticatedHeaders({
-        "Content-Type": "application/json",
-      }),
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -1188,6 +1179,10 @@ async function mutateAccountState<TUser = StoredUser>(payload: {
         message?: string;
       }
     | null;
+
+  if (response.status === 401) {
+    dispatchAuthExpired(data?.message);
+  }
 
   if (!response.ok || !data?.ok) {
     throw new Error(data?.message ?? "account update failed");
@@ -2185,8 +2180,8 @@ export default function Page() {
     );
   };
 
-  const ensureAuthenticatedSession = (message?: string) => {
-    if (readGoogleIdToken()) return true;
+  const ensureAuthenticatedSession = async (message?: string) => {
+    if (await getAuthAccessToken()) return true;
 
     const nextMessage = message ?? "your session needs a quick refresh. sign out and sign back in with google, then try again.";
     if (isAdmin) {
@@ -2198,12 +2193,27 @@ export default function Page() {
     return false;
   };
 
+  const resetExpiredSession = (message?: string) => {
+    persistUser(defaultUser);
+    void supabaseBrowser.auth.signOut().catch(() => undefined);
+    setFullName(null);
+    setUsername(null);
+    setCity(null);
+    setIsStudent(null);
+    setSchoolName(null);
+    setAuthMode("login");
+    setShowWelcomeScreen(false);
+    setStudentTab("feed");
+    setError(message ?? "your google session expired. sign in again.");
+  };
+
   const syncPushSubscriptionToBackend = async (subscription: PushSubscription) => {
+    const headers = await getAuthenticatedHeaders({
+      "Content-Type": "application/json",
+    });
     const response = await fetch("/api/push-subscriptions", {
       method: "POST",
-      headers: getAuthenticatedHeaders({
-        "Content-Type": "application/json",
-      }),
+      headers,
       body: JSON.stringify({ subscription }),
     });
 
@@ -2214,7 +2224,7 @@ export default function Page() {
   };
 
   const enablePushNotifications = async () => {
-    if (!ensureAuthenticatedSession("sign in again first so we can turn on alerts for this account.")) {
+    if (!(await ensureAuthenticatedSession("sign in again first so we can turn on alerts for this account."))) {
       return;
     }
 
@@ -2265,11 +2275,12 @@ export default function Page() {
       const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
+        const headers = await getAuthenticatedHeaders({
+          "Content-Type": "application/json",
+        });
         await fetch("/api/push-subscriptions", {
           method: "DELETE",
-          headers: getAuthenticatedHeaders({
-            "Content-Type": "application/json",
-          }),
+          headers,
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         }).catch(() => undefined);
         await subscription.unsubscribe().catch(() => undefined);
@@ -2284,7 +2295,7 @@ export default function Page() {
     }
   };
 
-  const syncSharedState = ({
+  const syncSharedState = async ({
     nextPosts,
     nextInteractions,
     nextDare,
@@ -2297,18 +2308,17 @@ export default function Page() {
     nextAnnouncements?: AppAnnouncement[];
     deletePostId?: string;
   }) => {
-    if (!ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined)) {
+    if (!(await ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined))) {
       return;
     }
 
+    const headers = await getAuthenticatedHeaders({
+      "Content-Type": "application/json",
+    });
     void fetch("/api/state", {
       method: "POST",
       cache: "no-store",
-      headers: {
-        ...getAuthenticatedHeaders({
-          "Content-Type": "application/json",
-        }),
-      },
+      headers,
       body: JSON.stringify({
         ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
         ...(nextInteractions ? { interactions: nextInteractions } : {}),
@@ -2321,6 +2331,10 @@ export default function Page() {
         if (response.ok) return;
 
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        if (response.status === 401) {
+          dispatchAuthExpired(payload?.message);
+          return;
+        }
         const fallbackMessage = isAdmin
           ? "that admin change didn’t stick. sign out and back in with crumbleappco@gmail.com, then try again."
           : "that change didn’t stick. sign out and back in with google, then try again.";
@@ -2334,6 +2348,16 @@ export default function Page() {
       })
       .catch(() => undefined);
   };
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const authEvent = event as CustomEvent<{ message?: string }>;
+      resetExpiredSession(authEvent.detail?.message);
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+  }, []);
 
   useEffect(() => {
     const nextUser = readUser();
@@ -2412,6 +2436,27 @@ export default function Page() {
   }, [accounts]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    void supabaseBrowser.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      if (!data.session && userRef.current.signedIn) {
+        resetExpiredSession("sign in with google to keep going.");
+      }
+    });
+
+    const { data: authListener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      if (session || !userRef.current.signedIn) return;
+      resetExpiredSession("sign in with google to keep going.");
+    });
+
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     const currentEmail = user.googleProfile?.email?.toLowerCase();
     if (!currentEmail || !accounts.length) return;
 
@@ -2420,7 +2465,7 @@ export default function Page() {
       if (!user.signedIn) return;
 
       persistUser(defaultUser);
-      clearGoogleIdToken();
+      void supabaseBrowser.auth.signOut().catch(() => undefined);
       setFullName(null);
       setUsername(null);
       setCity(null);
@@ -2771,7 +2816,15 @@ export default function Page() {
             return;
           }
 
-          persistGoogleIdToken(response.credential);
+          const authResult = await supabaseBrowser.auth.signInWithIdToken({
+            provider: "google",
+            token: response.credential,
+          });
+          if (authResult.error) {
+            setError("google sign-in didn’t finish. try again.");
+            return;
+          }
+
           const profile = parseJwtCredential(response.credential);
           if (!profile) {
             setError("google sign-in didn’t come through. try again.");
@@ -3122,7 +3175,7 @@ export default function Page() {
     }
 
     persistUser(defaultUser);
-    clearGoogleIdToken();
+    void supabaseBrowser.auth.signOut().catch(() => undefined);
     setFullName(null);
     setUsername(null);
     setCity(null);
@@ -3134,10 +3187,10 @@ export default function Page() {
     setStudentTab("feed");
   };
 
-  const addFriend = (friendEmail: string) => {
+  const addFriend = async (friendEmail: string) => {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
     if (user.profile.friends.includes(friendEmail) || user.profile.outgoingFriendRequests.includes(friendEmail)) return;
-    if (!ensureAuthenticatedSession()) return;
+    if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
     void mutateAccountState({
@@ -3160,10 +3213,10 @@ export default function Page() {
       });
   };
 
-  const acceptFriendRequest = (requesterEmail: string) => {
+  const acceptFriendRequest = async (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
-    if (!ensureAuthenticatedSession()) return;
+    if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
     void mutateAccountState({
@@ -3185,10 +3238,10 @@ export default function Page() {
       });
   };
 
-  const declineFriendRequest = (requesterEmail: string) => {
+  const declineFriendRequest = async (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
-    if (!ensureAuthenticatedSession()) return;
+    if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
     void mutateAccountState({
@@ -3210,10 +3263,10 @@ export default function Page() {
       });
   };
 
-  const removeFriend = (friendEmail: string) => {
+  const removeFriend = async (friendEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
-    if (!ensureAuthenticatedSession()) return;
+    if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
     void mutateAccountState({
@@ -3793,8 +3846,8 @@ export default function Page() {
     resetComposer();
   };
 
-  const deletePost = (postId: string) => {
-    if (!ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the post again.")) {
+  const deletePost = async (postId: string) => {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the post again."))) {
       return;
     }
 
@@ -3806,7 +3859,7 @@ export default function Page() {
     lastSharedStateMutationAtRef.current = Date.now();
     setPosts(nextPosts);
     setInteractions(nextInteractions);
-    syncSharedState({
+    void syncSharedState({
       nextPosts,
       nextInteractions,
       deletePostId: postId,
@@ -3823,8 +3876,8 @@ export default function Page() {
     }
   };
 
-  const deleteUserFromAdmin = (targetEmail: string) => {
-    if (!ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the user again.")) {
+  const deleteUserFromAdmin = async (targetEmail: string) => {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the user again."))) {
       return;
     }
 
@@ -3973,13 +4026,12 @@ export default function Page() {
       }),
     );
 
+    const headers = await getAuthenticatedHeaders({
+      "Content-Type": "application/json",
+    });
     const response = await fetch("/api/upload-url", {
       method: "POST",
-      headers: {
-        ...getAuthenticatedHeaders({
-          "Content-Type": "application/json",
-        }),
-      },
+      headers,
       body: JSON.stringify({
         files: filePayloads.map((file) => ({
           name: file.name,
