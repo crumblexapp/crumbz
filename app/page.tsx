@@ -5750,6 +5750,109 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
+              {shouldShowSundayDumpFeed ? (
+                <div className="space-y-4">
+                  {friendWeeklyDumps.length ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
+                          <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{communityTitle}</h3>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendWeeklyDumps.length} dumps</Chip>
+                      </div>
+                      {friendWeeklyDumps.map(renderFeedCard)}
+                    </>
+                  ) : null}
+
+                  <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+                    <CardBody className="gap-4 p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
+                              sunday food drop
+                            </p>
+                            <p className="mt-3 text-lg text-[#73809a]">add up to 7 photos from your week.</p>
+                          </div>
+                        <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{activeWeeklyDumpMediaUrls.length}/7</Chip>
+                      </div>
+
+                      <form className="space-y-4" onSubmit={submitWeeklyDump}>
+                        <div className="grid grid-cols-4 gap-3">
+                          {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
+                            const showAddTile = activeWeeklyDumpMediaUrls.length < 7 && index === 0;
+                            const imageIndex = activeWeeklyDumpMediaUrls.length < 7 ? index - 1 : index;
+                            const imageUrl = activeWeeklyDumpMediaUrls[imageIndex];
+
+                            if (showAddTile) {
+                              return (
+                                <button
+                                  key="weekly-dump-add-tile"
+                                  type="button"
+                                  aria-label="add sunday dump photos"
+                                  disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
+                                  onClick={() => weeklyDumpInputRef.current?.click()}
+                                  className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
+                                >
+                                  +
+                                </button>
+                              );
+                            }
+
+                            if (imageUrl) {
+                              return (
+                                <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={imageUrl} alt={`weekly dump photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
+                                </div>
+                              );
+                            }
+
+                            return <div key={`weekly-dump-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
+                          })}
+                        </div>
+                        <Textarea
+                          placeholder="what hit this week?"
+                          value={activeWeeklyDumpCaption}
+                          onValueChange={setWeeklyDumpCaption}
+                          classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
+                        />
+                        <input
+                          ref={weeklyDumpInputRef}
+                          key={weeklyDumpInputKey}
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                          multiple
+                          disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7}
+                          onChange={(event) => {
+                            void handleWeeklyDumpFiles(event.target.files);
+                          }}
+                          className="hidden"
+                        />
+                        <div className="flex items-center gap-3">
+                          {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
+                          <Button
+                            type="submit"
+                            radius="full"
+                            size="lg"
+                            isDisabled={!canSubmitWeeklyDumpToday || isUploadingWeeklyDump}
+                          className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                        >
+                            →
+                          </Button>
+                        </div>
+                      </form>
+                    </CardBody>
+                  </Card>
+
+                  {!friendWeeklyDumps.length ? (
+                    <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                      <CardBody className="p-5 text-sm text-[#2C1A0E]">{communityEmpty}</CardBody>
+                    </Card>
+                  ) : null}
+                </div>
+              ) : null}
+
               <Card
                 id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
                 className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
@@ -5781,107 +5884,6 @@ export default function Page() {
               </Card>
 
               {friendDailyFeedPosts.length ? <div className="space-y-4">{friendDailyFeedPosts.map(renderFeedCard)}</div> : null}
-
-              {shouldShowSundayDumpFeed ? (
-                <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
-                  <CardBody className="gap-4 p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-[family-name:var(--font-young-serif)] text-[2.7rem] italic leading-none text-[#2C1A0E]">
-                            sunday food drop
-                          </p>
-                          <p className="mt-3 text-lg text-[#73809a]">add up to 7 photos from your week.</p>
-                        </div>
-                      <Chip className="rounded-full bg-[#fff1eb] px-3 text-[#ff6a24]">{activeWeeklyDumpMediaUrls.length}/7</Chip>
-                    </div>
-
-                    <form className="space-y-4" onSubmit={submitWeeklyDump}>
-                      <div className="grid grid-cols-4 gap-3">
-                        {Array.from({ length: weeklyDumpTileCount }, (_, index) => {
-                          const showAddTile = activeWeeklyDumpMediaUrls.length < 7 && index === 0;
-                          const imageIndex = activeWeeklyDumpMediaUrls.length < 7 ? index - 1 : index;
-                          const imageUrl = activeWeeklyDumpMediaUrls[imageIndex];
-
-                          if (showAddTile) {
-                            return (
-                              <button
-                                key="weekly-dump-add-tile"
-                                type="button"
-                                aria-label="add sunday dump photos"
-                                disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
-                                onClick={() => weeklyDumpInputRef.current?.click()}
-                                className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
-                              >
-                                +
-                              </button>
-                            );
-                          }
-
-                          if (imageUrl) {
-                            return (
-                              <div key={imageUrl} className="aspect-square overflow-hidden rounded-[18px] bg-[#eef2f8]">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={imageUrl} alt={`weekly dump photo ${imageIndex + 1}`} className="h-full w-full object-cover" loading="lazy" />
-                              </div>
-                            );
-                          }
-
-                          return <div key={`weekly-dump-empty-${index}`} className="aspect-square rounded-[18px] bg-[#eef2f8]" />;
-                        })}
-                      </div>
-                      <Textarea
-                        placeholder="what hit this week?"
-                        value={activeWeeklyDumpCaption}
-                        onValueChange={setWeeklyDumpCaption}
-                        classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
-                      />
-                      <input
-                        ref={weeklyDumpInputRef}
-                        key={weeklyDumpInputKey}
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                        multiple
-                        disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7}
-                        onChange={(event) => {
-                          void handleWeeklyDumpFiles(event.target.files);
-                        }}
-                        className="hidden"
-                      />
-                      <div className="flex items-center gap-3">
-                        {weeklyDumpNotice ? <p className="text-sm text-[#ff6a24]">{weeklyDumpNotice}</p> : <div className="flex-1" />}
-                        <Button
-                          type="submit"
-                          radius="full"
-                          size="lg"
-                          isDisabled={!canSubmitWeeklyDumpToday || isUploadingWeeklyDump}
-                        className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
-                      >
-                          →
-                        </Button>
-                      </div>
-                    </form>
-                  </CardBody>
-                </Card>
-              ) : null}
-
-              {shouldShowSundayDumpFeed ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{communityEyebrow}</p>
-                      <h3 className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{communityTitle}</h3>
-                    </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendWeeklyDumps.length} dumps</Chip>
-                  </div>
-                  {friendWeeklyDumps.length ? (
-                    friendWeeklyDumps.map(renderFeedCard)
-                  ) : (
-                    <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                      <CardBody className="p-5 text-sm text-[#2C1A0E]">{communityEmpty}</CardBody>
-                    </Card>
-                  )}
-                </div>
-              ) : null}
 
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.14),_transparent_28%),linear-gradient(135deg,_#2d1a10_0%,_#5a2d14_52%,_#f5a623_100%)] text-white shadow-[0_24px_60px_rgba(90,45,20,0.24)]">
                 <CardBody className="gap-4 p-5">
