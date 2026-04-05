@@ -1588,7 +1588,7 @@ export default function Page() {
   }, [liveProfile.username]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !user.signedIn || !accounts.length) return;
+    if (typeof window === "undefined" || !accounts.length) return;
     const usernameParam = new URLSearchParams(window.location.search).get("profile")?.trim().toLowerCase();
     if (!usernameParam) return;
 
@@ -1752,7 +1752,9 @@ export default function Page() {
   const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfilePosts = selectedProfileEmail
-    ? studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
+    ? [...studentDailyPosts, ...studentWeeklyDumps]
+        .filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
+        .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     : [];
   const selectedProfileEmailLower = selectedProfileEmail?.toLowerCase() ?? "";
   const selectedProfileIsOwn = Boolean(selectedProfileEmailLower && selectedProfileEmailLower === currentUserEmail);
@@ -4302,10 +4304,18 @@ export default function Page() {
     const post = posts.find((item) => item.id === postId) ?? fallbackFeedPosts.find((item) => item.id === postId);
     if (!post || typeof window === "undefined") return;
 
-    const shareUrl = `${window.location.origin}/?post=${encodeURIComponent(postId)}`;
+    const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
+    const profileUsername = postAuthorAccount?.profile.username?.trim().toLowerCase() ?? "";
+    const shareUrl =
+      post.type === "weekly-dump" && profileUsername
+        ? `${window.location.origin}/?profile=${encodeURIComponent(profileUsername)}`
+        : `${window.location.origin}/?post=${encodeURIComponent(postId)}`;
     const sharePayload = {
-      title: post.title,
-      text: `${post.title} • ${post.body}`,
+      title: post.type === "weekly-dump" && profileUsername ? `${profileUsername}'s crumbz profile` : post.title,
+      text:
+        post.type === "weekly-dump" && profileUsername
+          ? `open ${profileUsername}'s crumbz profile and see their sunday dump`
+          : `${post.title} • ${post.body}`,
       url: shareUrl,
     };
 
