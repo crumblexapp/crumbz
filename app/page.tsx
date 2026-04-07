@@ -1546,6 +1546,7 @@ export default function Page() {
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
+  const lastManualSharedStateSyncAtRef = useRef(0);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
@@ -2361,13 +2362,19 @@ export default function Page() {
     nextDare,
     nextAnnouncements,
     deletePostId,
+    source = "manual",
   }: {
     nextPosts?: AppPost[];
     nextInteractions?: InteractionsMap;
     nextDare?: DareState;
     nextAnnouncements?: AppAnnouncement[];
     deletePostId?: string;
+    source?: "manual" | "auto";
   }) => {
+    if (source === "manual") {
+      lastManualSharedStateSyncAtRef.current = Date.now();
+    }
+
     if (!(await ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined))) {
       return;
     }
@@ -2766,12 +2773,14 @@ export default function Page() {
   useEffect(() => {
     if (!hasLoadedDataRef.current) return;
     if (Date.now() - lastSharedStateMutationAtRef.current > 5000) return;
+    if (Date.now() - lastManualSharedStateSyncAtRef.current < 1500) return;
 
     const timeout = window.setTimeout(() => {
-      syncSharedState({
+      void syncSharedState({
         nextPosts: posts,
         nextInteractions: interactions,
         nextDare: dare,
+        source: "auto",
       });
     }, 250);
 
