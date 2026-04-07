@@ -35,3 +35,17 @@ body {
     linear-gradient(180deg, #fff8ec 0%, var(--crumb-cream) 100%);
   color: var(--deep-brown);
 }
+
+.leaflet-container {
+  z-index: 0;
+}
+
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control,
+.leaflet-marker-pane,
+.leaflet-popup-pane,
+.leaflet-tile-pane {
+  z-index: 0 !important;
+}
