@@ -7202,7 +7202,7 @@ export default function Page() {
       </div>
 
       {notificationsOpen ? (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-[2000]">
           <button
             type="button"
             aria-label="close notifications"
