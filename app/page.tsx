@@ -6468,13 +6468,13 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-5 p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-[family-name:var(--font-young-serif)] text-[1.85rem] leading-none text-[#2C1A0E]">
+                  <div className="min-w-0">
+                    <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.45rem] leading-none text-[#2C1A0E] sm:text-[1.6rem]">
                       @{liveProfile.username}
                     </p>
                     <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
                   </div>
-                  <Button radius="full" variant="bordered" className="border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
+                  <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
                     log out
                   </Button>
                 </div>
