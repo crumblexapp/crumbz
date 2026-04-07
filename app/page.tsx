@@ -55,6 +55,11 @@ const STORY_MAX_VIDEO_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 const STORY_MAX_IMAGE_FILE_SIZE_BYTES = 30 * 1024 * 1024;
 const STORY_RATIO = 9 / 16;
 const STORY_RATIO_TOLERANCE = 0.02;
+const STORY_IMAGE_DIMENSIONS = { width: 1080, height: 1920 } as const;
+const CHAPTER_IMAGE_DIMENSIONS = [
+  { width: 1080, height: 1350 },
+  { width: 1080, height: 1080 },
+] as const;
 const cityOptions = [
   "Warsaw",
   "Kraków",
@@ -393,6 +398,20 @@ const defaultPostFields = {
 
 function isStoryAspectRatio(width: number, height: number) {
   return Math.abs(width / height - STORY_RATIO) <= STORY_RATIO_TOLERANCE;
+}
+
+function hasExactDimensions(
+  dimensions: { width: number; height: number },
+  allowed: readonly { width: number; height: number }[],
+) {
+  return allowed.some((option) => dimensions.width === option.width && dimensions.height === option.height);
+}
+
+function isLiveStory(post: Pick<AppPost, "type" | "createdAtIso">) {
+  if (post.type !== "story") return false;
+  const createdAt = Date.parse(post.createdAtIso);
+  if (Number.isNaN(createdAt)) return false;
+  return Date.now() - createdAt < 24 * 60 * 60 * 1000;
 }
 
 function readImageDimensions(file: File): Promise<{ width: number; height: number }> {
@@ -1755,9 +1774,13 @@ export default function Page() {
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
-  const adminStoryPosts = adminPosts.filter((post) => post.type === "story").slice(0, 8);
-  const adminStorySequence = [...adminStoryPosts].reverse();
+  const adminLiveStoryPosts = adminPosts.filter((post) => isLiveStory(post)).slice(0, 8);
+  const adminArchivedStoryPosts = adminPosts
+    .filter((post) => post.type === "story" && !isLiveStory(post))
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const adminStorySequence = [...adminLiveStoryPosts].reverse();
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
+  const adminPostArchive = [...adminFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -2000,7 +2023,10 @@ export default function Page() {
         };
       })
       .filter(Boolean),
-    ...adminPosts.slice(0, 6).map((post) => ({
+    ...[...adminLiveStoryPosts, ...adminFeedPosts]
+      .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+      .slice(0, 6)
+      .map((post) => ({
       id: `admin-post-${post.id}`,
       kind: "admin_post" as const,
       title: `crumbz posted ${post.title}`,
@@ -4117,8 +4143,12 @@ export default function Page() {
         for (const file of fileList) {
           try {
             const metadata = await readVideoMetadata(file);
-            if (!isStoryAspectRatio(metadata.width, metadata.height)) {
-              options.setNotice("story videos need to be vertical 9:16, like 1080 x 1920.");
+            if (
+              !isStoryAspectRatio(metadata.width, metadata.height) ||
+              metadata.width !== STORY_IMAGE_DIMENSIONS.width ||
+              metadata.height !== STORY_IMAGE_DIMENSIONS.height
+            ) {
+              options.setNotice("story videos need to be exactly 1080 x 1920.");
               return null;
             }
 
@@ -4135,14 +4165,27 @@ export default function Page() {
         for (const file of fileList) {
           try {
             const dimensions = await readImageDimensions(file);
-            if (!isStoryAspectRatio(dimensions.width, dimensions.height)) {
-              options.setNotice("story photos need to be vertical 9:16, like 1080 x 1920.");
+            if (!isStoryAspectRatio(dimensions.width, dimensions.height) || !hasExactDimensions(dimensions, [STORY_IMAGE_DIMENSIONS])) {
+              options.setNotice("story photos need to be exactly 1080 x 1920.");
               return null;
             }
           } catch {
             options.setNotice("we couldn't read that image. try another jpg or png file.");
             return null;
           }
+        }
+      }
+    } else if (options.postType === "chapter" && options.mediaKind === "photo") {
+      for (const file of fileList) {
+        try {
+          const dimensions = await readImageDimensions(file);
+          if (!hasExactDimensions(dimensions, CHAPTER_IMAGE_DIMENSIONS)) {
+            options.setNotice("chapter photos need to be exactly 1080 x 1350 or 1080 x 1080.");
+              return null;
+            }
+        } catch {
+          options.setNotice("we couldn't read that image. try another jpg, png, or heic file.");
+          return null;
         }
       }
     }
@@ -5388,7 +5431,7 @@ export default function Page() {
                       </div>
                     </Tab>
 
-                    <Tab key="published-posts" title={`posts (${adminPosts.length})`}>
+                    <Tab key="published-posts" title={`posts (${adminFeedPosts.length})`}>
                       <div className="mt-4 space-y-4">
                         <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                           <CardBody className="p-5">
@@ -5423,7 +5466,9 @@ export default function Page() {
                                 ))}
                               </Select>
                               {composer.type === "story" ? (
-                                <p className="text-sm text-[#6c7289]">stories stay vertical. use a 9:16 file like 1080 x 1920. photos can be jpg or png up to 30mb. videos can be mp4 or mov up to 500mb and 1 to 60 seconds.</p>
+                                <p className="text-sm text-[#6c7289]">stories stay live for 24 hours, then move into stories archive. use exactly 1080 x 1920 for story photos and videos. photos can be jpg or png up to 30mb. videos can be mp4 or mov up to 500mb and 1 to 60 seconds.</p>
+                              ) : composer.type === "chapter" && composer.mediaKind === "photo" ? (
+                                <p className="text-sm text-[#6c7289]">chapter photos need to be exactly 1080 x 1350 or 1080 x 1080.</p>
                               ) : null}
                               <Select
                                 label="media type"
@@ -5584,12 +5629,165 @@ export default function Page() {
                         <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                           <CardBody className="gap-3 p-5">
                             <div className="flex items-center justify-between">
-                              <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">all posts</p>
-                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminPosts.length} total</Chip>
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">live stories</p>
+                                <p className="mt-1 text-sm text-[#2C1A0E]">these are the stories people can still see right now.</p>
+                              </div>
+                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminLiveStoryPosts.length} live</Chip>
+                            </div>
+                            {adminLiveStoryPosts.length ? (
+                              adminLiveStoryPosts.map((post) => (
+                                <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                        story • {post.createdAt}
+                                      </p>
+                                    </div>
+                                    <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
+                                  </div>
+                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.mediaKind !== "none" ? (
+                                    <div className="mt-3">
+                                      {post.mediaUrls.length ? (
+                                        <PostMediaPreview post={post} />
+                                      ) : (
+                                        <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
+                                          media is missing on this saved story. open edit and upload it again once.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingPost(post)}
+                                      className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                    >
+                                      edit
+                                    </button>
+                                    {pendingDeletePostId === post.id ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPendingDeletePostId(null)}
+                                          className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                        >
+                                          cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => deletePost(post.id)}
+                                          className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                        >
+                                          confirm delete
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingDeletePostId(post.id)}
+                                        className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                      >
+                                        delete
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-[#2C1A0E]">no live stories right now.</p>
+                            )}
+                          </CardBody>
+                        </Card>
+
+                        <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                          <CardBody className="gap-3 p-5">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">stories archive</p>
+                                <p className="mt-1 text-sm text-[#2C1A0E]">expired admin stories stay here after their 24-hour live window ends.</p>
+                              </div>
+                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminArchivedStoryPosts.length} total</Chip>
                             </div>
                             {adminActionNotice ? <p className="text-sm text-[#2C1A0E]">{adminActionNotice}</p> : null}
-                            {adminPosts.length ? (
-                              adminPosts.map((post) => (
+                            {adminArchivedStoryPosts.length ? (
+                              adminArchivedStoryPosts.map((post) => (
+                                <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">story • {post.createdAt}</p>
+                                    </div>
+                                    <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
+                                  </div>
+                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.mediaKind !== "none" ? (
+                                    <div className="mt-3">
+                                      {post.mediaUrls.length ? (
+                                        <PostMediaPreview post={post} />
+                                      ) : (
+                                        <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
+                                          media is missing on this saved post. open edit and upload it again once.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditingPost(post)}
+                                      className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                    >
+                                      edit
+                                    </button>
+                                    {pendingDeletePostId === post.id ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => setPendingDeletePostId(null)}
+                                          className="rounded-full bg-white px-6 py-3 text-base font-semibold text-[#2C1A0E]"
+                                        >
+                                          cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => deletePost(post.id)}
+                                          className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                        >
+                                          confirm delete
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setPendingDeletePostId(post.id)}
+                                        className="rounded-full bg-[#f8b7b3] px-6 py-3 text-base font-semibold text-[#c81e5b]"
+                                      >
+                                        delete
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-[#2C1A0E]">no archived stories yet.</p>
+                            )}
+                          </CardBody>
+                        </Card>
+
+                        <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                          <CardBody className="gap-3 p-5">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">post archive</p>
+                                <p className="mt-1 text-sm text-[#2C1A0E]">chapters, discounts, ads, and collabs stay here for admin.</p>
+                              </div>
+                              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminPostArchive.length} total</Chip>
+                            </div>
+                            {adminPostArchive.length ? (
+                              adminPostArchive.map((post) => (
                                 <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
@@ -5650,7 +5848,7 @@ export default function Page() {
                                 </div>
                               ))
                             ) : (
-                              <p className="text-sm text-[#2C1A0E]">no posts yet.</p>
+                              <p className="text-sm text-[#2C1A0E]">no archived posts yet.</p>
                             )}
                           </CardBody>
                         </Card>
