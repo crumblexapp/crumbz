@@ -28,6 +28,11 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 const STORAGE_KEY = "crumbz-active-user-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
@@ -35,6 +40,7 @@ const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
+const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -824,6 +830,17 @@ function getPushPromptAskedKey(email: string) {
   return `${PUSH_PROMPT_ASKED_PREFIX}:${email.toLowerCase()}`;
 }
 
+function isIosDevice() {
+  if (typeof window === "undefined") return false;
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+}
+
+function isStandaloneDisplayMode() {
+  if (typeof window === "undefined") return false;
+  const iosStandalone = "standalone" in window.navigator && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+  return iosStandalone || window.matchMedia("(display-mode: standalone)").matches;
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -1482,6 +1499,10 @@ export default function Page() {
   const [pushNotice, setPushNotice] = useState("");
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
   const [isUpdatingPush, setIsUpdatingPush] = useState(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [installPromptMode, setInstallPromptMode] = useState<"android" | "ios" | null>(null);
+  const [installPromptExpanded, setInstallPromptExpanded] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [highlightedFavoritePlaceId, setHighlightedFavoritePlaceId] = useState<string | null>(null);
@@ -2605,6 +2626,40 @@ export default function Page() {
       setPushPromptOpen(true);
     }
   }, [isAdmin, pushEnabled, pushPermission, pushSupported, user.googleProfile?.email, user.signedIn]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || user.signedIn) {
+      setShowInstallPrompt(false);
+      setInstallPromptMode(null);
+      return;
+    }
+
+    const dismissed = window.localStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY) === "true";
+    if (dismissed || isStandaloneDisplayMode()) {
+      setShowInstallPrompt(false);
+      setInstallPromptMode(null);
+      return;
+    }
+
+    if (isIosDevice()) {
+      setInstallPromptMode("ios");
+      setShowInstallPrompt(true);
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event as BeforeInstallPromptEvent);
+      setInstallPromptMode("android");
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, [user.signedIn]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
@@ -4485,6 +4540,90 @@ export default function Page() {
     });
   };
 
+  const dismissInstallPrompt = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, "true");
+    }
+    setShowInstallPrompt(false);
+    setInstallPromptExpanded(false);
+  };
+
+  const installApp = async () => {
+    if (!deferredInstallPrompt) return;
+
+    await deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+    setDeferredInstallPrompt(null);
+    setShowInstallPrompt(false);
+    setInstallPromptExpanded(false);
+
+    if (choice?.outcome !== "accepted" && typeof window !== "undefined") {
+      window.localStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, "true");
+    }
+  };
+
+  const renderInstallPrompt = (className = "") => {
+    if (!showInstallPrompt || !installPromptMode) return null;
+
+    return (
+      <Card className={`rounded-[28px] border border-[#FFE1B3] bg-white/96 shadow-[0_16px_40px_rgba(44,26,14,0.12)] backdrop-blur ${className}`.trim()}>
+        <CardBody className="gap-3 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">
+                {installPromptMode === "android" ? "install crumbz" : "add to home screen"}
+              </p>
+              <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.6rem] leading-none text-[#2C1A0E]">
+                {installPromptMode === "android" ? "put crumbz on your phone" : "save crumbz to your home screen"}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#6c7289]">
+                {installPromptMode === "android"
+                  ? "it’ll open like a real app and makes notifications way smoother."
+                  : "on iphone, this is how crumbz works like an app and unlocks alerts later on."}
+              </p>
+            </div>
+            <Button radius="full" variant="light" className="min-w-0 px-3 text-[#2C1A0E]" onPress={dismissInstallPrompt}>
+              close
+            </Button>
+          </div>
+
+          {installPromptMode === "android" ? (
+            <div className="flex gap-2">
+              <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => void installApp()}>
+                install app
+              </Button>
+              <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={dismissInstallPrompt}>
+                maybe later
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <Button
+                  radius="full"
+                  className="bg-[#2C1A0E] text-white"
+                  onPress={() => setInstallPromptExpanded((current) => !current)}
+                >
+                  {installPromptExpanded ? "hide steps" : "show me how"}
+                </Button>
+                <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={dismissInstallPrompt}>
+                  maybe later
+                </Button>
+              </div>
+              {installPromptExpanded ? (
+                <div className="rounded-[20px] bg-[#FFF7E8] p-4 text-sm leading-6 text-[#2C1A0E]">
+                  <p>1. tap the share button in safari</p>
+                  <p>2. pick add to home screen</p>
+                  <p>3. open crumbz from your home screen next time</p>
+                </div>
+              ) : null}
+            </>
+          )}
+        </CardBody>
+      </Card>
+    );
+  };
+
   if (!user.signedIn) {
     if (showWelcomeScreen) {
       return (
@@ -4511,6 +4650,10 @@ export default function Page() {
                 className="absolute inset-0"
                 onClick={() => setShowWelcomeScreen(false)}
               />
+
+              <div className="pointer-events-none absolute inset-x-4 bottom-6 z-10">
+                <div className="pointer-events-auto">{renderInstallPrompt()}</div>
+              </div>
             </motion.section>
           </div>
         </main>
@@ -4542,6 +4685,7 @@ export default function Page() {
             transition={{ duration: 0.35, delay: 0.08 }}
             className="mt-5"
           >
+            {renderInstallPrompt("mb-4")}
             <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(47,23,20,0.08)]">
               <CardBody className="gap-5 p-6">
                 <div>
