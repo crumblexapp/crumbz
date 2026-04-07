@@ -221,7 +221,7 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
 
   const newStudentPosts = normalizeObjectArray(rawPosts).filter((post) => {
     const postId = String(post.id ?? "");
-    return Boolean(postId) && !previousIds.has(postId) && post.authorRole === "student" && post.type !== "weekly-dump";
+    return Boolean(postId) && !previousIds.has(postId) && post.authorRole === "student";
   });
 
   await Promise.all(
@@ -234,13 +234,24 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
         : [];
       if (!friendEmails.length) return;
 
+      const authorUsername =
+        authorAccount?.profile && typeof authorAccount.profile === "object" && typeof (authorAccount.profile as JsonRecord).username === "string"
+          ? String((authorAccount.profile as JsonRecord).username).trim().toLowerCase()
+          : "";
+      const isWeeklyDump = post.type === "weekly-dump";
+      const postId = String(post.id ?? "");
+
       await sendPushToEmails(friendEmails, {
-        title: `${normalizeText(post.authorName) || "your friend"} posted`,
-        body: normalizeText(post.taggedPlaceName)
-          ? `${normalizeText(post.taggedPlaceName)} is on their feed now.`
-          : "something new landed in crumbz.",
-        url: "/",
-        tag: `post-${String(post.id)}`,
+        title: isWeeklyDump
+          ? `${normalizeText(post.authorName) || "your friend"} dropped a sunday dump`
+          : `${normalizeText(post.authorName) || "your friend"} posted`,
+        body: isWeeklyDump
+          ? "open crumbz to see what they ate this week."
+          : normalizeText(post.taggedPlaceName)
+            ? `${normalizeText(post.taggedPlaceName)} is on their feed now.`
+            : "something new landed in crumbz.",
+        url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
+        tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
       });
     }),
   );
