@@ -2323,6 +2323,38 @@ export default function Page() {
     }
   };
 
+  const sendTestPushNotification = async () => {
+    if (!(await ensureAuthenticatedSession("sign in again first so we can test alerts for this account."))) {
+      return;
+    }
+
+    setIsUpdatingPush(true);
+    setPushNotice("");
+
+    try {
+      const headers = await getAuthenticatedHeaders({
+        "Content-Type": "application/json",
+      });
+      const response = await fetch("/api/push-subscriptions", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "test" }),
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        setPushNotice(payload?.message ?? "the test alert didn't go out.");
+        return;
+      }
+
+      setPushNotice("test alert sent. close crumbz and lock your phone to see if it lands.");
+    } catch {
+      setPushNotice("the test alert didn't go out.");
+    } finally {
+      setIsUpdatingPush(false);
+    }
+  };
+
   const syncSharedState = async ({
     nextPosts,
     nextInteractions,
@@ -6428,15 +6460,29 @@ export default function Page() {
                       <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">↗</span>
                     </button>
                     <div className="pt-2">
-                      <Button
-                        radius="full"
-                        size="sm"
-                        isLoading={isUpdatingPush}
-                        className={pushEnabled ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
-                        onPress={pushEnabled ? disablePushNotifications : enablePushNotifications}
-                      >
-                        {pushEnabled ? "notifications on" : "turn on notifications"}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          radius="full"
+                          size="sm"
+                          isLoading={isUpdatingPush}
+                          className={pushEnabled ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
+                          onPress={pushEnabled ? disablePushNotifications : enablePushNotifications}
+                        >
+                          {pushEnabled ? "notifications on" : "turn on notifications"}
+                        </Button>
+                        {pushEnabled ? (
+                          <Button
+                            radius="full"
+                            size="sm"
+                            variant="flat"
+                            isLoading={isUpdatingPush}
+                            className="bg-[#FFF0D0] text-[#2C1A0E]"
+                            onPress={sendTestPushNotification}
+                          >
+                            send test alert
+                          </Button>
+                        ) : null}
+                      </div>
                       <p className="mt-2 text-sm text-[#6c7289]">
                         {pushSupported
                           ? pushEnabled
