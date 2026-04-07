@@ -34,6 +34,7 @@ const POSTS_KEY = "crumbz-posts-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
+const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -819,6 +820,10 @@ function readSeenNotifications() {
   return readJson<string[]>(SEEN_NOTIFICATIONS_KEY, []);
 }
 
+function getPushPromptAskedKey(email: string) {
+  return `${PUSH_PROMPT_ASKED_PREFIX}:${email.toLowerCase()}`;
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -1475,6 +1480,7 @@ export default function Page() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [pushNotice, setPushNotice] = useState("");
+  const [pushPromptOpen, setPushPromptOpen] = useState(false);
   const [isUpdatingPush, setIsUpdatingPush] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
@@ -2252,6 +2258,13 @@ export default function Page() {
     }
   };
 
+  const markPushPromptAsked = () => {
+    if (typeof window === "undefined") return;
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+    window.localStorage.setItem(getPushPromptAskedKey(email), "true");
+  };
+
   const enablePushNotifications = async () => {
     if (!(await ensureAuthenticatedSession("sign in again first so we can turn on alerts for this account."))) {
       return;
@@ -2271,6 +2284,7 @@ export default function Page() {
       setPushPermission(permission);
 
       if (permission !== "granted") {
+        markPushPromptAsked();
         setPushNotice(permission === "denied" ? "notifications are blocked on this device right now." : "notification setup was skipped.");
         setPushEnabled(false);
         return;
@@ -2285,7 +2299,9 @@ export default function Page() {
         }));
 
       await syncPushSubscriptionToBackend(subscription);
+      markPushPromptAsked();
       setPushEnabled(true);
+      setPushPromptOpen(false);
       setPushNotice("real device alerts are on.");
     } catch {
       setPushNotice("notifications didn’t turn on. try again from the home-screen app.");
@@ -2559,6 +2575,7 @@ export default function Page() {
   useEffect(() => {
     if (!user.signedIn || isAdmin) {
       setPushEnabled(false);
+      setPushPromptOpen(false);
       setPushNotice("");
       return;
     }
@@ -2602,6 +2619,22 @@ export default function Page() {
 
     void refresh();
   }, [isAdmin, user.signedIn]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user.signedIn || isAdmin || pushEnabled) {
+      setPushPromptOpen(false);
+      return;
+    }
+
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+    if (!pushSupported || pushPermission === "unsupported" || pushPermission === "denied") return;
+
+    const hasSeenPrompt = window.localStorage.getItem(getPushPromptAskedKey(email)) === "true";
+    if (!hasSeenPrompt) {
+      setPushPromptOpen(true);
+    }
+  }, [isAdmin, pushEnabled, pushPermission, pushSupported, user.googleProfile?.email, user.signedIn]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
@@ -6393,6 +6426,45 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
+            {!pushEnabled ? (
+              <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                <CardBody className="gap-3 p-5">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">notifications</p>
+                    <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                      want post alerts?
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[#6c7289]">
+                      we can ask your phone for permission so admin drops and friend posts hit like a real app.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => setPushPromptOpen(true)}>
+                      turn them on
+                    </Button>
+                    <Button
+                      radius="full"
+                      variant="flat"
+                      className="bg-white text-[#2C1A0E]"
+                      onPress={() => {
+                        markPushPromptAsked();
+                        setPushPromptOpen(false);
+                      }}
+                    >
+                      maybe later
+                    </Button>
+                  </div>
+                  <p className="text-sm text-[#6c7289]">
+                    {pushPermission === "denied"
+                      ? "this device blocked alerts before, so the next step is reopening them in your browser or phone settings."
+                      : pushSupported
+                        ? "iphone and android both still need one quick permission tap from the person using the device."
+                        : "if alerts don’t show here yet, open the installed home-screen app and try again there."}
+                  </p>
+                </CardBody>
+              </Card>
+            ) : null}
+
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-5 p-5">
                 <div className="flex items-center justify-between gap-3">
@@ -6479,18 +6551,6 @@ export default function Page() {
                         >
                           {pushEnabled ? "notifications on" : "turn on notifications"}
                         </Button>
-                        {pushEnabled ? (
-                          <Button
-                            radius="full"
-                            size="sm"
-                            variant="flat"
-                            isLoading={isUpdatingPush}
-                            className="bg-[#FFF0D0] text-[#2C1A0E]"
-                            onPress={sendTestPushNotification}
-                          >
-                            send test alert
-                          </Button>
-                        ) : null}
                       </div>
                       <p className="mt-2 text-sm text-[#6c7289]">
                         {pushSupported
@@ -7077,6 +7137,56 @@ export default function Page() {
                     copy link
                   </Button>
                 </div>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={pushPromptOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            markPushPromptAsked();
+          }
+          setPushPromptOpen(open);
+        }}
+        placement="center"
+      >
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">turn on notifications?</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">when admin posts, your phone can get the drop right away.</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-6 pt-5">
+                <div className="rounded-[22px] bg-[#FFF7E8] p-4 text-sm leading-6 text-[#2C1A0E]">
+                  apple and android both need one permission tap from you first. crumbz can ask now, but it can’t switch this on silently for everyone.
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button radius="full" className="bg-[#2C1A0E] text-white" isLoading={isUpdatingPush} onPress={enablePushNotifications}>
+                    yes, turn them on
+                  </Button>
+                  <Button
+                    radius="full"
+                    variant="flat"
+                    className="bg-white text-[#2C1A0E]"
+                    onPress={() => {
+                      markPushPromptAsked();
+                      setPushPromptOpen(false);
+                      setPushNotice("cool, we’ll leave notifications off for now.");
+                    }}
+                  >
+                    maybe later
+                  </Button>
+                </div>
+                {pushNotice ? <p className="text-sm text-[#F5A623]">{pushNotice}</p> : null}
               </ModalBody>
             </>
           )}
