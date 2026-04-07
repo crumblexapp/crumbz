@@ -1395,16 +1395,16 @@ function PostMediaPreview({ post }: { post: AppPost }) {
 
   if (post.mediaKind === "photo") {
     return (
-      <>
+      <div className="overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
         {/* uploaded dump images come straight from storage urls, so a plain img avoids remote loader issues here. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={mediaUrls[0]}
-        alt={post.title}
-        className="h-72 w-full rounded-[24px] object-cover ring-1 ring-[#FFF0D0]"
-        loading="lazy"
-      />
-      </>
+        <img
+          src={mediaUrls[0]}
+          alt={post.title}
+          className="h-auto w-full object-contain"
+          loading="lazy"
+        />
+      </div>
     );
   }
 
