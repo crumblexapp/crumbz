@@ -1745,7 +1745,9 @@ export default function Page() {
     authoredWeeklyDumps.find((post) => post.id === `weekly-dump-${currentUserEmail}-${currentSundayKey}`) ??
     authoredWeeklyDumps[0] ??
     null;
-  const studentUserPosts = [...studentDailyPosts, ...studentWeeklyDumps].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const nonAdminUserPosts = posts
+    .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserProfilePosts = studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === currentUserEmail);
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
@@ -2335,38 +2337,6 @@ export default function Page() {
       setPushNotice("device alerts are off.");
     } catch {
       setPushNotice("couldn’t turn alerts off right now.");
-    } finally {
-      setIsUpdatingPush(false);
-    }
-  };
-
-  const sendTestPushNotification = async () => {
-    if (!(await ensureAuthenticatedSession("sign in again first so we can test alerts for this account."))) {
-      return;
-    }
-
-    setIsUpdatingPush(true);
-    setPushNotice("");
-
-    try {
-      const headers = await getAuthenticatedHeaders({
-        "Content-Type": "application/json",
-      });
-      const response = await fetch("/api/push-subscriptions", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ action: "test" }),
-      });
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-
-      if (!response.ok) {
-        setPushNotice(payload?.message ?? "the test alert didn't go out.");
-        return;
-      }
-
-      setPushNotice("test alert sent. close crumbz and lock your phone to see if it lands.");
-    } catch {
-      setPushNotice("the test alert didn't go out.");
     } finally {
       setIsUpdatingPush(false);
     }
@@ -5530,7 +5500,7 @@ export default function Page() {
                   <div className="grid grid-cols-2 gap-3">
                     {[
                       { label: "signups", value: totalSignups },
-                      { label: "student posts", value: studentUserPosts.length },
+                      { label: "user posts", value: nonAdminUserPosts.length },
                       { label: "comments", value: totalComments },
                       { label: "unique sharers", value: uniqueSharers },
                     ].map((item) => (
@@ -5599,18 +5569,18 @@ export default function Page() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">user posts</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">remove one student post without deleting the whole account.</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">remove one user post without deleting the whole account.</p>
                         </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{studentUserPosts.length} total</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{nonAdminUserPosts.length} total</Chip>
                       </div>
-                      {studentUserPosts.length ? (
+                      {nonAdminUserPosts.length ? (
                         <div className="grid gap-2">
-                          {studentUserPosts.map((post) => (
+                          {nonAdminUserPosts.map((post) => (
                             <div key={post.id} className="rounded-[18px] bg-[#FFF0D0] px-4 py-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
-                                  <p className="mt-1 text-sm text-[#2C1A0E]">{post.authorName || "student post"}</p>
+                                  <p className="mt-1 text-sm text-[#2C1A0E]">{post.authorName || "user post"}</p>
                                   <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                                     {post.type === "weekly-dump" ? "sunday dump" : "post"} • {post.createdAt}
                                   </p>
