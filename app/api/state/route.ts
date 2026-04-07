@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { sendPushToEmails } from "@/lib/push-notifications";
+import { buildAdminPostNotification, buildAnnouncementNotification, buildFriendPostNotification } from "@/lib/notification-copy";
 import { webPushEnabled } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
@@ -193,11 +194,17 @@ async function sendAnnouncementPush(announcement: { id: string; title: string; b
   const { data, error } = await supabaseServer.from("push_subscriptions").select("author_email");
   if (error) return;
 
+  const copy = buildAnnouncementNotification({
+    title: announcement.title,
+    body: announcement.body,
+    seed: announcement.id,
+  });
+
   await sendPushToEmails(
     (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean),
     {
-      title: announcement.title,
-      body: announcement.body,
+      title: copy.title,
+      body: copy.body,
       url: "/",
       tag: announcement.id,
     },
@@ -240,16 +247,17 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
           : "";
       const isWeeklyDump = post.type === "weekly-dump";
       const postId = String(post.id ?? "");
+      const copy = buildFriendPostNotification({
+        authorName: normalizeText(post.authorName) || "your friend",
+        username: authorUsername ? `@${authorUsername}` : "@yourfriend",
+        placeName: normalizeText(post.taggedPlaceName),
+        isWeeklyDump,
+        seed: postId,
+      });
 
       await sendPushToEmails(friendEmails, {
-        title: isWeeklyDump
-          ? `${normalizeText(post.authorName) || "your friend"} dropped a sunday dump`
-          : `${normalizeText(post.authorName) || "your friend"} posted`,
-        body: isWeeklyDump
-          ? "open crumbz to see what they ate this week."
-          : normalizeText(post.taggedPlaceName)
-            ? `${normalizeText(post.taggedPlaceName)} is on their feed now.`
-            : "something new landed in crumbz.",
+        title: copy.title,
+        body: copy.body,
         url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
         tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
       });
@@ -277,14 +285,22 @@ async function sendAdminPostPush(rawPosts: unknown, previousPosts: unknown) {
   const emails = (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean);
 
   await Promise.all(
-    newAdminPosts.map((post) =>
-      sendPushToEmails(emails, {
-        title: `crumbz posted ${normalizeText(post.title) || "something new"}`,
-        body: normalizeText(post.body) || "open crumbz to see the new drop.",
+    newAdminPosts.map((post) => {
+      const copy = buildAdminPostNotification({
+        postType: normalizeText(post.type) || "drop",
+        title: normalizeText(post.title) || "something new",
+        body: normalizeText(post.body),
+        cta: normalizeText(post.cta) || "live now",
+        seed: String(post.id ?? ""),
+      });
+
+      return sendPushToEmails(emails, {
+        title: copy.title,
+        body: copy.body,
         url: "/",
         tag: `admin-post-${String(post.id)}`,
-      }),
-    ),
+      });
+    }),
   );
 }
 

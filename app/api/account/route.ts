@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
+import { buildFriendRequestNotification } from "@/lib/notification-copy";
 import { sendPushToEmails } from "@/lib/push-notifications";
 
 export const dynamic = "force-dynamic";
@@ -298,10 +299,15 @@ export async function POST(request: Request) {
     });
 
     const sender = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const copy = buildFriendRequestNotification(
+      getPublicName(sender),
+      sender?.profile.username ? `@${sender.profile.username}` : "@someone",
+      `${currentEmail}-${targetEmail}`,
+    );
     pendingPush = {
       emails: [targetEmail],
-      title: `${getPublicName(sender)} sent you a friend request`,
-      body: "open crumbz to accept or decline it.",
+      title: copy.title,
+      body: copy.body,
       tag: `friend-request-${currentEmail}-${targetEmail}`,
     };
   }

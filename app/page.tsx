@@ -24,6 +24,13 @@ import {
 } from "@heroui/react";
 import { motion } from "framer-motion";
 import QRCode from "qrcode";
+import {
+  buildAdminPostNotification,
+  buildAnnouncementNotification,
+  buildFriendFavoriteNotification,
+  buildFriendPostNotification,
+  buildFriendRequestNotification,
+} from "@/lib/notification-copy";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
@@ -1968,23 +1975,31 @@ export default function Page() {
     .slice(0, 8);
   const friendFavoriteNotifications = friendAccounts
     .flatMap((account) =>
-      (account.profile.favoriteActivities ?? []).map((activity) => ({
-        id: activity.id,
-        kind: "friend_favorite" as const,
-        title: `${account.profile.fullName} saved ${activity.placeName}`,
-        detail: `${activity.placeKind} • ${activity.city || account.profile.city}${activity.placeAddress ? ` • ${activity.placeAddress}` : ""}`,
-        picture: account.googleProfile?.picture,
-        createdAt: activity.createdAt,
-        city: activity.city || account.profile.city,
-        place: {
-          id: activity.placeId,
-          name: activity.placeName,
-          kind: activity.placeKind,
-          lat: activity.lat,
-          lon: activity.lon,
-          address: activity.placeAddress,
-        } satisfies FavoritePlace,
-      })),
+      (account.profile.favoriteActivities ?? []).map((activity) => {
+        const copy = buildFriendFavoriteNotification({
+          username: account.profile.username ? `@${account.profile.username}` : "@yourfriend",
+          placeName: activity.placeName,
+          seed: activity.id,
+        });
+
+        return {
+          id: activity.id,
+          kind: "friend_favorite" as const,
+          title: copy.title,
+          detail: copy.body,
+          picture: account.googleProfile?.picture,
+          createdAt: activity.createdAt,
+          city: activity.city || account.profile.city,
+          place: {
+            id: activity.placeId,
+            name: activity.placeName,
+            kind: activity.placeKind,
+            lat: activity.lat,
+            lon: activity.lon,
+            address: activity.placeAddress,
+          } satisfies FavoritePlace,
+        };
+      }),
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
@@ -2001,23 +2016,36 @@ export default function Page() {
           },
         ]
       : []),
-    ...announcements.slice(0, 4).map((announcement) => ({
-      id: announcement.id,
-      kind: "announcement" as const,
-      title: announcement.title,
-      detail: announcement.body,
-      picture: adminProfilePicture,
-    })),
+    ...announcements.slice(0, 4).map((announcement) => {
+      const copy = buildAnnouncementNotification({
+        title: announcement.title,
+        body: announcement.body,
+        seed: announcement.id,
+      });
+
+      return {
+        id: announcement.id,
+        kind: "announcement" as const,
+        title: copy.title,
+        detail: copy.body,
+        picture: adminProfilePicture,
+      };
+    }),
     ...liveProfile.incomingFriendRequests
       .map((requestEmail) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
         if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
+        const copy = buildFriendRequestNotification(
+          requester.profile.fullName || requester.googleProfile?.name || "someone",
+          requester.profile.username ? `@${requester.profile.username}` : "@someone",
+          `friend-${requestEmail}`,
+        );
 
         return {
           id: `friend-${requestEmail}`,
           kind: "friend_request" as const,
-          title: `${requester.profile.fullName} sent you a friend request`,
-          detail: `@${requester.profile.username}${requester.profile.schoolName ? ` • ${requester.profile.schoolName}` : ""}`,
+          title: copy.title,
+          detail: copy.body,
           email: requestEmail,
           picture: requester.googleProfile?.picture,
         };
@@ -2026,23 +2054,45 @@ export default function Page() {
     ...[...adminLiveStoryPosts, ...adminFeedPosts]
       .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
       .slice(0, 6)
-      .map((post) => ({
-      id: `admin-post-${post.id}`,
-      kind: "admin_post" as const,
-      title: `crumbz posted ${post.title}`,
-      detail: `${post.type} • ${post.createdAt}`,
-      postId: post.id,
-    })),
-    ...friendDailyFeedPosts
+      .map((post) => {
+        const copy = buildAdminPostNotification({
+          postType: post.type,
+          title: post.title,
+          body: post.body,
+          cta: post.cta,
+          seed: post.id,
+        });
+
+        return {
+          id: `admin-post-${post.id}`,
+          kind: "admin_post" as const,
+          title: copy.title,
+          detail: copy.body,
+          postId: post.id,
+        };
+      }),
+    ...[...friendDailyFeedPosts, ...friendWeeklyDumps]
+      .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
       .slice(0, 6)
-      .map((post) => ({
-        id: `friend-dump-${post.id}`,
-        kind: "friend_dump" as const,
-        title: `${post.authorName} posted`,
-        detail: `feed post • ${formatRelativePostTime(post.createdAtIso, post.createdAt)}`,
-        postId: post.id,
-        picture: accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture,
-      })),
+      .map((post) => {
+        const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
+        const copy = buildFriendPostNotification({
+          authorName: post.authorName,
+          username: authorAccount?.profile.username ? `@${authorAccount.profile.username}` : "@yourfriend",
+          placeName: post.taggedPlaceName,
+          isWeeklyDump: post.type === "weekly-dump",
+          seed: post.id,
+        });
+
+        return {
+          id: `friend-dump-${post.id}`,
+          kind: "friend_dump" as const,
+          title: copy.title,
+          detail: copy.body,
+          postId: post.id,
+          picture: authorAccount?.googleProfile?.picture,
+        };
+      }),
     ...friendFavoriteNotifications,
   ].filter(Boolean) as Array<
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string }
