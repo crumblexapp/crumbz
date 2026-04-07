@@ -122,6 +122,7 @@ export default function FavoritesMap({
   places,
   favoriteIds,
   onToggleFavorite,
+  onOpenDirections,
   onPostFromPlace,
   friends,
   highlightedPlaceId,
@@ -131,6 +132,7 @@ export default function FavoritesMap({
   favoriteIds: string[];
   mutualFansByPlace: Record<string, unknown>;
   onToggleFavorite: (place: FavoritePlace) => void;
+  onOpenDirections: (place: FavoritePlace) => void;
   onPostFromPlace?: (place: FavoritePlace) => void;
   cityName: string;
   friends: FriendProfile[];
@@ -340,10 +342,8 @@ export default function FavoritesMap({
       ) : null}
 
       {selectedPreviewPlace && selectedPreviewAccent ? (
-        <div
-          className="absolute inset-x-4 z-[500] max-h-[220px] overflow-y-auto rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.16)] backdrop-blur"
-          style={{ bottom: "calc(5.75rem + env(safe-area-inset-bottom, 0px))" }}
-        >
+        <div className="border-t border-[#eadfcf] bg-[#fffaf2] p-4">
+          <div className="rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.12)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -372,16 +372,6 @@ export default function FavoritesMap({
             </button>
           </div>
 
-          {onPostFromPlace ? (
-            <button
-              type="button"
-              onClick={() => onPostFromPlace(selectedPreviewPlace)}
-              className="mt-4 w-full rounded-full bg-[#2b1530] px-4 py-3 text-sm font-semibold text-white"
-            >
-              post from here
-            </button>
-          ) : null}
-
           {selectedMutualFans.length ? (
             <div className="mt-4 inline-flex items-center gap-3 rounded-full bg-[#edf5ff] px-3 py-2">
               <span className="text-xl">❤️</span>
@@ -397,6 +387,27 @@ export default function FavoritesMap({
               </p>
             </div>
           ) : null}
+
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenDirections(selectedPreviewPlace)}
+              className="flex-1 rounded-full bg-[#2b1530] px-4 py-3 text-sm font-semibold text-white"
+            >
+              directions
+            </button>
+            {onPostFromPlace ? (
+              <button
+                type="button"
+                onClick={() => onPostFromPlace(selectedPreviewPlace)}
+                aria-label={`post from ${selectedPreviewPlace.name}`}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#fff0d9] text-xl font-semibold text-[#d97706]"
+              >
+                +
+              </button>
+            ) : null}
+          </div>
+          </div>
         </div>
       ) : null}
     </div>

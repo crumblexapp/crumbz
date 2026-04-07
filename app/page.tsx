@@ -3711,6 +3711,27 @@ export default function Page() {
     }, 120);
   };
 
+  const focusFavoritePlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
+    setFavoriteViewCity(cityName);
+    setHighlightedFavoritePlaceId(place.id);
+    setFavoritePlaces((current) => {
+      const next = current.filter((item) => item.id !== place.id);
+      return [place, ...next].slice(0, 24);
+    });
+    setStudentTab("favorites");
+  };
+
+  const openPlaceDirections = (place: FavoritePlace) => {
+    if (typeof window === "undefined") return;
+
+    const destination =
+      Number.isFinite(place.lat) && Number.isFinite(place.lon)
+        ? `${place.lat},${place.lon}`
+        : encodeURIComponent([place.name, place.address].filter(Boolean).join(", "));
+
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}`, "_blank", "noopener,noreferrer");
+  };
+
   const openPostPlace = (post: AppPost) => {
     if (!post.taggedPlaceId || !post.taggedPlaceName) return;
 
@@ -6103,6 +6124,7 @@ export default function Page() {
                   mutualFansByPlace={mutualFansByPlace}
                   highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
+                  onOpenDirections={openPlaceDirections}
                   onPostFromPlace={(place) => startPostFromPlace(place, currentFavoriteCity)}
                   friends={friendAccounts.map((account) => ({
                     email: account.googleProfile?.email ?? account.profile.username,
@@ -6116,7 +6138,11 @@ export default function Page() {
                 {sharedFavoriteMoments.length ? (
                   <div className="grid gap-3">
                     {sharedFavoriteMoments.map(({ place, fans }) => (
-                      <div key={place.id} className="rounded-[22px] bg-[#FFF7E8] p-4">
+                      <div
+                        key={place.id}
+                        onClick={() => focusFavoritePlace(place, currentFavoriteCity)}
+                        className="cursor-pointer rounded-[22px] bg-[#FFF7E8] p-4 text-left"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex -space-x-2">
@@ -6134,7 +6160,7 @@ export default function Page() {
                           <Button
                             radius="full"
                             className="bg-[#F5A623] text-white"
-                            onPress={() => setHighlightedFavoritePlaceId(place.id)}
+                            onPress={() => focusFavoritePlace(place, currentFavoriteCity)}
                           >
                             show me
                           </Button>
@@ -6164,7 +6190,11 @@ export default function Page() {
                 {profileLikedSpots.length ? (
                   <div className="grid gap-3">
                     {profileLikedSpots.map((place) => (
-                      <div key={place.id} className="rounded-[22px] bg-[#FFF7E8] p-4 text-left">
+                      <div
+                        key={place.id}
+                        onClick={() => focusFavoritePlace(place, currentFavoriteCity)}
+                        className="cursor-pointer rounded-[22px] bg-[#FFF7E8] p-4 text-left"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{place.kind}</p>
@@ -6180,23 +6210,17 @@ export default function Page() {
                               size="sm"
                               variant="light"
                               className="bg-white text-[#2C1A0E]"
-                              onPress={() => {
-                                setHighlightedFavoritePlaceId(place.id);
-                                setFavoritePlaces((current) => {
-                                  const next = current.filter((item) => item.id !== place.id);
-                                  return [place, ...next].slice(0, 24);
-                                });
-                              }}
+                              onPress={() => openPlaceDirections(place)}
                             >
-                              show me
+                              directions
                             </Button>
                             <Button
                               radius="full"
                               size="sm"
-                              className="bg-[#2C1A0E] text-white"
+                              className="bg-white text-[#d97706]"
                               onPress={() => startPostFromPlace(place, currentFavoriteCity)}
                             >
-                              post from here
+                              +
                             </Button>
                           </div>
                         </div>
