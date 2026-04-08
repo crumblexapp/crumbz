@@ -1621,6 +1621,7 @@ export default function Page() {
   const lastDraftSyncedDareIdRef = useRef<string | null>(null);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
+  const hasBackfilledReferralCodeRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
@@ -1658,6 +1659,33 @@ export default function Page() {
     setBioDraft((liveProfile.bio ?? "").slice(0, 180));
     setBioSaveNotice("");
   }, [bioModalOpen, liveProfile.bio]);
+
+  useEffect(() => {
+    if (!user.signedIn || isAdmin || needsOnboarding || !liveAccount) return;
+    if (liveProfile.referralCode || hasBackfilledReferralCodeRef.current) return;
+
+    hasBackfilledReferralCodeRef.current = true;
+
+    void mutateAccountState({
+      action: "upsert_account",
+      account: {
+        ...liveAccount,
+        profile: {
+          ...liveAccount.profile,
+          referralCode: liveAccount.profile.referralCode ?? "",
+        },
+      },
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+      })
+      .catch(() => {
+        hasBackfilledReferralCodeRef.current = false;
+      });
+  }, [isAdmin, liveAccount, liveProfile.referralCode, needsOnboarding, user.signedIn]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !liveProfile.username) return;
@@ -3373,7 +3401,7 @@ export default function Page() {
   const shareReferralLink = async () => {
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
     if (!referralCode) {
-      setReferralNotice("your referral link is still getting ready. refresh once and try again.");
+      setReferralNotice("your referral link is getting ready. try again in a second.");
       return;
     }
 
