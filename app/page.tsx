@@ -6718,6 +6718,10 @@ export default function Page() {
                 </div>
               ) : null}
 
+              {adminFeedPosts.length ? <div className="space-y-4">{adminFeedPosts.map(renderFeedCard)}</div> : null}
+
+              {friendDailyFeedPosts.length ? <div className="space-y-4">{friendDailyFeedPosts.map(renderFeedCard)}</div> : null}
+
               <Card
                 id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
                 className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
@@ -6747,8 +6751,6 @@ export default function Page() {
                   </div>
                 </CardBody>
               </Card>
-
-              {friendDailyFeedPosts.length ? <div className="space-y-4">{friendDailyFeedPosts.map(renderFeedCard)}</div> : null}
 
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.14),_transparent_28%),linear-gradient(135deg,_#2d1a10_0%,_#5a2d14_52%,_#f5a623_100%)] text-white shadow-[0_24px_60px_rgba(90,45,20,0.24)]">
                 <CardBody className="gap-4 p-5">
@@ -6852,8 +6854,6 @@ export default function Page() {
                   )}
                 </CardBody>
               </Card>
-
-              {adminFeedPosts.length ? <div className="space-y-4">{adminFeedPosts.map(renderFeedCard)}</div> : null}
 
               <Card className="overflow-hidden rounded-[30px] border-0 bg-[#eadffd] shadow-[0_18px_50px_rgba(123,79,255,0.16)]">
                 <CardBody className="flex-row items-center justify-between gap-4 p-5">
