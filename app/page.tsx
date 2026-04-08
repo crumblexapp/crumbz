@@ -5235,22 +5235,22 @@ export default function Page() {
 
     return (
       <main className="min-h-screen bg-white text-[#2C1A0E]">
-        <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
+        <div className="mx-auto min-h-screen w-full max-w-md overflow-x-hidden bg-white px-4 pb-24 pt-5 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
             className="rounded-[30px] bg-[#F5A623] p-5 text-white shadow-[0_22px_60px_rgba(254,138,1,0.22)]"
           >
-            <div className="flex items-center justify-between gap-3">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-[0.28em] text-white/80">crumbz admin</p>
-                <h1 className="mt-2 font-[family-name:var(--font-young-serif)] text-4xl leading-none">
+                <h1 className="mt-2 font-[family-name:var(--font-young-serif)] text-[2.5rem] leading-none">
                   control room
                 </h1>
-                <p className="mt-2 text-sm text-white/88">{user.googleProfile?.email}</p>
+                <p className="mt-2 break-all text-sm text-white/88">{user.googleProfile?.email}</p>
               </div>
-              <Button radius="full" className="bg-white text-[#2C1A0E]" onPress={signOut}>
+              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
                 log out
               </Button>
             </div>
@@ -5265,10 +5265,10 @@ export default function Page() {
             <Tabs
               aria-label="admin areas"
               classNames={{
-                tabList: "w-full rounded-full bg-white/90 p-1",
+                tabList: "grid w-full grid-cols-3 gap-1 rounded-[28px] bg-white/90 p-1 sm:grid-cols-5",
                 cursor: "rounded-full bg-[#F5A623]",
-                tab: "h-11 text-sm font-medium text-[#2C1A0E]",
-                tabContent: "group-data-[selected=true]:text-white",
+                tab: "h-11 min-w-0 px-2 text-xs font-medium text-[#2C1A0E] sm:text-sm",
+                tabContent: "truncate group-data-[selected=true]:text-white",
               }}
             >
               <Tab key="overview" title="overview">
@@ -6346,12 +6346,12 @@ export default function Page() {
 
                   <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                     <CardBody className="gap-3 p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
+                      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">raffle referrals</p>
                           <p className="mt-1 text-sm text-[#2C1A0E]">every user gets a unique referral code. 2 completed referral signups qualifies them for the raffle.</p>
                         </div>
-                        <Button radius="full" className="bg-[#F5A623] text-white" onPress={downloadReferralsCsv}>
+                        <Button radius="full" className="w-full bg-[#F5A623] text-white sm:w-auto" onPress={downloadReferralsCsv}>
                           download csv
                         </Button>
                       </div>
