@@ -1016,6 +1016,24 @@ function formatProfileMeta(cityName: string, schoolName: string) {
   return cityName || schoolName || "";
 }
 
+const USERNAME_MENTION_REGEX = /(^|[^a-z0-9_])@([a-z0-9._-]+)/gi;
+
+function extractTaggedUsernames(text: string) {
+  if (!text.trim()) return [];
+
+  const matches = text.matchAll(USERNAME_MENTION_REGEX);
+  const taggedUsernames = new Set<string>();
+
+  for (const match of matches) {
+    const username = match[2]?.trim().toLowerCase();
+    if (username) {
+      taggedUsernames.add(username);
+    }
+  }
+
+  return [...taggedUsernames];
+}
+
 function getEmailHandle(email: string) {
   return email.split("@")[0]?.trim() || "";
 }
@@ -1839,6 +1857,14 @@ export default function Page() {
       .filter((account) => account.googleProfile?.email)
       .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", account] as const),
   );
+  const accountByUsername = new Map(
+    accounts
+      .map((account) => {
+        const username = account.profile.username.trim().toLowerCase();
+        return username && account.googleProfile?.email ? ([username, account] as const) : null;
+      })
+      .filter((entry): entry is readonly [string, StoredUser] => Boolean(entry)),
+  );
   const resolveChallenger = (email: string, submission?: DareSubmission | null) => {
     const account = accountByEmail.get(email.toLowerCase()) ?? null;
     const fallbackName = submission?.authorName || getSafePublicIdentity({ email });
@@ -1903,7 +1929,6 @@ export default function Page() {
   const nonAdminUserPosts = posts
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const currentUserProfilePosts = studentDailyPosts.filter((post) => post.authorEmail.toLowerCase() === currentUserEmail);
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
@@ -1915,9 +1940,16 @@ export default function Page() {
     : -1;
   const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
-  const selectedProfilePosts = selectedProfileEmail
+  const selectedProfileUsername = selectedProfileAccount?.profile.username.trim().toLowerCase() ?? "";
+  const selectedProfileAuthoredPosts = selectedProfileEmail
     ? [...studentDailyPosts, ...studentWeeklyDumps]
         .filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
+        .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+    : [];
+  const selectedProfileTaggedPosts = selectedProfileUsername
+    ? [...studentDailyPosts, ...studentWeeklyDumps]
+        .filter((post) => post.authorEmail.toLowerCase() !== selectedProfileEmail?.toLowerCase())
+        .filter((post) => extractTaggedUsernames(post.body).includes(selectedProfileUsername))
         .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     : [];
   const selectedProfileEmailLower = selectedProfileEmail?.toLowerCase() ?? "";
@@ -2217,6 +2249,55 @@ export default function Page() {
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
   const notificationCount = unreadNotificationItems.length;
 
+  const openProfileByUsername = (username: string) => {
+    const matchedAccount = accountByUsername.get(username.trim().toLowerCase());
+    const nextEmail = matchedAccount?.googleProfile?.email;
+    if (!nextEmail) return;
+    setSelectedProfileEmail(nextEmail);
+  };
+
+  const renderCaptionWithTags = (text: string, className = "") => {
+    const parts: ReactNode[] = [];
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(USERNAME_MENTION_REGEX)) {
+      const [fullMatch, prefix = "", username = ""] = match;
+      const startIndex = match.index ?? 0;
+
+      if (startIndex > lastIndex) {
+        parts.push(text.slice(lastIndex, startIndex));
+      }
+
+      if (prefix) {
+        parts.push(prefix);
+      }
+
+      const taggedAccount = accountByUsername.get(username.toLowerCase());
+      if (taggedAccount?.googleProfile?.email) {
+        parts.push(
+          <button
+            key={`${startIndex}-${username}`}
+            type="button"
+            onClick={() => openProfileByUsername(username)}
+            className="font-semibold text-[#F5A623] transition hover:text-[#d88b10]"
+          >
+            @{username}
+          </button>,
+        );
+      } else {
+        parts.push(`@${username}`);
+      }
+
+      lastIndex = startIndex + fullMatch.length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return <p className={className}>{parts.length ? parts : text}</p>;
+  };
+
   const renderFeedCard = (post: AppPost) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
@@ -2278,7 +2359,7 @@ export default function Page() {
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
-            showPostBody ? <p className="text-base leading-7 text-[#2C1A0E]">{post.body}</p> : null
+            showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null
           ) : isFriendFeedCard ? null : (
             <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
               <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
@@ -2296,7 +2377,7 @@ export default function Page() {
                   <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
                 </button>
               ) : null}
-              {showPostBody ? <p className="mt-2 text-sm leading-6 text-[#2C1A0E]">{post.body}</p> : null}
+              {showPostBody ? renderCaptionWithTags(post.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
               {post.tasteTag || post.priceTag ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
@@ -2316,7 +2397,7 @@ export default function Page() {
             )
           ) : null}
 
-          {isFriendFeedCard && showPostBody ? <p className="text-base leading-7 text-[#2C1A0E]">{post.body}</p> : null}
+          {isFriendFeedCard && showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null}
 
           {isFriendFeedCard && post.taggedPlaceName ? (
             <button
@@ -7717,9 +7798,29 @@ export default function Page() {
                     )}
                   </div>
                 ) : null}
-                {selectedProfilePosts.length ? (
-                  <div className="space-y-4">
-                    {selectedProfilePosts.map(renderFeedCard)}
+                {selectedProfileAuthoredPosts.length || selectedProfileTaggedPosts.length ? (
+                  <div className="space-y-6">
+                    {selectedProfileAuthoredPosts.length ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">posts</p>
+                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileAuthoredPosts.length}</Chip>
+                        </div>
+                        {selectedProfileAuthoredPosts.map(renderFeedCard)}
+                      </div>
+                    ) : null}
+                    {selectedProfileTaggedPosts.length ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">tagged posts</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">posts where people mentioned @{selectedProfileAccount?.profile.username || "this user"}.</p>
+                          </div>
+                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileTaggedPosts.length}</Chip>
+                        </div>
+                        {selectedProfileTaggedPosts.map(renderFeedCard)}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="rounded-[22px] bg-white p-4 text-sm text-[#2C1A0E]">
