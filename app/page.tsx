@@ -2108,7 +2108,7 @@ export default function Page() {
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
-  const notificationItems = [
+  const rawNotificationItems = [
     ...(currentUserDareReminder
       ? [
           {
@@ -2204,8 +2204,9 @@ export default function Page() {
         };
       }),
     ...friendFavoriteNotifications,
-  ]
-    .filter(Boolean)
+  ];
+  const notificationItems = rawNotificationItems
+    .filter((item): item is NonNullable<(typeof rawNotificationItems)[number]> => Boolean(item))
     .sort((a, b) => ("sortTime" in b ? b.sortTime : 0) - ("sortTime" in a ? a.sortTime : 0)) as Array<
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string; sortTime: number }
