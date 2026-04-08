@@ -48,6 +48,7 @@ const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
 const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
+const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -319,6 +320,10 @@ type StoredUser = {
     outgoingFriendRequests: string[];
     favoritePlaceIds: string[];
     favoriteActivities?: FavoriteActivity[];
+    referralCode?: string;
+    referredByCode?: string;
+    referredByEmail?: string;
+    referralCompletedAt?: string | null;
   };
 };
 
@@ -602,6 +607,10 @@ const defaultUser: StoredUser = {
     outgoingFriendRequests: [],
     favoritePlaceIds: [],
     favoriteActivities: [],
+    referralCode: "",
+    referredByCode: "",
+    referredByEmail: "",
+    referralCompletedAt: null,
   },
 };
 
@@ -867,6 +876,13 @@ function isStandaloneDisplayMode() {
   return iosStandalone || window.matchMedia("(display-mode: standalone)").matches;
 }
 
+function getReferralLink(referralCode: string) {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.origin);
+  url.searchParams.set("ref", referralCode);
+  return url.toString();
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -922,6 +938,11 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
                 ),
             )
           : [],
+        referralCode: typeof candidate.profile?.referralCode === "string" ? candidate.profile.referralCode : "",
+        referredByCode: typeof candidate.profile?.referredByCode === "string" ? candidate.profile.referredByCode : "",
+        referredByEmail: typeof candidate.profile?.referredByEmail === "string" ? candidate.profile.referredByEmail : "",
+        referralCompletedAt:
+          typeof candidate.profile?.referralCompletedAt === "string" ? candidate.profile.referralCompletedAt : null,
       },
     };
 
@@ -1516,6 +1537,8 @@ export default function Page() {
   const [profileShareUrl, setProfileShareUrl] = useState("");
   const [profileShareNotice, setProfileShareNotice] = useState("");
   const [profileQrImageUrl, setProfileQrImageUrl] = useState("");
+  const [referralNotice, setReferralNotice] = useState("");
+  const [pendingReferralCode, setPendingReferralCode] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -1666,6 +1689,22 @@ export default function Page() {
   }, {});
   const totalSignups = nonAdminAccounts.length;
   const sortedCityBreakdown = Object.entries(cityBreakdown).sort(([, a], [, b]) => b - a);
+  const completedReferralAccounts = nonAdminAccounts.filter(
+    (account) => account.profile.referralCompletedAt && account.profile.referredByEmail,
+  );
+  const referralRows = nonAdminAccounts
+    .map((account) => {
+      const email = account.googleProfile?.email?.toLowerCase() ?? "";
+      const referrals = completedReferralAccounts.filter((candidate) => candidate.profile.referredByEmail?.toLowerCase() === email);
+      return {
+        inviter: account,
+        successfulReferrals: referrals.length,
+        qualified: referrals.length >= 2,
+        referredAccounts: referrals,
+      };
+    })
+    .sort((a, b) => b.successfulReferrals - a.successfulReferrals || a.inviter.profile.fullName.localeCompare(b.inviter.profile.fullName));
+  const qualifiedReferralCount = referralRows.filter((row) => row.qualified).length;
   const allFoodSpots = Object.values(fallbackFavoritePlacesByCity).flat();
   const foodSpotCounts = allFoodSpots
     .map((place) => ({
@@ -2704,6 +2743,23 @@ export default function Page() {
   }, [isAdmin, pushEnabled, pushPermission, pushSupported, user.googleProfile?.email, user.signedIn]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const referralCode = url.searchParams.get("ref")?.trim().toUpperCase() ?? "";
+
+    if (referralCode) {
+      window.localStorage.setItem(PENDING_REFERRAL_CODE_KEY, referralCode);
+      setPendingReferralCode(referralCode);
+      url.searchParams.delete("ref");
+      window.history.replaceState({}, "", url.toString());
+      return;
+    }
+
+    setPendingReferralCode(window.localStorage.getItem(PENDING_REFERRAL_CODE_KEY)?.trim().toUpperCase() ?? "");
+  }, [user.signedIn]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || user.signedIn) {
       setShowInstallPrompt(false);
       setInstallPromptMode(null);
@@ -3215,6 +3271,11 @@ export default function Page() {
       return;
     }
 
+    const matchedReferrer =
+      pendingReferralCode && pendingReferralCode !== (liveProfile.referralCode ?? "")
+        ? accounts.find((account) => account.profile.referralCode?.trim().toUpperCase() === pendingReferralCode) ?? null
+        : null;
+
     const nextUser = {
       ...user,
       profile: {
@@ -3229,6 +3290,10 @@ export default function Page() {
         outgoingFriendRequests: user.profile.outgoingFriendRequests,
         favoritePlaceIds: user.profile.favoritePlaceIds,
         favoriteActivities: user.profile.favoriteActivities ?? [],
+        referralCode: liveProfile.referralCode ?? user.profile.referralCode ?? "",
+        referredByCode: matchedReferrer?.profile.referralCode ?? liveProfile.referredByCode ?? user.profile.referredByCode ?? "",
+        referredByEmail: matchedReferrer?.googleProfile?.email ?? liveProfile.referredByEmail ?? user.profile.referredByEmail ?? "",
+        referralCompletedAt: liveProfile.referralCompletedAt ?? user.profile.referralCompletedAt ?? null,
       },
     };
 
@@ -3239,6 +3304,10 @@ export default function Page() {
       .then((result) => {
         setAccounts(result.accounts);
         persistUser((result.user as StoredUser | null) ?? nextUser);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(PENDING_REFERRAL_CODE_KEY);
+        }
+        setPendingReferralCode("");
         setError("");
       })
       .catch(() => {
@@ -3299,6 +3368,104 @@ export default function Page() {
       window.prompt("copy your profile link", profileShareUrl);
       setProfileShareNotice("copy your profile link from the prompt.");
     }
+  };
+
+  const shareReferralLink = async () => {
+    const referralCode = liveProfile.referralCode?.trim().toUpperCase();
+    if (!referralCode) {
+      setReferralNotice("your referral link is still getting ready. refresh once and try again.");
+      return;
+    }
+
+    const referralLink = getReferralLink(referralCode);
+    if (!referralLink) {
+      setReferralNotice("that referral link didn’t load right. try again in a sec.");
+      return;
+    }
+
+    const shareText = "join me on crumbz. sign up from this link and your signup counts toward my raffle entry.";
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "join me on crumbz",
+          text: shareText,
+          url: referralLink,
+        });
+        setReferralNotice("your phone share menu is open with your referral link.");
+        return;
+      }
+
+      await navigator.clipboard.writeText(referralLink);
+      setReferralNotice("your referral link is copied.");
+    } catch {
+      window.prompt("copy your referral link", referralLink);
+      setReferralNotice("copy your referral link from the prompt.");
+    }
+  };
+
+  const downloadReferralsCsv = () => {
+    if (typeof window === "undefined") return;
+
+    const lines = [
+      [
+        "inviter_name",
+        "inviter_username",
+        "inviter_email",
+        "referral_code",
+        "successful_referrals",
+        "qualified_for_raffle",
+        "referred_name",
+        "referred_username",
+        "referred_email",
+        "completed_at",
+      ].join(","),
+      ...referralRows.flatMap((row) => {
+        if (!row.referredAccounts.length) {
+          return [
+            [
+              row.inviter.profile.fullName || row.inviter.googleProfile?.name || "",
+              row.inviter.profile.username,
+              row.inviter.googleProfile?.email ?? "",
+              row.inviter.profile.referralCode ?? "",
+              String(row.successfulReferrals),
+              row.qualified ? "yes" : "no",
+              "",
+              "",
+              "",
+              "",
+            ]
+              .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+              .join(","),
+          ];
+        }
+
+        return row.referredAccounts.map((referred) =>
+          [
+            row.inviter.profile.fullName || row.inviter.googleProfile?.name || "",
+            row.inviter.profile.username,
+            row.inviter.googleProfile?.email ?? "",
+            row.inviter.profile.referralCode ?? "",
+            String(row.successfulReferrals),
+            row.qualified ? "yes" : "no",
+            referred.profile.fullName || referred.googleProfile?.name || "",
+            referred.profile.username,
+            referred.googleProfile?.email ?? "",
+            referred.profile.referralCompletedAt ?? "",
+          ]
+            .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+            .join(","),
+        );
+      }),
+    ];
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `crumbz-referrals-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const shareProfile = async () => {
@@ -6095,6 +6262,82 @@ export default function Page() {
                   })}
                 </div>
               </Tab>
+
+              <Tab key="referrals" title="referrals">
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "qualified", value: qualifiedReferralCount },
+                      { label: "successful referrals", value: completedReferralAccounts.length },
+                    ].map((item) => (
+                      <Card key={item.label} className="rounded-[24px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                        <CardBody className="gap-1 p-4">
+                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">raffle referrals</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">every user gets a unique referral code. 2 completed referral signups qualifies them for the raffle.</p>
+                        </div>
+                        <Button radius="full" className="bg-[#F5A623] text-white" onPress={downloadReferralsCsv}>
+                          download csv
+                        </Button>
+                      </div>
+                      <div className="grid gap-3">
+                        {referralRows.length ? (
+                          referralRows.map((row) => (
+                            <div key={row.inviter.googleProfile?.email} className="rounded-[20px] bg-[#FFF0D0] p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-[#2C1A0E]">
+                                    {row.inviter.profile.fullName || row.inviter.googleProfile?.name || "crumbz user"}
+                                  </p>
+                                  <p className="mt-1 text-sm text-[#2C1A0E]">
+                                    @{row.inviter.profile.username || "pending"} • {row.inviter.googleProfile?.email}
+                                  </p>
+                                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                    code {row.inviter.profile.referralCode || "loading"}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Chip className="bg-white text-[#2C1A0E]">{row.successfulReferrals} referrals</Chip>
+                                  {row.qualified ? <Chip className="bg-[#2C1A0E] text-white">qualified</Chip> : null}
+                                </div>
+                              </div>
+                              {row.referredAccounts.length ? (
+                                <div className="mt-3 grid gap-2">
+                                  {row.referredAccounts.map((referred) => (
+                                    <div key={referred.googleProfile?.email} className="rounded-[16px] bg-white px-3 py-3 text-sm text-[#2C1A0E]">
+                                      <p className="font-semibold">
+                                        {referred.profile.fullName || referred.googleProfile?.name || "new signup"}{" "}
+                                        <span className="font-normal text-[#6c7289]">@{referred.profile.username || "pending"}</span>
+                                      </p>
+                                      <p className="mt-1 text-[#6c7289]">
+                                        {referred.googleProfile?.email} • {referred.profile.referralCompletedAt ? formatRelativePostTime(referred.profile.referralCompletedAt, referred.profile.referralCompletedAt) : "pending"}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="mt-3 text-sm text-[#6c7289]">no completed referrals yet.</p>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-[#2C1A0E]">no referral data yet.</p>
+                        )}
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
             </Tabs>
           </motion.section>
         </div>
@@ -6930,8 +7173,8 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfileQrOpen(true);
-                          setProfileShareNotice("");
+                          setReferralNotice("");
+                          void shareReferralLink();
                         }}
                         className="inline-flex items-center gap-2 text-sm font-medium text-[#6c7289]"
                       >
@@ -6944,6 +7187,7 @@ export default function Page() {
                         </span>
                       </button>
                     </div>
+                    {referralNotice ? <p className="text-sm text-[#6c7289]">{referralNotice}</p> : null}
                     <div className="pt-2">
                       <div className="flex flex-wrap gap-2">
                         <Button

@@ -41,8 +41,16 @@ type StoredUser = {
       city: string;
       createdAt: string;
     }[];
+    referralCode?: string;
+    referredByCode?: string;
+    referredByEmail?: string;
+    referralCompletedAt?: string | null;
   };
 };
+
+function generateReferralCode() {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
+}
 
 function normalizeAccount(account: StoredUser) {
   return {
@@ -55,6 +63,10 @@ function normalizeAccount(account: StoredUser) {
       outgoingFriendRequests: account.profile.outgoingFriendRequests ?? [],
       favoritePlaceIds: account.profile.favoritePlaceIds ?? [],
       favoriteActivities: account.profile.favoriteActivities ?? [],
+      referralCode: account.profile.referralCode?.trim().toUpperCase() ?? "",
+      referredByCode: account.profile.referredByCode?.trim().toUpperCase() ?? "",
+      referredByEmail: account.profile.referredByEmail?.trim().toLowerCase() ?? "",
+      referralCompletedAt: account.profile.referralCompletedAt ?? null,
     },
   };
 }
@@ -237,6 +249,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "you can only update your own account." }, { status: 403 });
     }
 
+    const existingAccount = accounts.find((item) => getEmail(item) === email) ?? null;
+    const existingReferralCode = existingAccount?.profile.referralCode?.trim().toUpperCase() ?? "";
+    const requestedReferralCode = account.profile.referralCode?.trim().toUpperCase() ?? "";
+    account.profile.referralCode = existingReferralCode || requestedReferralCode || generateReferralCode();
+
+    const requestedReferrerCode = account.profile.referredByCode?.trim().toUpperCase() ?? "";
+    const existingReferrerCode = existingAccount?.profile.referredByCode?.trim().toUpperCase() ?? "";
+    const referredByCode = existingReferrerCode || requestedReferrerCode;
+    const referrerAccount =
+      referredByCode && referredByCode !== account.profile.referralCode
+        ? accounts.find((item) => item.profile.referralCode?.trim().toUpperCase() === referredByCode) ?? null
+        : null;
+    account.profile.referredByCode = referrerAccount ? referredByCode : existingReferrerCode;
+    account.profile.referredByEmail = referrerAccount ? getEmail(referrerAccount) : existingAccount?.profile.referredByEmail ?? "";
+    account.profile.referralCompletedAt = account.profile.referralCompletedAt ?? existingAccount?.profile.referralCompletedAt ?? null;
+
     const normalizedUsername = account.profile.username.trim().toLowerCase();
     if (normalizedUsername) {
       const usernameOwner = accounts.find(
@@ -248,6 +276,16 @@ export async function POST(request: Request) {
       }
 
       account.profile.username = normalizedUsername;
+    }
+
+    if (
+      !existingAccount?.profile.referralCompletedAt &&
+      account.profile.fullName.trim() &&
+      account.profile.username.trim() &&
+      account.profile.city.trim() &&
+      typeof account.profile.isStudent === "boolean"
+    ) {
+      account.profile.referralCompletedAt = new Date().toISOString();
     }
 
     nextAccounts = [...accounts.filter((item) => getEmail(item) !== email), account];
