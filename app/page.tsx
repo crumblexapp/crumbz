@@ -1622,6 +1622,7 @@ export default function Page() {
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
   const hasBackfilledReferralCodeRef = useRef(false);
+  const hasAdminBackfilledReferralCodesRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
@@ -1686,6 +1687,42 @@ export default function Page() {
         hasBackfilledReferralCodeRef.current = false;
       });
   }, [isAdmin, liveAccount, liveProfile.referralCode, needsOnboarding, user.signedIn]);
+
+  useEffect(() => {
+    if (!user.signedIn || !isAdmin || hasAdminBackfilledReferralCodesRef.current) return;
+
+    const missingReferralCodeAccounts = accounts.filter(
+      (account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL && !account.profile.referralCode?.trim(),
+    );
+
+    if (!missingReferralCodeAccounts.length) return;
+
+    hasAdminBackfilledReferralCodesRef.current = true;
+
+    void Promise.all(
+      missingReferralCodeAccounts.map((account) =>
+        mutateAccountState({
+          action: "upsert_account",
+          account: {
+            ...account,
+            profile: {
+              ...account.profile,
+              referralCode: "",
+            },
+          },
+        }),
+      ),
+    )
+      .then((results) => {
+        const latest = results.at(-1);
+        if (latest?.accounts?.length) {
+          setAccounts(latest.accounts);
+        }
+      })
+      .catch(() => {
+        hasAdminBackfilledReferralCodesRef.current = false;
+      });
+  }, [accounts, isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !liveProfile.username) return;
