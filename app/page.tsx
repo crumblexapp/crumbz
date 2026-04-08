@@ -2093,6 +2093,7 @@ export default function Page() {
           detail: copy.body,
           picture: account.googleProfile?.picture,
           createdAt: activity.createdAt,
+          sortTime: Date.parse(activity.createdAt) || 0,
           city: activity.city || account.profile.city,
           place: {
             id: activity.placeId,
@@ -2117,6 +2118,7 @@ export default function Page() {
             detail: isDareLiveWindow
               ? "the challenge is open now. jump in and post proof before sunday midnight."
               : "we’ll keep this in your crumbz notifications too, so you don’t miss the drop.",
+            sortTime: Date.parse(dare.releaseAt) || 0,
           },
         ]
       : []),
@@ -2133,10 +2135,11 @@ export default function Page() {
         title: copy.title,
         detail: copy.body,
         picture: adminProfilePicture,
+        sortTime: Number(announcement.id.replace(/\D/g, "")) || 0,
       };
     }),
     ...liveProfile.incomingFriendRequests
-      .map((requestEmail) => {
+      .map((requestEmail, index, requests) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
         if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
         const copy = buildFriendRequestNotification(
@@ -2152,6 +2155,7 @@ export default function Page() {
           detail: copy.body,
           email: requestEmail,
           picture: requester.googleProfile?.picture,
+          sortTime: Date.now() - (requests.length - index),
         };
       })
       .filter(Boolean),
@@ -2173,6 +2177,7 @@ export default function Page() {
           title: copy.title,
           detail: copy.body,
           postId: post.id,
+          sortTime: getPostTimestamp(post),
         };
       }),
     ...[...friendDailyFeedPosts, ...friendWeeklyDumps]
@@ -2195,15 +2200,18 @@ export default function Page() {
           detail: copy.body,
           postId: post.id,
           picture: authorAccount?.googleProfile?.picture,
+          sortTime: getPostTimestamp(post),
         };
       }),
     ...friendFavoriteNotifications,
-  ].filter(Boolean) as Array<
-    | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string }
-    | { id: string; kind: "announcement"; title: string; detail: string; picture?: string }
-    | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string }
-    | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string; city: string; place: FavoritePlace }
-    | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string }
+  ]
+    .filter(Boolean)
+    .sort((a, b) => ("sortTime" in b ? b.sortTime : 0) - ("sortTime" in a ? a.sortTime : 0)) as Array<
+    | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string; sortTime: number }
+    | { id: string; kind: "announcement"; title: string; detail: string; picture?: string; sortTime: number }
+    | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string; sortTime: number }
+    | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string; city: string; place: FavoritePlace; sortTime: number }
+    | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
   >;
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
   const notificationCount = unreadNotificationItems.length;
