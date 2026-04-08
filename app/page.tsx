@@ -6915,17 +6915,35 @@ export default function Page() {
                       <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileQrOpen(true);
-                        setProfileShareNotice("");
-                      }}
-                      className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]"
-                    >
-                      <span>share</span>
-                      <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">↗</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-4 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileQrOpen(true);
+                          setProfileShareNotice("");
+                        }}
+                        className="inline-flex items-center gap-2 text-sm font-medium text-[#6c7289]"
+                      >
+                        <span>share</span>
+                        <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">⤴</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileQrOpen(true);
+                          setProfileShareNotice("");
+                        }}
+                        className="inline-flex items-center gap-2 text-sm font-medium text-[#6c7289]"
+                      >
+                        <span>refer</span>
+                        <span
+                          aria-hidden="true"
+                          className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]"
+                        >
+                          +
+                        </span>
+                      </button>
+                    </div>
                     <div className="pt-2">
                       <div className="flex flex-wrap gap-2">
                         <Button
