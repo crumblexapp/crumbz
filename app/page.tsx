@@ -8295,8 +8295,13 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={Boolean(selectedOwnPost)} onOpenChange={(open) => !open && setSelectedOwnPostId(null)} size="full">
-        <ModalContent>
+      <Modal
+        isOpen={Boolean(selectedOwnPost)}
+        onOpenChange={(open) => !open && setSelectedOwnPostId(null)}
+        size="full"
+        scrollBehavior="inside"
+      >
+        <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
           {(onClose) => (
             <>
               <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
@@ -8310,7 +8315,7 @@ export default function Page() {
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+              <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
               </ModalBody>
             </>
