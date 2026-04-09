@@ -63,8 +63,7 @@ export default async function ProfileOpengraphImage({ params }: ProfileRouteProp
                 padding: "14px 20px",
                 borderRadius: 999,
                 background: "#FFF7E8",
-                width: "fit-content",
-                maxWidth: "100%",
+                alignSelf: "flex-start",
               }}
             >
               {profile?.picture ? (

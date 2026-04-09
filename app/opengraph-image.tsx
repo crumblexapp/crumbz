@@ -57,7 +57,7 @@ export default async function OgImage() {
                 padding: "14px 20px",
                 borderRadius: 999,
                 background: "#FFF7E8",
-                width: "fit-content",
+                alignSelf: "flex-start",
               }}
             >
               <img
