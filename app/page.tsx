@@ -2471,7 +2471,7 @@ export default function Page() {
         key={post.id}
         className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
-        <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
+        <CardHeader className="flex flex-wrap items-start gap-3 px-5 pb-0 pt-5">
           {canOpenProfile ? (
             <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
               <Avatar
@@ -2495,8 +2495,8 @@ export default function Page() {
               className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
             />
           )}
-          <div className="flex-1">
-            <p className="font-semibold text-[#2C1A0E]">
+          <div className="min-w-0 flex-1">
+            <p className="break-words font-semibold text-[#2C1A0E]">
               {isStudentPost ? authorUsername : "crumbz"}
             </p>
             {isSundayDump && isStudentPost ? (
@@ -2507,7 +2507,7 @@ export default function Page() {
               </p>
             ) : null}
           </div>
-          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+          <Chip className="max-w-full shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
