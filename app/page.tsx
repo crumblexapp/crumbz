@@ -1017,6 +1017,7 @@ function formatProfileMeta(cityName: string, schoolName: string) {
 }
 
 const USERNAME_MENTION_REGEX = /(^|[^a-z0-9_])@([a-z0-9._-]+)/gi;
+const PROFILE_SHARE_CARD_SIZE = { width: 1080, height: 1350 } as const;
 
 function extractTaggedUsernames(text: string) {
   if (!text.trim()) return [];
@@ -1036,6 +1037,85 @@ function extractTaggedUsernames(text: string) {
 
 function getProfileShareMessage(username: string) {
   return `open @${username}'s crumbz profile and add them to your circle.`;
+}
+
+function roundRectPath(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.arcTo(x + width, y, x + width, y + height, safeRadius);
+  context.arcTo(x + width, y + height, x, y + height, safeRadius);
+  context.arcTo(x, y + height, x, y, safeRadius);
+  context.arcTo(x, y, x + width, y, safeRadius);
+  context.closePath();
+}
+
+function fillRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fillStyle: string,
+) {
+  roundRectPath(context, x, y, width, height, radius);
+  context.fillStyle = fillStyle;
+  context.fill();
+}
+
+function strokeRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  strokeStyle: string,
+  lineWidth = 1,
+) {
+  roundRectPath(context, x, y, width, height, radius);
+  context.strokeStyle = strokeStyle;
+  context.lineWidth = lineWidth;
+  context.stroke();
+}
+
+function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return [""];
+
+  const lines: string[] = [];
+  let currentLine = words[0];
+
+  for (const word of words.slice(1)) {
+    const nextLine = `${currentLine} ${word}`;
+    if (context.measureText(nextLine).width <= maxWidth) {
+      currentLine = nextLine;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+
+  lines.push(currentLine);
+  return lines;
+}
+
+async function loadCanvasImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new window.Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image load failed"));
+    image.src = url;
+  });
 }
 
 function getEmailHandle(email: string) {
@@ -1559,6 +1639,7 @@ export default function Page() {
   const [profileShareUrl, setProfileShareUrl] = useState("");
   const [profileShareNotice, setProfileShareNotice] = useState("");
   const [profileQrImageUrl, setProfileQrImageUrl] = useState("");
+  const [profileShareCardImageUrl, setProfileShareCardImageUrl] = useState("");
   const [referralNotice, setReferralNotice] = useState("");
   const [pendingReferralCode, setPendingReferralCode] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
@@ -3378,6 +3459,7 @@ export default function Page() {
 
     if (!profileShareUrl) {
       setProfileQrImageUrl("");
+      setProfileShareCardImageUrl("");
       return;
     }
 
@@ -3400,6 +3482,128 @@ export default function Page() {
       cancelled = true;
     };
   }, [profileShareUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!profileQrImageUrl || !profileShareUrl || !liveProfile.username || typeof window === "undefined") {
+      setProfileShareCardImageUrl("");
+      return;
+    }
+
+    const buildShareCard = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = PROFILE_SHARE_CARD_SIZE.width;
+      canvas.height = PROFILE_SHARE_CARD_SIZE.height;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        setProfileShareCardImageUrl("");
+        return;
+      }
+
+      context.fillStyle = "#FFF8EF";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      fillRoundedRect(context, 48, 48, canvas.width - 96, canvas.height - 96, 40, "#FFFFFF");
+      strokeRoundedRect(context, 48, 48, canvas.width - 96, canvas.height - 96, 40, "#F3E1CF", 3);
+
+      const logoImage = await loadCanvasImage(`${window.location.origin}/brand/crumbz-logo.png`);
+      const qrImage = await loadCanvasImage(profileQrImageUrl);
+
+      fillRoundedRect(context, 96, 104, 240, 84, 42, "#FFF7E8");
+      context.drawImage(logoImage, 118, 123, 48, 48);
+      context.fillStyle = "#2C1A0E";
+      context.font = "700 38px Arial";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.fillText("crumbz", 186, 146);
+
+      context.font = "700 76px Arial";
+      context.fillStyle = "#2C1A0E";
+      const headlineLines = ["the feed that", "keeps you hungry."];
+      headlineLines.forEach((line, index) => {
+        context.fillText(line, 96, 278 + index * 86);
+      });
+
+      fillRoundedRect(context, 724, 132, 260, 260, 34, "#FFF7E8");
+      context.drawImage(logoImage, 780, 188, 148, 148);
+
+      fillRoundedRect(context, 96, 472, canvas.width - 192, 152, 50, "#FFF7E8");
+      const avatarSize = 108;
+      const avatarX = 130;
+      const avatarY = 494;
+      const avatarLabel = (liveProfile.fullName || liveProfile.username || "C").charAt(0).toUpperCase();
+
+      try {
+        if (user.googleProfile?.picture) {
+          const avatarImage = await loadCanvasImage(user.googleProfile.picture);
+          context.save();
+          context.beginPath();
+          context.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+          context.closePath();
+          context.clip();
+          context.drawImage(avatarImage, avatarX, avatarY, avatarSize, avatarSize);
+          context.restore();
+        } else {
+          throw new Error("missing avatar");
+        }
+      } catch {
+        fillRoundedRect(context, avatarX, avatarY, avatarSize, avatarSize, 54, "#FFF0D0");
+        context.fillStyle = "#F5A623";
+        context.font = "700 48px Arial";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(avatarLabel, avatarX + avatarSize / 2, avatarY + avatarSize / 2);
+      }
+
+      context.textAlign = "left";
+      context.textBaseline = "alphabetic";
+      context.fillStyle = "#2C1A0E";
+      context.font = "700 42px Arial";
+      context.fillText(liveProfile.fullName || "crumbz user", 270, 548);
+      context.fillStyle = "#6C7289";
+      context.font = "400 34px Arial";
+      context.fillText(`@${liveProfile.username}`, 270, 596);
+
+      fillRoundedRect(context, 171, 684, 738, 738, 42, "#FFFFFF");
+      strokeRoundedRect(context, 171, 684, 738, 738, 42, "#F3E1CF", 3);
+      context.drawImage(qrImage, 219, 732, 642, 642);
+
+      fillRoundedRect(context, 96, 1062, canvas.width - 192, 98, 49, "#2C1A0E");
+      context.fillStyle = "#FFFFFF";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.font = "500 38px Arial";
+      context.fillText("share to instagram", canvas.width / 2, 1111);
+
+      context.fillStyle = "#6C7289";
+      context.font = "400 28px Arial";
+      const messageLines = wrapCanvasText(context, getProfileShareMessage(liveProfile.username), canvas.width - 240);
+      messageLines.slice(0, 2).forEach((line, index) => {
+        context.fillText(line, canvas.width / 2, 1214 + index * 36);
+      });
+
+      fillRoundedRect(context, 96, 1272, canvas.width - 192, 92, 28, "#FFF7E8");
+      context.fillStyle = "#6C7289";
+      context.textAlign = "left";
+      context.textBaseline = "middle";
+      context.font = "400 27px Arial";
+      context.fillText(profileShareUrl, 124, 1318);
+
+      if (!cancelled) {
+        setProfileShareCardImageUrl(canvas.toDataURL("image/png"));
+      }
+    };
+
+    void buildShareCard().catch(() => {
+      if (!cancelled) setProfileShareCardImageUrl("");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [liveProfile.fullName, liveProfile.username, profileQrImageUrl, profileShareUrl, user.googleProfile?.picture]);
 
   const finishOnboarding = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3632,6 +3836,21 @@ export default function Page() {
     const shareMessage = getProfileShareMessage(liveProfile.username);
 
     try {
+      if (navigator.share && profileShareCardImageUrl) {
+        const imageBlob = await fetch(profileShareCardImageUrl).then((response) => response.blob());
+        const imageFile = new File([imageBlob], `${liveProfile.username}-crumbz-share.png`, { type: "image/png" });
+
+        if (navigator.canShare?.({ files: [imageFile] })) {
+          await navigator.share({
+            files: [imageFile],
+            title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
+            text: shareMessage,
+          });
+          setProfileShareNotice("your phone share menu is open with the image card.");
+          return;
+        }
+      }
+
       if (navigator.share) {
         await navigator.share({
           title: `${liveProfile.fullName || liveProfile.username}'s crumbz profile`,
@@ -7918,26 +8137,19 @@ export default function Page() {
               </ModalHeader>
               <ModalBody className="items-center gap-4 overflow-y-auto bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
                 <div className="w-full rounded-[28px] border border-[#FFF0D0] bg-white p-5 text-center shadow-[0_18px_40px_rgba(254,138,1,0.08)]">
-                  <div className="mx-auto flex w-fit items-center gap-3 rounded-full bg-[#FFF7E8] px-4 py-2">
-                    <Avatar src={user.googleProfile?.picture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-[#2C1A0E]">{liveProfile.fullName || "crumbz user"}</p>
-                      <p className="text-sm text-[#6c7289]">@{liveProfile.username}</p>
-                    </div>
-                  </div>
-                  {profileQrImageUrl ? (
+                  {profileShareCardImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profileQrImageUrl} alt={`QR code for @${liveProfile.username}`} className="mx-auto mt-4 h-64 w-64 rounded-[24px] border border-[#FFF0D0] bg-white p-3" />
+                    <img src={profileShareCardImageUrl} alt={`share card for @${liveProfile.username}`} className="mx-auto w-full rounded-[24px] border border-[#FFF0D0] bg-white" />
                   ) : (
-                    <div className="mx-auto mt-4 flex h-64 w-64 items-center justify-center rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] text-sm text-[#6c7289]">
-                      qr code loading...
+                    <div className="mx-auto flex min-h-[22rem] w-full items-center justify-center rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] text-sm text-[#6c7289]">
+                      share card loading...
                     </div>
                   )}
                   <div className="mt-4 space-y-3">
                     <Button radius="full" className="w-full bg-[#2C1A0E] text-white" onPress={shareProfile}>
-                      share profile link
+                      share image to instagram
                     </Button>
-                    <p className="text-sm text-[#6c7289]">this opens your phone share menu with the profile link people can tap.</p>
+                    <p className="text-sm text-[#6c7289]">we’ll try the styled photo first so it can go straight into instagram. if that isn’t supported, we fall back to the link.</p>
                   </div>
                   <div className="mt-4 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">message</p>
