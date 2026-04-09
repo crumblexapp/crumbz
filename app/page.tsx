@@ -1684,6 +1684,7 @@ export default function Page() {
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
+  const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
@@ -2091,9 +2092,12 @@ export default function Page() {
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const selectedOwnPost = selectedOwnPostId
-    ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
-    : null;
+  const selectedOwnPost =
+    selectedOwnPostSnapshot && selectedOwnPostSnapshot.id === selectedOwnPostId
+      ? selectedOwnPostSnapshot
+      : selectedOwnPostId
+        ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
+        : null;
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
@@ -4441,6 +4445,16 @@ export default function Page() {
     revealFavoritePlace(place, cityName);
   };
 
+  const openOwnPost = (post: AppPost) => {
+    setSelectedOwnPostSnapshot(post);
+    setSelectedOwnPostId(post.id);
+  };
+
+  const closeOwnPost = () => {
+    setSelectedOwnPostSnapshot(null);
+    setSelectedOwnPostId(null);
+  };
+
   const startPostFromPlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
     setFavoriteViewCity(cityName);
     setHighlightedFavoritePlaceId(place.id);
@@ -4487,7 +4501,7 @@ export default function Page() {
       address: post.taggedPlaceAddress,
     };
 
-    setSelectedOwnPostId((current) => (current === post.id ? null : current));
+    closeOwnPost();
     revealFavoritePlace(place, post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
   };
 
@@ -7893,7 +7907,7 @@ export default function Page() {
                         <button
                           key={post.id}
                           type="button"
-                          onClick={() => setSelectedOwnPostId(post.id)}
+                          onClick={() => openOwnPost(post)}
                           className="group relative aspect-square overflow-hidden rounded-[20px] bg-[#FFF7E8]"
                         >
                           {post.mediaUrls[0] ? (
@@ -8587,7 +8601,7 @@ export default function Page() {
 
       <Modal
         isOpen={Boolean(selectedOwnPost)}
-        onOpenChange={(open) => !open && setSelectedOwnPostId(null)}
+        onOpenChange={(open) => !open && closeOwnPost()}
         size="full"
         scrollBehavior="inside"
       >
