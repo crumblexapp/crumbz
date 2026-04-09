@@ -1658,6 +1658,7 @@ export default function Page() {
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
+  const favoritesMapSectionRef = useRef<HTMLElement | null>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
   const lastDraftSyncedDareIdRef = useRef<string | null>(null);
@@ -4241,8 +4242,7 @@ export default function Page() {
     }, 120);
   };
 
-  const openFriendFavoriteNotification = (notificationId: string, cityName: string, place: FavoritePlace) => {
-    markNotificationSeen(notificationId);
+  const revealFavoritePlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
     setFavoriteViewCity(cityName);
     setHighlightedFavoritePlaceId(place.id);
     setFavoritePlaces((current) => {
@@ -4250,17 +4250,19 @@ export default function Page() {
       return [place, ...next].slice(0, 24);
     });
     setStudentTab("favorites");
+    window.setTimeout(() => {
+      favoritesMapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  };
+
+  const openFriendFavoriteNotification = (notificationId: string, cityName: string, place: FavoritePlace) => {
+    markNotificationSeen(notificationId);
     setNotificationsOpen(false);
+    revealFavoritePlace(place, cityName);
   };
 
   const openFriendFavoriteMoment = (cityName: string, place: FavoritePlace) => {
-    setFavoriteViewCity(cityName);
-    setHighlightedFavoritePlaceId(place.id);
-    setFavoritePlaces((current) => {
-      const next = current.filter((item) => item.id !== place.id);
-      return [place, ...next].slice(0, 24);
-    });
-    setStudentTab("favorites");
+    revealFavoritePlace(place, cityName);
   };
 
   const startPostFromPlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
@@ -4283,13 +4285,7 @@ export default function Page() {
   };
 
   const focusFavoritePlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
-    setFavoriteViewCity(cityName);
-    setHighlightedFavoritePlaceId(place.id);
-    setFavoritePlaces((current) => {
-      const next = current.filter((item) => item.id !== place.id);
-      return [place, ...next].slice(0, 24);
-    });
-    setStudentTab("favorites");
+    revealFavoritePlace(place, cityName);
   };
 
   const openPlaceDirections = (place: FavoritePlace) => {
@@ -4315,10 +4311,7 @@ export default function Page() {
       address: post.taggedPlaceAddress,
     };
 
-    setFavoriteViewCity(post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
-    setHighlightedFavoritePlaceId(place.id);
-    setFavoritePlaces((current) => [place, ...current.filter((item) => item.id !== place.id)].slice(0, 24));
-    setStudentTab("favorites");
+    revealFavoritePlace(place, post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
   };
 
   const openStorySequence = (postId?: string | null) => {
@@ -6942,7 +6935,7 @@ export default function Page() {
         ) : null}
 
         {studentTab === "favorites" ? (
-          <section className="mt-6 space-y-4">
+          <section ref={favoritesMapSectionRef} className="mt-6 space-y-4">
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -7956,9 +7949,7 @@ export default function Page() {
                         type="button"
                         onClick={() => {
                           setProfileDrawer(null);
-                          setStudentTab("favorites");
-                          setHighlightedFavoritePlaceId(place.id);
-                          setFavoritePlaces((current) => [place, ...current.filter((item) => item.id !== place.id)].slice(0, 24));
+                          focusFavoritePlace(place, currentFavoriteCity);
                         }}
                         className="rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-left"
                       >
