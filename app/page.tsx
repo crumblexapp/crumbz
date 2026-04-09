@@ -1942,6 +1942,7 @@ export default function Page() {
   const adminStorySequence = [...adminLiveStoryPosts].reverse();
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const adminPostArchive = [...adminFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const mixedHomeFeedPosts = [...adminFeedPosts, ...friendDailyFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -2071,6 +2072,7 @@ export default function Page() {
         .filter((friend) => !dailyPostMentionQuery || friend.usernameLower.startsWith(dailyPostMentionQuery))
         .slice(0, 6)
     : [];
+  const shouldShowFeedAnnouncementCard = user.signedIn && (liveProfile.friends.length === 0 || (friendDailyFeedPosts.length === 0 && friendWeeklyDumps.length === 0));
   const citySpotlightName = liveProfile.city || "Lodz";
   const citySnapshot = {
     mostPostedSpot: friendDailyFeedPosts[0]?.title ?? friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
@@ -2179,19 +2181,6 @@ export default function Page() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
   const rawNotificationItems = [
-    ...(currentUserDareReminder
-      ? [
-          {
-            id: dareReminderNotificationId,
-            kind: "dare_reminder" as const,
-            title: isDareLiveWindow ? `${dare.title} is live now` : `dare reminder set for ${dareReleaseText}`,
-            detail: isDareLiveWindow
-              ? "the challenge is open now. jump in and post proof before sunday midnight."
-              : "we’ll keep this in your crumbz notifications too, so you don’t miss the drop.",
-            sortTime: Date.parse(dare.releaseAt) || 0,
-          },
-        ]
-      : []),
     ...announcements.slice(0, 4).map((announcement) => {
       const copy = buildAnnouncementNotification({
         title: announcement.title,
@@ -6824,107 +6813,39 @@ export default function Page() {
                 </div>
               ) : null}
 
-              {adminFeedPosts.length ? <div className="space-y-4">{adminFeedPosts.map(renderFeedCard)}</div> : null}
-
-              {friendDailyFeedPosts.length ? <div className="space-y-4">{friendDailyFeedPosts.map(renderFeedCard)}</div> : null}
-
-              <Card
-                id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
-                className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
-              >
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
-                      <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
-                        {selectedAnnouncement?.title || "Upcoming Food Mob"}
-                      </h3>
-                      <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
-                        {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
-                      </p>
-                    </div>
-                    <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      radius="full"
-                      className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
-                      onPress={() => setNotificationsOpen(true)}
-                    >
-                      remind me
-                    </Button>
-                    <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
-                  </div>
-                </CardBody>
-              </Card>
-
-              <Card className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.14),_transparent_28%),linear-gradient(135deg,_#2d1a10_0%,_#5a2d14_52%,_#f5a623_100%)] text-white shadow-[0_24px_60px_rgba(90,45,20,0.24)]">
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-[#ffd88b]">🎯 dare to eat</p>
-                      <h3 className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[2rem] leading-[1.02] text-white">
-                        {isPreDareWindow ? "dare to eat" : dare.title}
-                      </h3>
-                      <p className="mt-3 text-sm text-white/78">
-                        {isPreDareWindow
-                          ? `next dare drops ${dareReleaseText}`
-                          : dare.prompt}
-                      </p>
-                    </div>
-                    {isDareLiveWindow ? (
-                      dareHydrated ? <Chip className="bg-white text-[#5a2d14]">{dare.acceptedEmails.length} in</Chip> : <div className="h-11 w-20 rounded-full bg-white/20" />
-                    ) : (
-                      <Chip className="bg-white text-[#5a2d14]">{dare.reminderEmails.length} reminded</Chip>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    {isPreDareWindow ? (
-                      <Button
-                        radius="full"
-                        className={currentUserDareReminder ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
-                        onPress={remindMeForDare}
-                      >
-                        {currentUserDareReminder ? "reminder set" : "remind me"}
-                      </Button>
-                    ) : (
-                      <Button
-                        radius="full"
-                        className={currentUserAcceptedDare ? "bg-white text-[#5a2d14]" : "bg-[#F5A623] text-white"}
-                        onPress={currentUserAcceptedDare ? openDareProof : acceptDare}
-                      >
-                        {currentUserAcceptedDare ? "submit proof" : "are you in? 🎯"}
-                      </Button>
-                    )}
-                    {winningDareSubmission ? <Chip className="bg-white/15 text-white">winner announced tuesday</Chip> : null}
-                  </div>
-                </CardBody>
-              </Card>
-
-              {winningDareSubmission ? (
-                <Card className="rounded-[30px] border border-[#FFD89A] bg-[#FFF6E5] shadow-[0_18px_50px_rgba(245,166,35,0.14)]">
+              {shouldShowFeedAnnouncementCard ? (
+                <Card
+                  id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
+                  className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
+                >
                   <CardBody className="gap-4 p-5">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#F5A623]">tuesday winner</p>
-                        <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
-                          {winningDareSubmission.authorName} nailed the dare
+                        <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
+                        <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
+                          {selectedAnnouncement?.title || "Upcoming Food Mob"}
+                        </h3>
+                        <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
+                          {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
                         </p>
                       </div>
-                      <Chip className="bg-[#F5A623] text-white">winner</Chip>
+                      <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
                     </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={winningDareSubmission.photoUrl}
-                      alt={winningDareSubmission.caption || winningDareSubmission.authorName}
-                      className="h-64 w-full rounded-[24px] object-cover"
-                      loading="lazy"
-                    />
-                    <p className="text-sm text-[#2C1A0E]">{winningDareSubmission.caption || "this one won the week."}</p>
-                    <p className="text-sm text-[#6c7289]">{winningDareSubmission.locationTag} • {dare.reward}</p>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        radius="full"
+                        className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
+                        onPress={() => setNotificationsOpen(true)}
+                      >
+                        remind me
+                      </Button>
+                      <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
+                    </div>
                   </CardBody>
                 </Card>
               ) : null}
+
+              {mixedHomeFeedPosts.length ? <div className="space-y-4">{mixedHomeFeedPosts.map(renderFeedCard)}</div> : null}
 
               <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
                 <CardBody className="gap-4 p-5">
@@ -7138,63 +7059,6 @@ export default function Page() {
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">rewards</p>
                 <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{rewardsTitle}</h2>
                 <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
-              </CardBody>
-            </Card>
-
-            <Card className="rounded-[28px] border border-[#FFF0D0] bg-[#fff8ee] shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-              <CardBody className="gap-4 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">dare challenge</p>
-                    <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{dare.title}</p>
-                    <p className="mt-2 text-sm text-[#6c7289]">{isPreDareWindow ? `next dare drops ${dareReleaseText}` : dare.prompt}</p>
-                  </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{dare.submissions.length} proofs</Chip>
-                </div>
-
-                {isDareLiveWindow && currentUserAcceptedDare ? (
-                  <form className="grid gap-3" onSubmit={submitDareProof}>
-                    <Input
-                      radius="full"
-                      placeholder="location tag"
-                      value={dareLocationDraft}
-                      onValueChange={setDareLocationDraft}
-                      classNames={{ inputWrapper: "bg-white border border-[#FFF0D0]" }}
-                    />
-                    <Textarea
-                      placeholder="one line caption"
-                      value={dareCaptionDraft}
-                      onValueChange={setDareCaptionDraft}
-                      classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
-                    />
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                      onChange={(event) => {
-                        void handleDareProofFile(event.target.files);
-                      }}
-                      className="rounded-[18px] border border-[#FFF0D0] bg-white px-3 py-3 text-sm text-[#2C1A0E]"
-                    />
-                    {dareProofPhotoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={dareProofPhotoUrl} alt="dare proof preview" className="h-40 w-full rounded-[22px] object-cover" loading="lazy" />
-                    ) : null}
-                    <div className="flex items-center gap-3">
-                      <Button radius="full" className="bg-[#F5A623] text-white" type="submit" isDisabled={isUploadingDareProof}>
-                        {currentUserDareSubmission ? "update proof" : "submit proof"}
-                      </Button>
-                      {dareNotice ? <p className="text-sm text-[#6c7289]">{dareNotice}</p> : null}
-                    </div>
-                  </form>
-                ) : (
-                  <div className="rounded-[18px] bg-[#FFF0D0] px-4 py-3 text-sm text-[#2C1A0E]">
-                    {isPreDareWindow
-                      ? "save your reminder in feed. once the dare goes live on wednesday, come back here to submit proof."
-                      : currentUserAcceptedDare
-                        ? "your proof form unlocks here while the dare is live."
-                        : "jump into the dare from feed first, then come back here to upload proof."}
-                  </div>
-                )}
               </CardBody>
             </Card>
           </section>
