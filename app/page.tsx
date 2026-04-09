@@ -2475,7 +2475,7 @@ export default function Page() {
     return <p className={className}>{parts.length ? parts : text}</p>;
   };
 
-  const renderFeedCard = (post: AppPost) => {
+  const renderFeedCard = (post: AppPost, detail = false) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
@@ -2571,7 +2571,7 @@ export default function Page() {
 
           {post.mediaKind !== "none" ? (
             post.mediaUrls.length ? (
-              <PostMediaPreview post={post} />
+              <PostMediaPreview post={post} detail={detail} />
             ) : (
               <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
                 this post’s media needs one re-upload from the admin side.
@@ -4481,6 +4481,7 @@ export default function Page() {
       address: post.taggedPlaceAddress,
     };
 
+    setSelectedOwnPostId((current) => (current === post.id ? null : current));
     revealFavoritePlace(place, post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
   };
 
@@ -6986,7 +6987,7 @@ export default function Page() {
                         </div>
                         <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendWeeklyDumps.length} dumps</Chip>
                       </div>
-                      {friendWeeklyDumps.map(renderFeedCard)}
+                      {friendWeeklyDumps.map((post) => renderFeedCard(post))}
                     </>
                   ) : null}
 
@@ -7110,7 +7111,7 @@ export default function Page() {
                 </Card>
               ) : null}
 
-              {mixedHomeFeedPosts.length ? <div className="space-y-4">{mixedHomeFeedPosts.map(renderFeedCard)}</div> : null}
+              {mixedHomeFeedPosts.length ? <div className="space-y-4">{mixedHomeFeedPosts.map((post) => renderFeedCard(post))}</div> : null}
 
               <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
                 <CardBody className="gap-4 p-5">
@@ -7909,7 +7910,7 @@ export default function Page() {
                     </div>
                   ) : (
                     <div className="grid gap-4">
-                      {currentUserAllPosts.map(renderFeedCard)}
+                      {currentUserAllPosts.map((post) => renderFeedCard(post))}
                     </div>
                   )
                 ) : (
@@ -8156,7 +8157,7 @@ export default function Page() {
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">posts</p>
                           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileAuthoredPosts.length}</Chip>
                         </div>
-                        {selectedProfileAuthoredPosts.map(renderFeedCard)}
+                        {selectedProfileAuthoredPosts.map((post) => renderFeedCard(post))}
                       </div>
                     ) : null}
                     {selectedProfileTaggedPosts.length ? (
@@ -8168,7 +8169,7 @@ export default function Page() {
                           </div>
                           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileTaggedPosts.length}</Chip>
                         </div>
-                        {selectedProfileTaggedPosts.map(renderFeedCard)}
+                        {selectedProfileTaggedPosts.map((post) => renderFeedCard(post))}
                       </div>
                     ) : null}
                   </div>
@@ -8599,7 +8600,7 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
+                {selectedOwnPost ? renderFeedCard(selectedOwnPost, true) : null}
               </ModalBody>
             </>
           )}
