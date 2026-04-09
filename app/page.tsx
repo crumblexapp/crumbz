@@ -1486,7 +1486,7 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
         <img
           src={mediaUrls[0]}
           alt={post.title}
-          className="h-auto w-full object-contain"
+          className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-auto w-full object-contain"}
           loading="lazy"
         />
       </div>
