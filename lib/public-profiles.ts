@@ -12,6 +12,7 @@ type StoredAccount = {
     bio?: string;
     city?: string;
     schoolName?: string;
+    picture?: string;
   } | null;
 };
 
@@ -48,6 +49,6 @@ export async function readPublicProfilePreview(handle: string): Promise<PublicPr
     bio: matchedAccount.profile?.bio?.trim() || "",
     city: matchedAccount.profile?.city?.trim() || "",
     schoolName: matchedAccount.profile?.schoolName?.trim() || "",
-    picture: matchedAccount.googleProfile?.picture?.trim() || "",
+    picture: matchedAccount.profile?.picture?.trim() || matchedAccount.googleProfile?.picture?.trim() || "",
   };
 }

@@ -330,6 +330,7 @@ type StoredUser = {
     username: string;
     city: string;
     bio?: string;
+    picture?: string;
     isStudent: boolean | null;
     schoolName: string;
     friends: string[];
@@ -617,6 +618,7 @@ const defaultUser: StoredUser = {
     username: "",
     city: "",
     bio: "",
+    picture: "",
     isStudent: null,
     schoolName: "",
     friends: [],
@@ -804,6 +806,7 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
       profile: {
         ...account.profile,
         bio: localAccount.profile.bio || account.profile.bio || "",
+        picture: localAccount.profile.picture || account.profile.picture || "",
       },
     };
   });
@@ -926,6 +929,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
         bio: typeof candidate.profile?.bio === "string" ? candidate.profile.bio : "",
+        picture: typeof candidate.profile?.picture === "string" ? candidate.profile.picture : "",
         schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
         friends: Array.isArray(candidate.profile?.friends) ? candidate.profile.friends.filter((item): item is string => typeof item === "string") : [],
         incomingFriendRequests: Array.isArray(candidate.profile?.incomingFriendRequests)
@@ -1031,6 +1035,11 @@ function normalizeCityKey(cityName: string) {
 function formatProfileMeta(cityName: string, schoolName: string) {
   if (cityName && schoolName) return `${cityName} • ${schoolName}`;
   return cityName || schoolName || "";
+}
+
+function getAccountPicture(account: Pick<StoredUser, "googleProfile" | "profile"> | null | undefined) {
+  if (!account) return "";
+  return account.profile.picture?.trim() || account.googleProfile?.picture?.trim() || "";
 }
 
 const USERNAME_MENTION_REGEX = /(^|[^a-z0-9_])@([a-z0-9._-]+)/gi;
@@ -1585,9 +1594,16 @@ export default function Page() {
   const [isStudent, setIsStudent] = useState<boolean | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [bioDraft, setBioDraft] = useState("");
+  const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [bioModalOpen, setBioModalOpen] = useState(false);
   const [bioSaveNotice, setBioSaveNotice] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
+  const [profilePhotoModalOpen, setProfilePhotoModalOpen] = useState(false);
+  const [profilePhotoDraft, setProfilePhotoDraft] = useState("");
+  const [profilePhotoNotice, setProfilePhotoNotice] = useState("");
+  const [isSavingProfilePhoto, setIsSavingProfilePhoto] = useState(false);
+  const [profilePhotoInputKey, setProfilePhotoInputKey] = useState(0);
+  const [profileCameraInputKey, setProfileCameraInputKey] = useState(0);
   const [profileQrOpen, setProfileQrOpen] = useState(false);
   const [profileShareUrl, setProfileShareUrl] = useState("");
   const [profileShareNotice, setProfileShareNotice] = useState("");
@@ -1672,6 +1688,8 @@ export default function Page() {
     videoRatio: "9:16" as VideoRatio,
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const profileCameraInputRef = useRef<HTMLInputElement>(null);
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
@@ -1695,6 +1713,7 @@ export default function Page() {
       (account) => account.googleProfile?.email?.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
     ) ?? null;
   const liveProfile = liveAccount?.profile ?? user.profile;
+  const currentUserPicture = getAccountPicture(liveAccount ?? user);
   const needsOnboarding =
     user.signedIn &&
     (!liveProfile.fullName ||
@@ -1746,6 +1765,12 @@ export default function Page() {
     setBioDraft((liveProfile.bio ?? "").slice(0, 180));
     setBioSaveNotice("");
   }, [bioModalOpen, liveProfile.bio]);
+
+  useEffect(() => {
+    if (!profilePhotoModalOpen) return;
+    setProfilePhotoDraft(currentUserPicture);
+    setProfilePhotoNotice("");
+  }, [currentUserPicture, profilePhotoModalOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1883,7 +1908,7 @@ export default function Page() {
   }, [accounts, user.signedIn]);
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
-  const adminProfilePicture = adminAccount?.googleProfile?.picture;
+  const adminProfilePicture = getAccountPicture(adminAccount);
   const nonAdminAccounts = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL);
   const nonAdminEmailSet = new Set(
     nonAdminAccounts
@@ -1999,7 +2024,7 @@ export default function Page() {
       name: account?.profile.fullName || account?.googleProfile?.name || fallbackName,
       username: account?.profile.username || "",
       meta: formatProfileMeta(account?.profile.city ?? "", account?.profile.schoolName ?? ""),
-      picture: account?.googleProfile?.picture,
+      picture: getAccountPicture(account),
       submission: submission ?? null,
     };
   };
@@ -2165,7 +2190,7 @@ export default function Page() {
       username: account.profile.username.trim(),
       usernameLower: account.profile.username.trim().toLowerCase(),
       fullName: account.profile.fullName || account.googleProfile?.name || account.profile.username,
-      picture: account.googleProfile?.picture ?? "",
+      picture: getAccountPicture(account),
     }))
     .filter((friend) => friend.username);
   const dailyPostMentionSuggestions = dailyPostMentionRange
@@ -2238,7 +2263,7 @@ export default function Page() {
           email: account.googleProfile?.email ?? account.profile.username,
           name: account.profile.fullName,
           username: `@${account.profile.username}`,
-          picture: account.googleProfile?.picture,
+          picture: getAccountPicture(account),
         })),
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
@@ -2264,7 +2289,7 @@ export default function Page() {
           kind: "friend_favorite" as const,
           title: copy.title,
           detail: copy.body,
-          picture: account.googleProfile?.picture,
+          picture: getAccountPicture(account),
           createdAt: activity.createdAt,
           sortTime: Date.parse(activity.createdAt) || 0,
           city: activity.city || account.profile.city,
@@ -2314,7 +2339,7 @@ export default function Page() {
           title: copy.title,
           detail: copy.body,
           email: requestEmail,
-          picture: requester.googleProfile?.picture,
+          picture: getAccountPicture(requester),
           sortTime: Date.now() - (requests.length - index),
         };
       })
@@ -2359,7 +2384,7 @@ export default function Page() {
           title: copy.title,
           detail: copy.body,
           postId: post.id,
-          picture: authorAccount?.googleProfile?.picture,
+          picture: getAccountPicture(authorAccount),
           sortTime: getPostTimestamp(post),
         };
       }),
@@ -2383,7 +2408,7 @@ export default function Page() {
           title: copy.title,
           detail: copy.body,
           postId: post.id,
-          picture: authorAccount?.googleProfile?.picture,
+          picture: getAccountPicture(authorAccount),
           sortTime: getPostTimestamp(post),
         };
       }),
@@ -2482,7 +2507,7 @@ export default function Page() {
               <Avatar
                 src={
                   isStudentPost
-                    ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
+                    ? getAccountPicture(accounts.find((account) => account.googleProfile?.email === post.authorEmail))
                     : adminProfilePicture
                 }
                 name={isStudentPost ? post.authorName : "C"}
@@ -2493,7 +2518,7 @@ export default function Page() {
             <Avatar
               src={
                 isStudentPost
-                  ? accounts.find((account) => account.googleProfile?.email === post.authorEmail)?.googleProfile?.picture
+                  ? getAccountPicture(accounts.find((account) => account.googleProfile?.email === post.authorEmail))
                   : adminProfilePicture
               }
               name={isStudentPost ? post.authorName : "C"}
@@ -3624,6 +3649,7 @@ export default function Page() {
         username: trimmedUsername,
         city: trimmedCity,
         bio: user.profile.bio ?? "",
+        picture: liveProfile.picture ?? user.profile.picture ?? "",
         isStudent: isStudentValue,
         schoolName: isStudentValue ? trimmedSchool : "",
         friends: user.profile.friends,
@@ -4899,6 +4925,80 @@ export default function Page() {
     return uploadResults?.length ? uploadResults : null;
   };
 
+  const handleProfilePhotoFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+
+    setIsSavingProfilePhoto(true);
+    setProfilePhotoNotice("uploading your new photo...");
+
+    try {
+      const uploadResults = await uploadMediaFiles(files, {
+        mediaKind: "photo",
+        maxFiles: 1,
+        setNotice: setProfilePhotoNotice,
+      });
+
+      if (!uploadResults?.[0]) {
+        return;
+      }
+
+      setProfilePhotoDraft(uploadResults[0]);
+      setProfilePhotoNotice("photo ready. tap save to use it.");
+      setProfilePhotoInputKey((current) => current + 1);
+      setProfileCameraInputKey((current) => current + 1);
+    } finally {
+      setIsSavingProfilePhoto(false);
+    }
+  };
+
+  const saveProfilePhoto = () => {
+    const sourceUser = liveAccount ?? user;
+    const nextPicture = profilePhotoDraft.trim();
+    if (!nextPicture) {
+      setProfilePhotoNotice("pick a photo first.");
+      return;
+    }
+
+    const nextUser = {
+      ...sourceUser,
+      signedIn: true,
+      googleProfile: user.googleProfile ?? sourceUser.googleProfile,
+      profile: {
+        ...sourceUser.profile,
+        picture: nextPicture,
+      },
+    };
+
+    setIsSavingProfilePhoto(true);
+    setProfilePhotoNotice("");
+
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextUser,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        persistUser((result.user as StoredUser | null) ?? nextUser);
+        setProfilePhotoModalOpen(false);
+      })
+      .catch(() => {
+        const currentEmail = nextUser.googleProfile?.email?.toLowerCase();
+        const nextAccounts =
+          currentEmail && accountsRef.current.some((account) => account.googleProfile?.email?.toLowerCase() === currentEmail)
+            ? accountsRef.current.map((account) =>
+                account.googleProfile?.email?.toLowerCase() === currentEmail ? nextUser : account,
+              )
+            : [...accountsRef.current, nextUser];
+
+        setAccounts(nextAccounts);
+        persistUser(nextUser);
+        setProfilePhotoModalOpen(false);
+      })
+      .finally(() => {
+        setIsSavingProfilePhoto(false);
+      });
+  };
+
   const handleComposerFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
@@ -5444,7 +5544,7 @@ export default function Page() {
           >
             <div className="flex items-center gap-4">
               <Avatar
-                src={user.googleProfile?.picture}
+                src={currentUserPicture}
                 name={user.googleProfile?.name ?? "C"}
                 className="h-16 w-16 bg-[#F5A623] text-white"
               />
@@ -6820,7 +6920,7 @@ export default function Page() {
             <button type="button" onClick={() => setStudentTab("profile")} className="rounded-full">
               <Badge color="warning" content="" shape="circle" isInvisible>
                 <Avatar
-                  src={user.googleProfile?.picture}
+                  src={currentUserPicture}
                   name={user.profile.fullName}
                   className="h-12 w-12 border-2 border-[#f8c6ad] bg-[#FFF0D0] text-[#F5A623]"
                 />
@@ -7111,7 +7211,7 @@ export default function Page() {
                     email: account.googleProfile?.email ?? account.profile.username,
                     name: account.profile.fullName,
                     username: `@${account.profile.username}`,
-                    picture: account.googleProfile?.picture,
+                    picture: getAccountPicture(account),
                     favoritePlaceIds: account.profile.favoritePlaceIds ?? [],
                   }))}
                 />
@@ -7439,7 +7539,7 @@ export default function Page() {
                 <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
                   <div className="flex justify-start">
                     <Avatar
-                      src={user.googleProfile?.picture}
+                      src={currentUserPicture}
                       name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
                       className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
                     />
@@ -7475,6 +7575,27 @@ export default function Page() {
                   </div>
 
                   <div className="col-span-2 space-y-1 pt-1">
+                    <input
+                      key={profilePhotoInputKey}
+                      ref={profilePhotoInputRef}
+                      type="file"
+                      accept="image/*,.jpg,.jpeg,.png,.heic,.heif"
+                      onChange={(event) => {
+                        void handleProfilePhotoFiles(event.currentTarget.files);
+                      }}
+                      className="hidden"
+                    />
+                    <input
+                      key={profileCameraInputKey}
+                      ref={profileCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(event) => {
+                        void handleProfilePhotoFiles(event.currentTarget.files);
+                      }}
+                      className="hidden"
+                    />
                     {liveProfile.bio ? (
                       <div className="max-w-full overflow-x-auto [scrollbar-width:none]">
                         <p className="whitespace-pre py-1 text-sm leading-6 text-[#6c7289] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -7482,8 +7603,8 @@ export default function Page() {
                         </p>
                       </div>
                     ) : null}
-                    <button type="button" onClick={() => setBioModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
-                      <span>{liveProfile.bio ? copy.profile.editBio : copy.profile.addBio}</span>
+                    <button type="button" onClick={() => setProfileEditModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
+                      <span>edit</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
                     </button>
                     <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -8099,7 +8220,7 @@ export default function Page() {
                             }}
                             className="flex items-center gap-3 rounded-[22px] bg-[#FFF7E8] px-4 py-3 text-left"
                           >
-                            <Avatar src={friend.googleProfile?.picture} name={friend.profile.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
+                            <Avatar src={getAccountPicture(friend)} name={friend.profile.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-[#2C1A0E]">{friend.profile.fullName}</p>
                               <p className="truncate text-sm text-[#6c7289]">@{friend.profile.username}</p>
@@ -8157,7 +8278,7 @@ export default function Page() {
               <ModalBody className="items-center gap-4 overflow-y-auto bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
                 <div className="w-full rounded-[28px] border border-[#FFF0D0] bg-white p-5 text-center shadow-[0_18px_40px_rgba(254,138,1,0.08)]">
                   <div className="mx-auto flex w-fit items-center gap-3 rounded-full bg-[#FFF7E8] px-4 py-2">
-                    <Avatar src={user.googleProfile?.picture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
+                    <Avatar src={currentUserPicture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
                     <div className="text-left">
                       <p className="text-sm font-semibold text-[#2C1A0E]">{liveProfile.fullName || "crumbz user"}</p>
                       <p className="text-sm text-[#6c7289]">@{liveProfile.username}</p>
@@ -8320,6 +8441,101 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
+      <Modal isOpen={profileEditModalOpen} onOpenChange={setProfileEditModalOpen} placement="center">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">edit profile</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">change your bio or swap your display photo.</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-3 bg-[#fffaf2] pb-6 pt-5">
+                <Button
+                  radius="full"
+                  className="bg-[#2C1A0E] text-white"
+                  onPress={() => {
+                    setProfileEditModalOpen(false);
+                    setBioModalOpen(true);
+                  }}
+                >
+                  edit bio
+                </Button>
+                <Button
+                  radius="full"
+                  className="bg-[#F5A623] text-white"
+                  onPress={() => {
+                    setProfileEditModalOpen(false);
+                    setProfilePhotoModalOpen(true);
+                  }}
+                >
+                  edit dp
+                </Button>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={profilePhotoModalOpen} onOpenChange={setProfilePhotoModalOpen} placement="center">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">edit dp</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">pick a photo from your device or take a new one.</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-6 pt-5">
+                <div className="flex justify-center">
+                  <Avatar
+                    src={profilePhotoDraft || currentUserPicture}
+                    name={liveProfile.fullName || liveProfile.username || "crumbz"}
+                    className="h-28 w-28 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Button
+                    radius="full"
+                    className="bg-[#2C1A0E] text-white"
+                    isDisabled={isSavingProfilePhoto}
+                    onPress={() => profilePhotoInputRef.current?.click()}
+                  >
+                    choose from device
+                  </Button>
+                  <Button
+                    radius="full"
+                    variant="flat"
+                    className="bg-[#FFF0D0] text-[#2C1A0E]"
+                    isDisabled={isSavingProfilePhoto}
+                    onPress={() => profileCameraInputRef.current?.click()}
+                  >
+                    take new photo
+                  </Button>
+                </div>
+                {profilePhotoNotice ? <p className="text-sm text-[#6c7289]">{profilePhotoNotice}</p> : null}
+                <div className="flex items-center justify-end gap-2">
+                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                    maybe later
+                  </Button>
+                  <Button radius="full" className="bg-[#F5A623] text-white" isLoading={isSavingProfilePhoto} onPress={saveProfilePhoto}>
+                    save photo
+                  </Button>
+                </div>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
       <Modal isOpen={bioModalOpen} onOpenChange={setBioModalOpen} placement="center">
         <ModalContent className="bg-[#fffaf2]">
           {(onClose) => (
@@ -8383,34 +8599,7 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? (
-                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-                    <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
-                      <Avatar
-                        src={user.googleProfile?.picture}
-                        name={selectedOwnPost.authorName}
-                        className="bg-[#FFF0D0] text-[#F5A623]"
-                      />
-                      <div className="flex-1">
-                        <p className="font-semibold text-[#2C1A0E]">@{user.profile.username}</p>
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                          {selectedOwnPost.type === "weekly-dump" ? "sunday dump" : formatRelativePostTime(selectedOwnPost.createdAtIso, selectedOwnPost.createdAt)}
-                        </p>
-                      </div>
-                    </CardHeader>
-                    <CardBody className="gap-4 p-5">
-                      <PostMediaPreview post={selectedOwnPost} detail />
-                      {selectedOwnPost.body.trim() ? <p className="text-base leading-7 text-[#2C1A0E]">{selectedOwnPost.body}</p> : null}
-                      {selectedOwnPost.taggedPlaceName ? (
-                        <div className="rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 ring-1 ring-[#FFF0D0]">
-                          <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{selectedOwnPost.taggedPlaceKind || "food spot"}</p>
-                          <p className="mt-1 text-base font-semibold text-[#2C1A0E]">{selectedOwnPost.taggedPlaceName}</p>
-                          {selectedOwnPost.taggedPlaceAddress ? <p className="mt-1 text-sm text-[#6c7289]">{selectedOwnPost.taggedPlaceAddress}</p> : null}
-                        </div>
-                      ) : null}
-                    </CardBody>
-                  </Card>
-                ) : null}
+                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
               </ModalBody>
             </>
           )}
