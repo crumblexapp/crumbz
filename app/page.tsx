@@ -3529,6 +3529,35 @@ export default function Page() {
     }
   };
 
+  const shareProfilePhotoToInstagram = async () => {
+    if (!profileShareUrl || typeof window === "undefined") return;
+
+    const shareMessage = getProfileShareMessage(liveProfile.username);
+    const shareImageUrl = `${window.location.origin}/opengraph-image`;
+
+    try {
+      if (navigator.share) {
+        const imageBlob = await fetch(shareImageUrl).then((response) => response.blob());
+        const imageFile = new File([imageBlob], "crumbz-share.png", { type: "image/png" });
+
+        if (navigator.canShare?.({ files: [imageFile] })) {
+          await navigator.share({
+            files: [imageFile],
+            title: "crumbz",
+            text: shareMessage,
+          });
+          setProfileShareNotice("your phone share menu is open with the crumbz photo.");
+          return;
+        }
+      }
+    } catch {
+      setProfileShareNotice("photo sharing didn’t open, so you can use the profile link instead.");
+      return;
+    }
+
+    setProfileShareNotice("this device can’t share the photo directly here, so use the profile link button instead.");
+  };
+
   const shareReferralLink = async () => {
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
     if (!referralCode) {
@@ -7937,15 +7966,16 @@ export default function Page() {
                     <Button radius="full" className="w-full bg-[#2C1A0E] text-white" onPress={shareProfile}>
                       share profile link
                     </Button>
+                    <Button radius="full" variant="flat" className="w-full bg-[#FFF0D0] text-[#2C1A0E]" onPress={shareProfilePhotoToInstagram}>
+                      share photo to instagram
+                    </Button>
                     <p className="text-sm text-[#6c7289]">this opens your phone share menu with the profile link people can tap.</p>
-                  </div>
-                  <div className="mt-4 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">message</p>
-                    <p className="mt-2 text-[#2C1A0E]">{getProfileShareMessage(liveProfile.username)}</p>
                   </div>
                   <div className="mt-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">link</p>
-                    <p className="truncate">{profileShareUrl}</p>
+                    <button type="button" onClick={() => void copyProfileLink()} className="block w-full truncate text-left text-[#2C1A0E]">
+                      {profileShareUrl}
+                    </button>
                   </div>
                 </div>
                 {profileShareNotice ? <p className="text-sm text-[#2C1A0E]">{profileShareNotice}</p> : null}
