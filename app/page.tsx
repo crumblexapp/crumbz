@@ -6598,11 +6598,14 @@ export default function Page() {
 
                   {posts.map((post) => {
                     const bucket = getInteractionBucket(interactions, post.id);
+                    const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
+                    const adminPostUsername = authorAccount?.profile.username?.trim() ? `@${authorAccount.profile.username.trim()}` : post.authorName;
                     return (
                       <Card key={post.id} className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                         <CardHeader className="flex items-start justify-between gap-3 px-5 pb-0 pt-5">
                           <div>
                             <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
+                            <p className="mt-1 text-sm text-[#2C1A0E]">{adminPostUsername}</p>
                             <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                               {post.type} • {post.createdAt}
                             </p>
