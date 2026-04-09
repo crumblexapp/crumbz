@@ -24,6 +24,7 @@ import {
 } from "@heroui/react";
 import { motion } from "framer-motion";
 import QRCode from "qrcode";
+import { LANGUAGE_STORAGE_KEY, detectPreferredLanguage, translations, type Language } from "@/lib/i18n";
 import {
   buildAdminPostNotification,
   buildAnnouncementNotification,
@@ -1594,6 +1595,7 @@ export default function Page() {
   const [referralNotice, setReferralNotice] = useState("");
   const [pendingReferralCode, setPendingReferralCode] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
+  const [language, setLanguage] = useState<Language>(detectPreferredLanguage);
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
@@ -1714,6 +1716,7 @@ export default function Page() {
     ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
     : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
   const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
+  const copy = useMemo(() => translations[language], [language]);
   const navigationState = useMemo<AppNavigationState>(
     () => ({
       studentTab,
@@ -1743,6 +1746,12 @@ export default function Page() {
     setBioDraft((liveProfile.bio ?? "").slice(0, 180));
     setBioSaveNotice("");
   }, [bioModalOpen, liveProfile.bio]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    document.documentElement.lang = language;
+  }, [language]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -6972,12 +6981,12 @@ export default function Page() {
                   <CardBody className="gap-4 p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">push notification</p>
+                        <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">{copy.feed.announcementLabel}</p>
                         <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
-                          {selectedAnnouncement?.title || "Upcoming Food Mob"}
+                          {selectedAnnouncement?.title || copy.feed.announcementFallbackTitle}
                         </h3>
                         <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
-                          {selectedAnnouncement?.body || "The Sunday Food Drop is happening soon. Get your camera ready."}
+                          {selectedAnnouncement?.body || copy.feed.announcementFallbackBody}
                         </p>
                       </div>
                       <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
@@ -6988,9 +6997,9 @@ export default function Page() {
                         className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
                         onPress={() => setNotificationsOpen(true)}
                       >
-                        remind me
+                        {copy.feed.remindMe}
                       </Button>
-                      <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{notificationCount} alerts</Chip>
+                      <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{copy.feed.alerts(notificationCount)}</Chip>
                     </div>
                   </CardBody>
                 </Card>
@@ -7003,11 +7012,11 @@ export default function Page() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        what your friends ate
+                        {copy.feed.friendsAteTitle}
                       </p>
-                      <p className="mt-2 text-base text-[#6c7289]">your friends&apos; real food activity this week. no algorithm, no recommendations engine.</p>
+                      <p className="mt-2 text-base text-[#6c7289]">{copy.feed.friendsAteSubtitle}</p>
                     </div>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{friendFoodMoments.length} updates</Chip>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{copy.feed.updates(friendFoodMoments.length)}</Chip>
                   </div>
                   {friendFoodMoments.length ? (
                     <div className="grid gap-3">
@@ -7028,7 +7037,7 @@ export default function Page() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-[#6c7289]">once your friends post or like spots this week, they&apos;ll land here.</p>
+                    <p className="text-sm text-[#6c7289]">{copy.feed.friendsAteEmpty}</p>
                   )}
                 </CardBody>
               </Card>
@@ -7037,23 +7046,23 @@ export default function Page() {
                 <CardBody className="flex-row items-center justify-between gap-4 p-5">
                   <div className="max-w-[14rem]">
                     <p className="font-[family-name:var(--font-young-serif)] text-[2.3rem] leading-none text-[#2C1A0E]">
-                      this week in {citySpotlightName}
+                      {copy.feed.cityWeekTitle(citySpotlightName)}
                     </p>
                     <p className="mt-3 text-lg leading-7 text-[#4f526f]">
-                      a live snapshot of what&apos;s happening in the city this week.
+                      {copy.feed.cityWeekBody}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <Chip className="bg-white text-[#2C1A0E]">most posted: {citySnapshot.mostPostedSpot}</Chip>
-                      <Chip className="bg-white text-[#2C1A0E]">most liked: {citySnapshot.mostLikedFood}</Chip>
+                      <Chip className="bg-white text-[#2C1A0E]">{copy.feed.mostPosted(citySnapshot.mostPostedSpot)}</Chip>
+                      <Chip className="bg-white text-[#2C1A0E]">{copy.feed.mostLiked(citySnapshot.mostLikedFood)}</Chip>
                     </div>
                     <p className="mt-3 text-sm text-[#4f526f]">
-                      hottest neighbourhood: {citySnapshot.hottestNeighbourhood} • hidden gem: {citySnapshot.hiddenGem}
+                      {copy.feed.hottest(citySnapshot.hottestNeighbourhood)} • {copy.feed.hiddenGem(citySnapshot.hiddenGem)}
                     </p>
                   </div>
                   <div className="relative h-40 w-32 shrink-0">
                     <div className="absolute right-4 top-0 h-20 w-20 rounded-full bg-[#f05c1c]" />
                     <div className="absolute left-2 top-4 rounded-full bg-[#dfff67] px-2 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2C1A0E]">
-                      city
+                      {copy.feed.cityLabel}
                     </div>
                     <div className="absolute bottom-0 right-0 flex h-24 w-16 items-center justify-center rounded-[16px] bg-[#ff7b2f] text-4xl">
                       🗺️
@@ -7073,18 +7082,17 @@ export default function Page() {
               <CardBody className="gap-4 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">favorites</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.favorites.label}</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      food map for {currentFavoriteCity}
+                      {copy.favorites.title(currentFavoriteCity)}
                     </h2>
-                    <p className="text-sm text-[#2C1A0E]">
-                      heart the cafes, restaurants, bakeries, and food spots you rate. your friends can spot the overlap.
-                    </p>
+                    <p className="text-sm text-[#2C1A0E]">{copy.favorites.subtitle}</p>
                   </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{favoritePlaceIds.length} liked</Chip>
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{copy.favorites.likedCount(favoritePlaceIds.length)}</Chip>
                 </div>
 
                 <FavoritesMap
+                  language={language}
                   cityName={currentFavoriteCity}
                   center={favoriteCityCenter}
                   places={favoritePlaces}
@@ -7120,8 +7128,8 @@ export default function Page() {
                             </div>
                             <p className="mt-3 text-base font-semibold text-[#2C1A0E]">
                               {fans.length === 1
-                                ? `${fans[0]?.username} added ${place.name} in ${user.profile.city}`
-                                : `${fans[0]?.username} and ${fans.length - 1} friends added ${place.name} in ${user.profile.city}`}
+                                ? copy.favorites.friendAdded(fans[0]?.username ?? "", place.name, user.profile.city)
+                                : copy.favorites.friendAddedMany(fans[0]?.username ?? "", fans.length - 1, place.name, user.profile.city)}
                             </p>
                             <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
                           </div>
@@ -7130,7 +7138,7 @@ export default function Page() {
                             className="bg-[#F5A623] text-white"
                             onPress={() => focusFavoritePlace(place, currentFavoriteCity)}
                           >
-                            show me
+                            {copy.common.showMe}
                           </Button>
                         </div>
                       </div>
@@ -7138,7 +7146,7 @@ export default function Page() {
                   </div>
                 ) : null}
 
-                {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">loading food spots around the city...</p> : null}
+                {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">{copy.common.loadingSpots}</p> : null}
                 {favoritePlacesError ? <p className="text-sm text-[#2C1A0E]">{favoritePlacesError}</p> : null}
               </CardBody>
             </Card>
@@ -7147,9 +7155,9 @@ export default function Page() {
               <CardBody className="gap-4 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">liked spots</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.favorites.likedSpots}</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      your saved places
+                      {copy.favorites.savedPlaces}
                     </h2>
                   </div>
                   <Chip className="bg-[#FFF0D0] text-[#F5A623]">{profileLikedSpots.length}</Chip>
@@ -7207,9 +7215,9 @@ export default function Page() {
           <section className="mt-6 space-y-4">
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">rewards</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.rewards.label}</p>
                 <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{rewardsTitle}</h2>
-                <p className="text-sm text-[#2C1A0E]">share crumbz posts, stay active, and this is where discounts and drops will land.</p>
+                <p className="text-sm text-[#2C1A0E]">{copy.rewards.body}</p>
               </CardBody>
             </Card>
           </section>
@@ -7224,7 +7232,7 @@ export default function Page() {
             ) : null}
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend requests</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.social.requests}</p>
                 {liveProfile.incomingFriendRequests.length ? (
                   liveProfile.incomingFriendRequests.map((requestEmail) => {
                     const requester = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
@@ -7239,17 +7247,17 @@ export default function Page() {
                         </p>
                         <div className="mt-3 flex gap-2">
                           <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => acceptFriendRequest(requestEmail)}>
-                            accept
+                            {copy.common.accept}
                           </Button>
                           <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => declineFriendRequest(requestEmail)}>
-                            decline
+                            {copy.common.decline}
                           </Button>
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-sm text-[#2C1A0E]">no requests waiting right now.</p>
+                  <p className="text-sm text-[#2C1A0E]">{copy.social.noRequests}</p>
                 )}
               </CardBody>
             </Card>
@@ -7257,13 +7265,13 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">social</p>
-                  <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">add your friends</h2>
-                  <p className="text-sm text-[#2C1A0E]">search by exact username only to add someone to your crumbz circle.</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.social.label}</p>
+                  <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">{copy.social.title}</h2>
+                  <p className="text-sm text-[#2C1A0E]">{copy.social.subtitle}</p>
                 </div>
                 <Input
                   radius="full"
-                  placeholder="type exact username"
+                  placeholder={copy.social.placeholder}
                   value={friendQuery}
                   onValueChange={setFriendQuery}
                   classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
@@ -7276,28 +7284,28 @@ export default function Page() {
                         <p className="text-sm text-[#2C1A0E]">@{exactFriendMatch.profile.username}</p>
                       </div>
                       <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => addFriend(exactFriendMatch.googleProfile?.email ?? "")}>
-                        send request
+                        {copy.common.sendRequest}
                       </Button>
                     </div>
                   ) : (
-                    <p className="text-sm text-[#2C1A0E]">no exact username match yet.</p>
+                    <p className="text-sm text-[#2C1A0E]">{copy.common.noExactUsername}</p>
                   )
                 ) : null}
 
                 {liveProfile.outgoingFriendRequests.length ? (
                   <div className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">pending</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{copy.social.pending}</p>
                     <div className="mt-2 grid gap-2">
                       {liveProfile.outgoingFriendRequests.map((requestEmail) => {
                         const pendingFriend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
                         return (
                           <div key={requestEmail} className="flex items-center justify-between gap-3 rounded-[16px] bg-white px-3 py-3">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold text-[#2C1A0E]">{pendingFriend?.profile.fullName || "pending friend"}</p>
+                              <p className="truncate text-sm font-semibold text-[#2C1A0E]">{pendingFriend?.profile.fullName || copy.social.pendingFriend}</p>
                               <p className="truncate text-sm text-[#6c7289]">@{pendingFriend?.profile.username || requestEmail}</p>
                             </div>
                             <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => cancelFriendRequest(requestEmail)}>
-                              cancel
+                              {copy.common.cancel}
                             </Button>
                           </div>
                         );
@@ -7310,7 +7318,7 @@ export default function Page() {
 
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
-                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your people</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.social.yourPeople}</p>
                 {liveProfile.friends.length ? (
                   liveProfile.friends.map((friendEmail) => {
                     const friend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === friendEmail.toLowerCase());
@@ -7325,17 +7333,17 @@ export default function Page() {
                         </p>
                         <div className="mt-3 flex gap-2">
                           <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => setSelectedProfileEmail(friendEmail)}>
-                            view profile
+                            {copy.common.viewProfile}
                           </Button>
                           <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => removeFriend(friendEmail)}>
-                            remove friend
+                            {copy.common.removeFriend}
                           </Button>
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <p className="text-sm text-[#2C1A0E]">no friends added yet.</p>
+                  <p className="text-sm text-[#2C1A0E]">{copy.social.noFriends}</p>
                 )}
               </CardBody>
             </Card>
@@ -7344,21 +7352,47 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
+            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+              <CardBody className="gap-4 p-5">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.profile.languageLabel}</p>
+                  <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                    {copy.profile.languageTitle}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#6c7289]">{copy.profile.languageBody}</p>
+                </div>
+                <Select
+                  radius="full"
+                  aria-label={copy.profile.languageTitle}
+                  selectedKeys={[language]}
+                  onSelectionChange={(keys) => {
+                    const nextLanguage = Array.from(keys)[0];
+                    if (nextLanguage === "en" || nextLanguage === "pl") {
+                      setLanguage(nextLanguage);
+                    }
+                  }}
+                  placeholder={copy.profile.languageSelectPlaceholder}
+                  classNames={{ trigger: "bg-[#FFF7E8] border border-[#FFF0D0]" }}
+                >
+                  <SelectItem key="en">{copy.profile.english}</SelectItem>
+                  <SelectItem key="pl">{copy.profile.polish}</SelectItem>
+                </Select>
+              </CardBody>
+            </Card>
+
             {!pushEnabled ? (
               <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                 <CardBody className="gap-3 p-5">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">notifications</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.profile.notificationsLabel}</p>
                     <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                      want post alerts?
+                      {copy.profile.notificationsTitle}
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-[#6c7289]">
-                      we can ask your phone for permission so admin drops and friend posts hit like a real app.
-                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[#6c7289]">{copy.profile.notificationsBody}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => setPushPromptOpen(true)}>
-                      turn them on
+                      {copy.profile.turnOn}
                     </Button>
                     <Button
                       radius="full"
@@ -7369,7 +7403,7 @@ export default function Page() {
                         setPushPromptOpen(false);
                       }}
                     >
-                      maybe later
+                      {copy.profile.maybeLater}
                     </Button>
                   </div>
                   <p className="text-sm text-[#6c7289]">
@@ -7417,7 +7451,7 @@ export default function Page() {
                         className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
+                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">{copy.profile.followers}</p>
                       </button>
                       <button
                         type="button"
@@ -7425,7 +7459,7 @@ export default function Page() {
                         className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
+                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">{copy.profile.favorites}</p>
                       </button>
                     </div>
                   </div>
@@ -7444,7 +7478,7 @@ export default function Page() {
                       </div>
                     ) : null}
                     <button type="button" onClick={() => setBioModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
-                      <span>{liveProfile.bio ? "edit bio" : "add bio"}</span>
+                      <span>{liveProfile.bio ? copy.profile.editBio : copy.profile.addBio}</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
                     </button>
                     <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -7456,7 +7490,7 @@ export default function Page() {
                         }}
                         className="inline-flex items-center gap-2 text-sm font-medium text-[#6c7289]"
                       >
-                        <span>share</span>
+                        <span>{copy.profile.share}</span>
                         <span aria-hidden="true" className="text-base leading-none text-[#2C1A0E]">⤴</span>
                       </button>
                       <button
@@ -7467,7 +7501,7 @@ export default function Page() {
                         }}
                         className="inline-flex items-center gap-2 text-sm font-medium text-[#6c7289]"
                       >
-                        <span>refer</span>
+                        <span>{copy.profile.refer}</span>
                         <span
                           aria-hidden="true"
                           className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]"
@@ -7486,17 +7520,17 @@ export default function Page() {
                           className={pushEnabled ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
                           onPress={pushEnabled ? disablePushNotifications : enablePushNotifications}
                         >
-                          {pushEnabled ? "notifications on" : "turn on notifications"}
+                          {pushEnabled ? copy.profile.notificationsOn : copy.profile.turnOnNotifications}
                         </Button>
                       </div>
                       <p className="mt-2 text-sm text-[#6c7289]">
                         {pushSupported
                           ? pushEnabled
-                            ? "crumbz can now send real device alerts when a push goes out."
+                            ? copy.profile.pushEnabled
                             : pushPermission === "denied"
-                              ? "notifications are blocked for crumbz on this device right now."
-                              : "turn this on from the home-screen app to get real device alerts."
-                          : "open the latest home-screen app from safari to turn on real device alerts."}
+                              ? copy.profile.pushDenied
+                              : copy.profile.pushHomeScreen
+                          : copy.profile.pushSafari}
                       </p>
                       {pushNotice ? <p className="mt-2 text-sm text-[#F5A623]">{pushNotice}</p> : null}
                     </div>
@@ -7509,18 +7543,18 @@ export default function Page() {
               <CardBody className="gap-4 p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">post</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.profile.postLabel}</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      make a post
+                      {copy.profile.postTitle}
                     </h2>
-                    <p className="text-sm text-[#6c7289]">drop a photo, add whatever context you want, and it stays in your profile and your friends&apos; feed.</p>
+                    <p className="text-sm text-[#6c7289]">{copy.profile.postBody}</p>
                   </div>
                 </div>
 
                 <form className="space-y-4" onSubmit={submitDailyPost}>
                   <button
                     type="button"
-                    aria-label="add post photo"
+                    aria-label={copy.profile.addPostPhoto}
                     disabled={isUploadingDailyPost}
                     onClick={() => dailyPostInputRef.current?.click()}
                     className="flex h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
@@ -7531,14 +7565,14 @@ export default function Page() {
                     ) : (
                       <div className="text-center">
                         <div className="text-5xl leading-none">+</div>
-                        <p className="mt-3 text-sm font-medium">add your post photo</p>
+                        <p className="mt-3 text-sm font-medium">{copy.profile.addPostPhoto}</p>
                       </div>
                     )}
                   </button>
                   <div className="relative">
                     <Textarea
                       ref={dailyPostCaptionRef}
-                      placeholder="what did you try? what should friends know?"
+                      placeholder={copy.profile.captionPlaceholder}
                       value={dailyPostCaption}
                       onValueChange={(value) => {
                         setDailyPostCaption(value);
@@ -7585,15 +7619,15 @@ export default function Page() {
                             </button>
                           ))
                         ) : (
-                          <div className="px-4 py-3 text-sm text-[#6c7289]">no friends match that username yet.</div>
+                          <div className="px-4 py-3 text-sm text-[#6c7289]">{copy.common.noFriendsMatch}</div>
                         )}
                       </div>
                     ) : null}
                   </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">tag the shop <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">tag a spot if you want friends to see where this was.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.profile.tagShop} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{copy.profile.tagShopBody}</p>
                     </div>
                     <Input
                       value={dailyPostPlaceQuery}
@@ -7601,7 +7635,7 @@ export default function Page() {
                         setDailyPostPlaceQuery(value);
                         if (dailyPostNotice) setDailyPostNotice("");
                       }}
-                      placeholder={`search in ${dailyPostCity}`}
+                      placeholder={copy.profile.searchIn(dailyPostCity)}
                       startContent={<span className="text-[#B56D19]">⌕</span>}
                       classNames={{ inputWrapper: "rounded-[18px] bg-white shadow-none border border-[#f3e1cf]" }}
                     />
@@ -7613,11 +7647,11 @@ export default function Page() {
                           <p className="mt-1 text-sm text-[#6c7289]">{dailyPostTaggedPlace.address}</p>
                         </div>
                         <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setDailyPostTaggedPlace(null)}>
-                          change
+                          {copy.common.change}
                         </Button>
                       </div>
                     ) : null}
-                    {dailyPostPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">searching spots...</p> : null}
+                    {dailyPostPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">{copy.common.searchingSpots}</p> : null}
                     {dailyPostPlaceResults.length ? (
                       <div className="grid gap-2">
                         {dailyPostPlaceResults.map((place) => (
@@ -7642,7 +7676,7 @@ export default function Page() {
                   </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">how was it? <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.profile.howWasIt} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
                       <p className="mt-1 text-sm text-[#6c7289]">give friends the quick truth if you want.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -7768,11 +7802,11 @@ export default function Page() {
           >
             <div className="grid grid-cols-5 gap-1 text-center">
               {[
-                { label: "Feed", key: "feed" },
-                { label: "Favorites", key: "favorites" },
-                { label: "Rewards", key: "rewards" },
-                { label: "Social", key: "social" },
-                { label: "Profile", key: "profile" },
+                { label: copy.tabs.feed, key: "feed" },
+                { label: copy.tabs.favorites, key: "favorites" },
+                { label: copy.tabs.rewards, key: "rewards" },
+                { label: copy.tabs.social, key: "social" },
+                { label: copy.tabs.profile, key: "profile" },
               ].map((item) => (
                 <button
                   key={item.label}

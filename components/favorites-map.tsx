@@ -4,6 +4,7 @@ import { Avatar, Spinner } from "@heroui/react";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { type Language, translations } from "@/lib/i18n";
 
 type FavoritePlace = {
   id: string;
@@ -119,6 +120,7 @@ function MapViewportSync({
 export default function FavoritesMap({
   center,
   cityName,
+  language,
   places,
   favoriteIds,
   onToggleFavorite,
@@ -128,6 +130,7 @@ export default function FavoritesMap({
   highlightedPlaceId,
 }: {
   center: [number, number];
+  language: Language;
   places: FavoritePlace[];
   favoriteIds: string[];
   mutualFansByPlace: Record<string, unknown>;
@@ -138,6 +141,7 @@ export default function FavoritesMap({
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
 }) {
+  const copy = translations[language];
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -238,10 +242,10 @@ export default function FavoritesMap({
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="find cafes, bakeries, restaurants..."
+                placeholder={copy.map.searchPlaceholder}
                 className="w-full bg-transparent text-sm font-medium text-[#2b1530] outline-none placeholder:text-[#b4b1c8]"
               />
-              <p className="text-xs text-[#8d89ab]">{searchLoading ? "searching food spots..." : "add your favorite spots here."}</p>
+              <p className="text-xs text-[#8d89ab]">{searchLoading ? copy.map.searchLoading : copy.map.searchIdle}</p>
             </div>
           </div>
         </div>
@@ -250,11 +254,11 @@ export default function FavoritesMap({
           <div className="mt-3 max-h-[260px] overflow-hidden rounded-[24px] border border-white/70 bg-white/96 shadow-[0_18px_40px_rgba(43,21,48,0.12)] backdrop-blur">
             <div className="flex items-center justify-between border-b border-[#f3eadc] bg-[#fff8ef] px-4 py-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#b56d19]">live google maps results</p>
-                <p className="mt-1 text-xs text-[#7c6d60]">tap a spot to preview it on the map</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#b56d19]">{copy.map.liveResults}</p>
+                <p className="mt-1 text-xs text-[#7c6d60]">{copy.map.tapToPreview}</p>
               </div>
               <div className="rounded-full bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2b1530] shadow-[0_6px_18px_rgba(43,21,48,0.06)]">
-                {searchResults.length} found
+                {copy.map.found(searchResults.length)}
               </div>
             </div>
             {searchResults.length ? (
@@ -288,7 +292,7 @@ export default function FavoritesMap({
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-4 text-sm text-[#7c6d60]">no food spots found for that search yet.</div>
+              <div className="px-4 py-4 text-sm text-[#7c6d60]">{copy.map.noResults}</div>
             )}
           </div>
         ) : null}
@@ -330,7 +334,7 @@ export default function FavoritesMap({
       {!displayedPlaces.length && !searchLoading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]">
           <div className="rounded-[24px] bg-white/95 px-5 py-4 text-center text-sm text-[#785c42] shadow-[0_20px_40px_rgba(43,21,48,0.08)]">
-            search for a cafe, bakery, or restaurant, then tap one to preview it here.
+            {copy.map.noOverlay}
           </div>
         </div>
       ) : null}
@@ -354,7 +358,7 @@ export default function FavoritesMap({
                   {selectedPreviewPlace.kind}
                 </span>
                 <span className="text-xs font-medium text-[#7c6d60]">
-                  {selectedMutualFans.length ? `${selectedMutualFans.length} friend saves` : "new food spot"}
+                  {selectedMutualFans.length ? copy.map.friendSaves(selectedMutualFans.length) : copy.map.newFoodSpot}
                 </span>
               </div>
               <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPreviewPlace.name}</p>
@@ -382,8 +386,8 @@ export default function FavoritesMap({
               </div>
               <p className="text-xs font-medium text-[#34517a]">
                 {selectedMutualFans.length === 1
-                  ? `${selectedMutualFans[0]?.username} saved this spot`
-                  : `${selectedMutualFans[0]?.username} and ${selectedMutualFans.length - 1} more saved this spot`}
+                  ? copy.map.savedByOne(selectedMutualFans[0]?.username ?? "")
+                  : copy.map.savedByMany(selectedMutualFans[0]?.username ?? "", selectedMutualFans.length - 1)}
               </p>
             </div>
           ) : null}
@@ -394,7 +398,7 @@ export default function FavoritesMap({
               onClick={() => onOpenDirections(selectedPreviewPlace)}
               className="flex-1 rounded-full bg-[#2b1530] px-4 py-3 text-sm font-semibold text-white"
             >
-              directions
+              {copy.common.directions}
             </button>
             {onPostFromPlace ? (
               <button
