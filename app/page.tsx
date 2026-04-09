@@ -8600,7 +8600,7 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? renderFeedCard(selectedOwnPost, true) : null}
+                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
               </ModalBody>
             </>
           )}
