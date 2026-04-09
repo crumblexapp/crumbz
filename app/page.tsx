@@ -2126,6 +2126,11 @@ export default function Page() {
       : selectedOwnPostId
         ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
         : null;
+  const selectedOwnPostBucket = selectedOwnPost ? getInteractionBucket(interactions, selectedOwnPost.id) : null;
+  const selectedOwnPostVisibleComments = selectedOwnPostBucket?.comments.filter((comment) => !comment.hidden) ?? [];
+  const selectedOwnPostHasLiked = Boolean(
+    selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
+  );
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
@@ -8651,7 +8656,140 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? renderFeedCard(selectedOwnPost, true) : null}
+                {selectedOwnPost ? (
+                  <div className="space-y-4">
+                    <div className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                      <div className="flex items-center gap-3 px-5 pb-0 pt-5">
+                        <Avatar src={currentUserPicture} name={selectedOwnPost.authorName} className="bg-[#FFF0D0] text-[#F5A623]" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-[#2C1A0E]">@{user.profile.username}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                            {selectedOwnPost.type === "weekly-dump"
+                              ? "sunday dump"
+                              : formatRelativePostTime(selectedOwnPost.createdAtIso, selectedOwnPost.createdAt)}
+                          </p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">
+                          {selectedOwnPost.cta === "live now" ? "post" : selectedOwnPost.cta}
+                        </Chip>
+                      </div>
+
+                      <div className="mt-4">
+                        <PostMediaPreview post={selectedOwnPost} detail />
+                      </div>
+
+                      <div className="space-y-4 px-5 pb-5 pt-4">
+                        {selectedOwnPost.body.trim() ? renderCaptionWithTags(selectedOwnPost.body, "text-base leading-7 text-[#2C1A0E]") : null}
+
+                        {selectedOwnPost.taggedPlaceName ? (
+                          <button
+                            type="button"
+                            onClick={() => openPostPlace(selectedOwnPost)}
+                            className="flex w-full items-start justify-between gap-3 rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 text-left ring-1 ring-[#FFF0D0]"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{selectedOwnPost.taggedPlaceKind || "food spot"}</p>
+                              <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{selectedOwnPost.taggedPlaceName}</p>
+                              {selectedOwnPost.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{selectedOwnPost.taggedPlaceAddress}</p> : null}
+                            </div>
+                            <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                          </button>
+                        ) : null}
+
+                        {selectedOwnPost.tasteTag || selectedOwnPost.priceTag ? (
+                          <div className="flex flex-wrap gap-2">
+                            {selectedOwnPost.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{selectedOwnPost.tasteTag}</Chip> : null}
+                            {selectedOwnPost.priceTag ? (
+                              <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">
+                                {PRICE_TAG_OPTIONS.find((item) => item.key === selectedOwnPost.priceTag)?.label ?? selectedOwnPost.priceTag}
+                              </Chip>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        <div className="flex items-center gap-3">
+                          <PostActionIcon label="like post" active={selectedOwnPostHasLiked} onPress={() => toggleLike(selectedOwnPost.id)}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path
+                                d="M12 20s-6.5-4.35-8.5-7.8C1.7 9 3.2 5.5 7 5.5c2 0 3.3 1.15 4 2.2.7-1.05 2-2.2 4-2.2 3.8 0 5.3 3.5 3.5 6.7C18.5 15.65 12 20 12 20Z"
+                                fill={selectedOwnPostHasLiked ? "currentColor" : "none"}
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </PostActionIcon>
+                          <PostActionIcon
+                            label="comment on post"
+                            onPress={() => {
+                              setOpenCommentPostId((current) => (current === selectedOwnPost.id ? null : selectedOwnPost.id));
+                            }}
+                          >
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path
+                                d="M6 18.5L3.5 20V6.8C3.5 5.8 4.3 5 5.3 5h13.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H6Z"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </PostActionIcon>
+                          <PostActionIcon label="share post" onPress={() => void sharePost(selectedOwnPost.id)}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M20 4 11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                              <path
+                                d="m20 4-6 16-3.4-6.6L4 10l16-6Z"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </PostActionIcon>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                          <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.likes.length ?? 0} likes</span>
+                          <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostVisibleComments.length} comments</span>
+                          <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.shares.length ?? 0} shares</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {selectedOwnPostVisibleComments.map((comment) => (
+                            <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
+                              <p className="text-sm font-semibold text-[#2C1A0E]">
+                                {accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username
+                                  ? `@${accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username}`
+                                  : comment.authorName}
+                              </p>
+                              <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
+                            </div>
+                          ))}
+
+                          {openCommentPostId === selectedOwnPost.id ? (
+                            <form className="flex gap-2" onSubmit={(event) => addComment(event, selectedOwnPost.id)}>
+                              <Input
+                                aria-label={`comment on ${selectedOwnPost.title}`}
+                                radius="full"
+                                placeholder="comment on this post"
+                                value={commentDrafts[selectedOwnPost.id] ?? ""}
+                                onValueChange={(value) =>
+                                  setCommentDrafts((current) => ({
+                                    ...current,
+                                    [selectedOwnPost.id]: value,
+                                  }))
+                                }
+                                classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
+                              />
+                              <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+                                send
+                              </Button>
+                            </form>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </ModalBody>
             </>
           )}
