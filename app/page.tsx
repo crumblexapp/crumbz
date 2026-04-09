@@ -1444,7 +1444,7 @@ function getVideoAspectClass(ratio: VideoRatio) {
   }
 }
 
-function PostMediaPreview({ post }: { post: AppPost }) {
+function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: boolean }) {
   const mediaUrls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
   const [activeIndex, setActiveIndex] = useState(0);
   const currentIndex = Math.min(activeIndex, mediaUrls.length - 1);
@@ -1470,8 +1470,8 @@ function PostMediaPreview({ post }: { post: AppPost }) {
 
   if (post.mediaKind === "video") {
     return (
-      <div className={`${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}>
-        <video src={mediaUrls[0]} controls className="h-full w-full object-cover" />
+      <div className={`${detail ? "overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]" : `${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}`}>
+        <video src={mediaUrls[0]} controls className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-full w-full object-cover"} />
       </div>
     );
   }
@@ -1484,7 +1484,7 @@ function PostMediaPreview({ post }: { post: AppPost }) {
         <img
           src={mediaUrls[currentIndex]}
           alt={`${post.title} ${currentIndex + 1}`}
-          className="h-[28rem] w-full object-cover"
+          className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-[28rem] w-full object-cover"}
           loading="lazy"
         />
         {mediaUrls.length > 1 ? (
@@ -8316,7 +8316,34 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
+                {selectedOwnPost ? (
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                    <CardHeader className="items-start gap-3 px-5 pb-0 pt-5">
+                      <Avatar
+                        src={user.googleProfile?.picture}
+                        name={selectedOwnPost.authorName}
+                        className="bg-[#FFF0D0] text-[#F5A623]"
+                      />
+                      <div className="flex-1">
+                        <p className="font-semibold text-[#2C1A0E]">@{user.profile.username}</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                          {selectedOwnPost.type === "weekly-dump" ? "sunday dump" : formatRelativePostTime(selectedOwnPost.createdAtIso, selectedOwnPost.createdAt)}
+                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardBody className="gap-4 p-5">
+                      <PostMediaPreview post={selectedOwnPost} detail />
+                      {selectedOwnPost.body.trim() ? <p className="text-base leading-7 text-[#2C1A0E]">{selectedOwnPost.body}</p> : null}
+                      {selectedOwnPost.taggedPlaceName ? (
+                        <div className="rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 ring-1 ring-[#FFF0D0]">
+                          <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{selectedOwnPost.taggedPlaceKind || "food spot"}</p>
+                          <p className="mt-1 text-base font-semibold text-[#2C1A0E]">{selectedOwnPost.taggedPlaceName}</p>
+                          {selectedOwnPost.taggedPlaceAddress ? <p className="mt-1 text-sm text-[#6c7289]">{selectedOwnPost.taggedPlaceAddress}</p> : null}
+                        </div>
+                      ) : null}
+                    </CardBody>
+                  </Card>
+                ) : null}
               </ModalBody>
             </>
           )}
