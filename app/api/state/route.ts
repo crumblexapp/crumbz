@@ -258,7 +258,7 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
       await sendPushToEmails(friendEmails, {
         title: copy.title,
         body: copy.body,
-        url: isWeeklyDump && authorUsername ? `/@${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
+        url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
         tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
       });
     }),

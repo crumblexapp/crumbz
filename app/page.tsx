@@ -1748,7 +1748,7 @@ export default function Page() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !liveProfile.username) return;
-    setProfileShareUrl(`${window.location.origin}/@${encodeURIComponent(liveProfile.username.trim().toLowerCase())}`);
+    setProfileShareUrl(`${window.location.origin}/?profile=${encodeURIComponent(liveProfile.username.trim().toLowerCase())}`);
   }, [liveProfile.username]);
 
   useEffect(() => {
@@ -4832,7 +4832,7 @@ export default function Page() {
     const profileUsername = postAuthorAccount?.profile.username?.trim().toLowerCase() ?? "";
     const shareUrl =
       post.type === "weekly-dump" && profileUsername
-        ? `${window.location.origin}/@${encodeURIComponent(profileUsername)}`
+        ? `${window.location.origin}/?profile=${encodeURIComponent(profileUsername)}`
         : `${window.location.origin}/?post=${encodeURIComponent(postId)}`;
     const sharePayload = {
       title: post.type === "weekly-dump" && profileUsername ? `${profileUsername}'s crumbz profile` : post.title,
