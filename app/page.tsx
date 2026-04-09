@@ -2464,6 +2464,11 @@ export default function Page() {
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const ctaLabel = post.cta === "live now" ? "post" : post.cta;
+    const commentUsernamesByEmail = new Map(
+      accounts
+        .filter((account) => account.googleProfile?.email && account.profile.username)
+        .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", `@${account.profile.username}`]),
+    );
 
     return (
       <Card
@@ -2628,7 +2633,7 @@ export default function Page() {
             {visibleComments.map((comment) => (
               <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
                 <p className="text-sm font-semibold text-[#2C1A0E]">
-                  {comment.authorName} • {comment.schoolName}
+                  {commentUsernamesByEmail.get(comment.authorEmail.toLowerCase()) || comment.authorName}
                 </p>
                 <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
               </div>
