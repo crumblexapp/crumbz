@@ -127,6 +127,32 @@ export function buildFriendFavoriteNotification(params: {
   ]);
 }
 
+export function buildTaggedPostNotification(params: {
+  authorName: string;
+  username: string;
+  placeName?: string;
+  seed: string;
+}): CopyPair {
+  const name = clean(params.authorName, "someone");
+  const handle = clean(params.username, "@someone");
+  const place = clean(params.placeName);
+
+  return pickVariant(params.seed, [
+    {
+      title: `${handle} tagged you in a post`,
+      body: place ? `${name} tagged you at ${place}.` : `${name} tagged you in something new.`,
+    },
+    {
+      title: "you just got tagged 👀",
+      body: `${handle} mentioned you on crumbz.`,
+    },
+    {
+      title: `${name} added you to the caption`,
+      body: place ? `${place} is in the post too.` : "open the post and see what they said.",
+    },
+  ]);
+}
+
 export function buildAdminPostNotification(params: {
   postType: string;
   title: string;

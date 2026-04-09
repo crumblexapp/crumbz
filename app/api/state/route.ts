@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { sendPushToEmails } from "@/lib/push-notifications";
-import { buildAdminPostNotification, buildAnnouncementNotification, buildFriendPostNotification } from "@/lib/notification-copy";
+import { buildAdminPostNotification, buildAnnouncementNotification, buildFriendPostNotification, buildTaggedPostNotification } from "@/lib/notification-copy";
 import { webPushEnabled } from "@/lib/web-push";
 
 export const dynamic = "force-dynamic";
@@ -95,6 +95,21 @@ function dedupeByKey<T extends JsonRecord>(items: T[], getKey: (item: T) => stri
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function extractTaggedUsernames(value: unknown) {
+  const text = normalizeText(value);
+  if (!text) return [];
+
+  const matches = text.matchAll(/(^|[^a-z0-9_])@([a-z0-9._-]+)/gi);
+  const usernames = new Set<string>();
+
+  for (const match of matches) {
+    const username = String(match[2] ?? "").trim().toLowerCase();
+    if (username) usernames.add(username);
+  }
+
+  return [...usernames];
 }
 
 function normalizeNumber(value: unknown) {
@@ -225,6 +240,16 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
       .map((account) => [normalizeEmail(account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord).email : ""), account] as const)
       .filter(([email]) => Boolean(email)),
   );
+  const accountByUsername = new Map(
+    accounts
+      .map((account) => {
+        const profile = account.profile && typeof account.profile === "object" ? (account.profile as JsonRecord) : null;
+        const username = normalizeText(profile?.username).toLowerCase();
+        const email = normalizeEmail(account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord).email : "");
+        return username && email ? ([username, email] as const) : null;
+      })
+      .filter((entry): entry is readonly [string, string] => Boolean(entry)),
+  );
 
   const newStudentPosts = normalizeObjectArray(rawPosts).filter((post) => {
     const postId = String(post.id ?? "");
@@ -260,6 +285,26 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
         body: copy.body,
         url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
         tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
+      });
+
+      const taggedEmails = extractTaggedUsernames(post.body)
+        .map((username) => accountByUsername.get(username) ?? "")
+        .filter((email) => email && email !== authorEmail);
+
+      if (!taggedEmails.length) return;
+
+      const taggedCopy = buildTaggedPostNotification({
+        authorName: normalizeText(post.authorName) || "someone",
+        username: authorUsername ? `@${authorUsername}` : "@someone",
+        placeName: normalizeText(post.taggedPlaceName),
+        seed: `tagged-${postId}`,
+      });
+
+      await sendPushToEmails([...new Set(taggedEmails)], {
+        title: taggedCopy.title,
+        body: taggedCopy.body,
+        url: `/?post=${encodeURIComponent(postId)}`,
+        tag: `tagged-post-${postId}`,
       });
     }),
   );

@@ -30,6 +30,7 @@ import {
   buildFriendFavoriteNotification,
   buildFriendPostNotification,
   buildFriendRequestNotification,
+  buildTaggedPostNotification,
 } from "@/lib/notification-copy";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -1038,6 +1039,22 @@ function getProfileShareMessage(username: string) {
   return `open @${username}'s crumbz profile and add them to your circle.`;
 }
 
+function getActiveMentionQuery(text: string, cursorPosition: number) {
+  const safeCursor = Math.max(0, Math.min(cursorPosition, text.length));
+  const textBeforeCursor = text.slice(0, safeCursor);
+  const mentionMatch = textBeforeCursor.match(/(^|\s)@([a-z0-9._-]*)$/i);
+  if (!mentionMatch) return null;
+
+  const fullMatch = mentionMatch[0] ?? "";
+  const query = mentionMatch[2] ?? "";
+
+  return {
+    query: query.toLowerCase(),
+    start: safeCursor - fullMatch.length + fullMatch.lastIndexOf("@"),
+    end: safeCursor,
+  };
+}
+
 function getEmailHandle(email: string) {
   return email.split("@")[0]?.trim() || "";
 }
@@ -1603,6 +1620,8 @@ export default function Page() {
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [dailyPostNotice, setDailyPostNotice] = useState("");
   const [dailyPostCaption, setDailyPostCaption] = useState("");
+  const [dailyPostMentionQuery, setDailyPostMentionQuery] = useState("");
+  const [dailyPostMentionRange, setDailyPostMentionRange] = useState<{ start: number; end: number } | null>(null);
   const [dailyPostMediaUrls, setDailyPostMediaUrls] = useState<string[]>([]);
   const [dailyPostTaggedPlace, setDailyPostTaggedPlace] = useState<FavoritePlace | null>(null);
   const [dailyPostPlaceQuery, setDailyPostPlaceQuery] = useState("");
@@ -1636,6 +1655,7 @@ export default function Page() {
     videoRatio: "9:16" as VideoRatio,
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const userRef = useRef(user);
@@ -2037,6 +2057,20 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
+  const dailyPostMentionFriends = friendAccounts
+    .map((account) => ({
+      email: account.googleProfile?.email ?? "",
+      username: account.profile.username.trim(),
+      usernameLower: account.profile.username.trim().toLowerCase(),
+      fullName: account.profile.fullName || account.googleProfile?.name || account.profile.username,
+      picture: account.googleProfile?.picture ?? "",
+    }))
+    .filter((friend) => friend.username);
+  const dailyPostMentionSuggestions = dailyPostMentionRange
+    ? dailyPostMentionFriends
+        .filter((friend) => !dailyPostMentionQuery || friend.usernameLower.startsWith(dailyPostMentionQuery))
+        .slice(0, 6)
+    : [];
   const citySpotlightName = liveProfile.city || "Lodz";
   const citySnapshot = {
     mostPostedSpot: friendDailyFeedPosts[0]?.title ?? friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
@@ -2239,6 +2273,30 @@ export default function Page() {
           sortTime: getPostTimestamp(post),
         };
       }),
+    ...[...studentDailyPosts, ...studentWeeklyDumps]
+      .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+      .filter((post) => extractTaggedUsernames(post.body).includes(liveProfile.username.trim().toLowerCase()))
+      .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+      .slice(0, 6)
+      .map((post) => {
+        const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
+        const copy = buildTaggedPostNotification({
+          authorName: post.authorName,
+          username: authorAccount?.profile.username ? `@${authorAccount.profile.username}` : "@someone",
+          placeName: post.taggedPlaceName,
+          seed: `tagged-${post.id}`,
+        });
+
+        return {
+          id: `tagged-post-${post.id}-${liveProfile.username.trim().toLowerCase()}`,
+          kind: "tagged_post" as const,
+          title: copy.title,
+          detail: copy.body,
+          postId: post.id,
+          picture: authorAccount?.googleProfile?.picture,
+          sortTime: getPostTimestamp(post),
+        };
+      }),
     ...friendFavoriteNotifications,
   ];
   const notificationItems = rawNotificationItems
@@ -2248,7 +2306,7 @@ export default function Page() {
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string; sortTime: number }
     | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string; city: string; place: FavoritePlace; sortTime: number }
-    | { id: string; kind: "admin_post" | "friend_dump"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
+    | { id: string; kind: "admin_post" | "friend_dump" | "tagged_post"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
   >;
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
   const notificationCount = unreadNotificationItems.length;
@@ -3558,6 +3616,34 @@ export default function Page() {
     setProfileShareNotice("this device can’t share the photo directly here, so use the profile link button instead.");
   };
 
+  const updateDailyPostMentionState = (nextCaption: string, cursorPosition: number) => {
+    const activeMention = getActiveMentionQuery(nextCaption, cursorPosition);
+    if (!activeMention) {
+      setDailyPostMentionQuery("");
+      setDailyPostMentionRange(null);
+      return;
+    }
+
+    setDailyPostMentionQuery(activeMention.query);
+    setDailyPostMentionRange({ start: activeMention.start, end: activeMention.end });
+  };
+
+  const applyDailyPostMention = (username: string) => {
+    if (!dailyPostMentionRange) return;
+
+    const nextCaption = `${dailyPostCaption.slice(0, dailyPostMentionRange.start)}@${username} ${dailyPostCaption.slice(dailyPostMentionRange.end)}`;
+    const nextCursorPosition = dailyPostMentionRange.start + username.length + 2;
+
+    setDailyPostCaption(nextCaption);
+    setDailyPostMentionQuery("");
+    setDailyPostMentionRange(null);
+
+    window.requestAnimationFrame(() => {
+      dailyPostCaptionRef.current?.focus();
+      dailyPostCaptionRef.current?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
+
   const shareReferralLink = async () => {
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
     if (!referralCode) {
@@ -4804,6 +4890,8 @@ export default function Page() {
       nextInteractions: interactions,
     });
     setDailyPostCaption("");
+    setDailyPostMentionQuery("");
+    setDailyPostMentionRange(null);
     setDailyPostMediaUrls([]);
     setDailyPostTaggedPlace(null);
     setDailyPostPlaceQuery("");
@@ -7419,12 +7507,61 @@ export default function Page() {
                       </div>
                     )}
                   </button>
-                  <Textarea
-                    placeholder="what did you try? what should friends know?"
-                    value={dailyPostCaption}
-                    onValueChange={setDailyPostCaption}
-                    classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
-                  />
+                  <div className="relative">
+                    <Textarea
+                      ref={dailyPostCaptionRef}
+                      placeholder="what did you try? what should friends know?"
+                      value={dailyPostCaption}
+                      onValueChange={(value) => {
+                        setDailyPostCaption(value);
+                        const cursorPosition = dailyPostCaptionRef.current?.selectionStart ?? value.length;
+                        updateDailyPostMentionState(value, cursorPosition);
+                      }}
+                      onChange={(event) => {
+                        updateDailyPostMentionState(event.target.value, event.target.selectionStart ?? event.target.value.length);
+                      }}
+                      onKeyUp={(event) => {
+                        const target = event.currentTarget;
+                        updateDailyPostMentionState(target.value, target.selectionStart ?? target.value.length);
+                      }}
+                      onClick={(event) => {
+                        const target = event.currentTarget;
+                        updateDailyPostMentionState(target.value, target.selectionStart ?? target.value.length);
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(() => {
+                          setDailyPostMentionQuery("");
+                          setDailyPostMentionRange(null);
+                        }, 120);
+                      }}
+                      classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
+                    />
+                    {dailyPostMentionRange ? (
+                      <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[20px] border border-[#f3e1cf] bg-white shadow-[0_18px_40px_rgba(44,26,14,0.08)]">
+                        {dailyPostMentionSuggestions.length ? (
+                          dailyPostMentionSuggestions.map((friend) => (
+                            <button
+                              key={friend.email || friend.username}
+                              type="button"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                              }}
+                              onClick={() => applyDailyPostMention(friend.username)}
+                              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#FFF7E8]"
+                            >
+                              <Avatar src={friend.picture} name={friend.fullName} className="h-10 w-10 bg-[#FFF0D0] text-[#F5A623]" />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-[#2C1A0E]">{friend.fullName}</p>
+                                <p className="truncate text-sm text-[#6c7289]">@{friend.username}</p>
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-sm text-[#6c7289]">no friends match that username yet.</div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">tag the shop <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
