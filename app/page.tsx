@@ -7908,8 +7908,13 @@ export default function Page() {
         </div>
       ) : null}
 
-      <Modal isOpen={Boolean(selectedProfileEmail && selectedProfileAccount)} onOpenChange={(open) => !open && closeSelectedProfile()} size="full">
-        <ModalContent>
+      <Modal
+        isOpen={Boolean(selectedProfileEmail && selectedProfileAccount)}
+        onOpenChange={(open) => !open && closeSelectedProfile()}
+        size="full"
+        scrollBehavior="inside"
+      >
+        <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
           {(onClose) => (
             <>
               <ModalHeader className="flex items-start justify-between gap-3 border-b border-[#FFF0D0]">
@@ -7935,7 +7940,7 @@ export default function Page() {
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+              <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {!selectedProfileIsOwn ? (
                   <div className="mb-4 flex flex-wrap gap-2">
                     {selectedProfileIsFriend ? (
