@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type FormEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import {
@@ -55,6 +55,7 @@ const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
@@ -295,6 +296,20 @@ type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dum
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
+type AppNavigationState = {
+  studentTab: StudentTab;
+  notificationsOpen: boolean;
+  selectedProfileEmail: string | null;
+  profileDrawer: "followers" | "favorites" | null;
+  selectedOwnPostId: string | null;
+  selectedStoryPostId: string | null;
+  favoriteViewCity: string | null;
+  highlightedFavoritePlaceId: string | null;
+};
+
+type CrumbzHistoryState = {
+  crumbzNav?: AppNavigationState;
+};
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -1661,6 +1676,8 @@ export default function Page() {
   const favoritesMapSectionRef = useRef<HTMLElement | null>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
+  const isApplyingHistoryNavigationRef = useRef(false);
+  const lastNavigationKeyRef = useRef<string | null>(null);
   const lastDraftSyncedDareIdRef = useRef<string | null>(null);
   const authModeRef = useRef<AuthMode>("signup");
   const hasLoadedDataRef = useRef(false);
@@ -1697,12 +1714,86 @@ export default function Page() {
     ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
     : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
   const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
+  const navigationState = useMemo<AppNavigationState>(
+    () => ({
+      studentTab,
+      notificationsOpen,
+      selectedProfileEmail,
+      profileDrawer,
+      selectedOwnPostId,
+      selectedStoryPostId,
+      favoriteViewCity,
+      highlightedFavoritePlaceId,
+    }),
+    [
+      favoriteViewCity,
+      highlightedFavoritePlaceId,
+      notificationsOpen,
+      profileDrawer,
+      selectedOwnPostId,
+      selectedProfileEmail,
+      selectedStoryPostId,
+      studentTab,
+    ],
+  );
+  const navigationKey = JSON.stringify(navigationState);
 
   useEffect(() => {
     if (!bioModalOpen) return;
     setBioDraft((liveProfile.bio ?? "").slice(0, 180));
     setBioSaveNotice("");
   }, [bioModalOpen, liveProfile.bio]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const nextHistoryState: CrumbzHistoryState = {
+      ...(typeof window.history.state === "object" && window.history.state ? window.history.state : {}),
+      crumbzNav: navigationState,
+    };
+
+    if (lastNavigationKeyRef.current === null) {
+      window.history.replaceState(nextHistoryState, "", window.location.href);
+      lastNavigationKeyRef.current = navigationKey;
+      return;
+    }
+
+    if (isApplyingHistoryNavigationRef.current) {
+      isApplyingHistoryNavigationRef.current = false;
+      lastNavigationKeyRef.current = navigationKey;
+      return;
+    }
+
+    if (lastNavigationKeyRef.current === navigationKey) return;
+
+    window.history.pushState(nextHistoryState, "", window.location.href);
+    lastNavigationKeyRef.current = navigationKey;
+  }, [navigationKey, navigationState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const applyNavigationState = (nextState: AppNavigationState) => {
+      isApplyingHistoryNavigationRef.current = true;
+      setStudentTab(nextState.studentTab);
+      setNotificationsOpen(nextState.notificationsOpen);
+      setSelectedProfileEmail(nextState.selectedProfileEmail);
+      setProfileDrawer(nextState.profileDrawer);
+      setSelectedOwnPostId(nextState.selectedOwnPostId);
+      setSelectedStoryPostId(nextState.selectedStoryPostId);
+      setFavoriteViewCity(nextState.favoriteViewCity);
+      setHighlightedFavoritePlaceId(nextState.highlightedFavoritePlaceId);
+    };
+
+    const handlePopState = (event: PopStateEvent) => {
+      const nextState = (event.state as CrumbzHistoryState | null)?.crumbzNav;
+      if (!nextState) return;
+      applyNavigationState(nextState);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin || needsOnboarding || !liveAccount) return;
@@ -2610,6 +2701,14 @@ export default function Page() {
     window.localStorage.setItem(getPushPromptAskedKey(email), "true");
   };
 
+  const registerCrumbzServiceWorker = async () => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !IS_PRODUCTION) {
+      return null;
+    }
+
+    return navigator.serviceWorker.register("/crumbz-sw.js");
+  };
+
   const enablePushNotifications = async () => {
     if (!(await ensureAuthenticatedSession("sign in again first so we can turn on alerts for this account."))) {
       return;
@@ -2624,7 +2723,12 @@ export default function Page() {
     setPushNotice("");
 
     try {
-      const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+      const registration = await registerCrumbzServiceWorker();
+      if (!registration) {
+        setPushNotice("notifications turn on in the live app, not the local build.");
+        setPushEnabled(false);
+        return;
+      }
       const permission = await Notification.requestPermission();
       setPushPermission(permission);
 
@@ -2662,7 +2766,12 @@ export default function Page() {
     setPushNotice("");
 
     try {
-      const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+      const registration = await registerCrumbzServiceWorker();
+      if (!registration) {
+        setPushEnabled(false);
+        setPushNotice("");
+        return;
+      }
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         const headers = await getAuthenticatedHeaders({
@@ -2894,7 +3003,7 @@ export default function Page() {
     }
 
     const refresh = async () => {
-      if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("Notification" in window)) {
+      if (typeof window === "undefined" || !("Notification" in window) || !IS_PRODUCTION) {
         setPushSupported(false);
         setPushPermission("unsupported");
         setPushEnabled(false);
@@ -2910,7 +3019,12 @@ export default function Page() {
       }
 
       try {
-        const registration = await navigator.serviceWorker.register("/crumbz-sw.js");
+        const registration = await registerCrumbzServiceWorker();
+        if (!registration) {
+          setPushSupported(false);
+          setPushEnabled(false);
+          return;
+        }
         if (!("pushManager" in registration)) {
           setPushSupported(false);
           setPushEnabled(false);
@@ -2959,7 +3073,13 @@ export default function Page() {
       window.localStorage.setItem(PENDING_REFERRAL_CODE_KEY, referralCode);
       setPendingReferralCode(referralCode);
       url.searchParams.delete("ref");
-      window.history.replaceState({}, "", url.toString());
+      window.history.replaceState(
+        {
+          ...(typeof window.history.state === "object" && window.history.state ? window.history.state : {}),
+        } satisfies CrumbzHistoryState,
+        "",
+        url.toString(),
+      );
       return;
     }
 
@@ -3761,7 +3881,17 @@ export default function Page() {
     const url = new URL(window.location.href);
     if (!url.searchParams.has("profile")) return;
     url.searchParams.delete("profile");
-    window.history.replaceState({}, "", url.toString());
+    window.history.replaceState(
+      {
+        ...(typeof window.history.state === "object" && window.history.state ? window.history.state : {}),
+        crumbzNav: {
+          ...navigationState,
+          selectedProfileEmail: null,
+        },
+      } satisfies CrumbzHistoryState,
+      "",
+      url.toString(),
+    );
   };
 
   const signOut = () => {
