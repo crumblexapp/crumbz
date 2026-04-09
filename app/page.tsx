@@ -771,6 +771,34 @@ function mergePostsPreferLocal(localPosts: AppPost[], serverPosts: AppPost[]) {
   });
 }
 
+function preserveLocalMedia(localPosts: AppPost[], incomingPosts: AppPost[]) {
+  const localPostsById = new Map(localPosts.map((post) => [post.id, post] as const));
+
+  return incomingPosts.map((post): AppPost => {
+    const localPost = localPostsById.get(post.id);
+    if (!localPost) return post;
+
+    const nextMediaUrls = post.mediaUrls.length ? post.mediaUrls : localPost.mediaUrls;
+    const nextMediaKind: MediaKind =
+      post.mediaKind !== "none"
+        ? post.mediaKind
+        : nextMediaUrls.length > 1
+          ? "carousel"
+          : nextMediaUrls.length === 1
+            ? localPost.mediaKind !== "none"
+              ? localPost.mediaKind
+              : "photo"
+            : "none";
+
+    return {
+      ...post,
+      mediaUrls: nextMediaUrls,
+      mediaKind: nextMediaKind,
+      videoRatio: post.videoRatio !== "9:16" || post.mediaKind === "video" ? post.videoRatio : localPost.videoRatio,
+    };
+  });
+}
+
 function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, serverInteractions: InteractionsMap) {
   return {
     ...serverInteractions,
@@ -1488,13 +1516,13 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
 
   if (effectiveMediaKind === "photo") {
     return (
-      <div className="overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
+      <div className={`overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0] ${detail ? "flex justify-center bg-white p-2" : ""}`}>
         {/* uploaded dump images come straight from storage urls, so a plain img avoids remote loader issues here. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={mediaUrls[0]}
           alt={post.title}
-          className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-auto w-full object-contain"}
+          className={detail ? "max-h-[70vh] w-auto max-w-full object-contain" : "h-auto w-full object-contain"}
           loading="lazy"
         />
       </div>
@@ -2959,7 +2987,7 @@ export default function Page() {
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
           } else {
             setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
-            setPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]));
+            setPosts(preserveLocalMedia(nextPosts, normalizePosts((payload.posts ?? []) as Partial<AppPost>[])));
             setInteractions(normalizeInteractions(payload.interactions));
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
@@ -3399,9 +3427,12 @@ export default function Page() {
           recentlyDeletedPostIdsRef.current = new Map(
             Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
           );
-          const serverPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
+          const baseServerPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
           const shouldPreserveLocalPosts = now - lastSharedStateMutationAtRef.current < 5000;
-          setPosts((current) => (shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts));
+          setPosts((current) => {
+            const serverPosts = preserveLocalMedia(current, baseServerPosts);
+            return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
+          });
           const serverInteractions = filterRecentDeletedInteractions(normalizeInteractions(payload.interactions), recentDeletedPostIds);
           setInteractions((current) =>
             shouldPreserveLocalPosts ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions,
@@ -8620,7 +8651,7 @@ export default function Page() {
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
-                {selectedOwnPost ? renderFeedCard(selectedOwnPost) : null}
+                {selectedOwnPost ? renderFeedCard(selectedOwnPost, true) : null}
               </ModalBody>
             </>
           )}
