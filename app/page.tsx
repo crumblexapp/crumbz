@@ -7470,7 +7470,7 @@ export default function Page() {
                           radius="full"
                           variant={dailyPostTasteTag === option.key ? "solid" : "flat"}
                           className={dailyPostTasteTag === option.key ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
-                          onPress={() => setDailyPostTasteTag(option.key)}
+                          onPress={() => setDailyPostTasteTag((current) => (current === option.key ? "" : option.key))}
                         >
                           {option.label}
                         </Button>
@@ -7490,7 +7490,7 @@ export default function Page() {
                           radius="full"
                           variant={dailyPostPriceTag === option.key ? "solid" : "flat"}
                           className={dailyPostPriceTag === option.key ? "bg-[#F5A623] text-white" : "bg-white text-[#2C1A0E]"}
-                          onPress={() => setDailyPostPriceTag(option.key)}
+                          onPress={() => setDailyPostPriceTag((current) => (current === option.key ? "" : option.key))}
                         >
                           {option.label}
                         </Button>
