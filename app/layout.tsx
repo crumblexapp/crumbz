@@ -37,11 +37,20 @@ export const metadata: Metadata = {
     title: "crumbz",
     description: "the feed that keeps you hungry.",
     siteName: "crumbz",
+    images: [
+      {
+        url: "https://app.crumbz.pl/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "crumbz",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "crumbz",
     description: "the feed that keeps you hungry.",
+    images: ["https://app.crumbz.pl/opengraph-image"],
   },
 };
 

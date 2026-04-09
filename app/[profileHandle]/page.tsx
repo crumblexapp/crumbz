@@ -28,25 +28,28 @@ export async function generateMetadata({ params }: ProfileRouteProps): Promise<M
   const profile = await readPublicProfilePreview(username);
   const title = profile ? `${profile.fullName} (@${profile.username})` : `@${username} on crumbz`;
   const description = buildProfileDescription(profile, username);
-  const imagePath = `/${encodeURIComponent(`@${username}`)}/opengraph-image`;
+  const profileUrl = `https://app.crumbz.pl/@${username}`;
+  const imageUrl = `${profileUrl}/opengraph-image`;
 
   return {
     title,
     description,
     alternates: {
-      canonical: `https://app.crumbz.pl/@${username}`,
+      canonical: profileUrl,
     },
     openGraph: {
       title,
       description,
-      url: `https://app.crumbz.pl/@${username}`,
-      images: [{ url: imagePath, width: 1200, height: 630, alt: title }],
+      url: profileUrl,
+      siteName: "crumbz",
+      type: "profile",
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: title }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [imagePath],
+      images: [imageUrl],
     },
   };
 }
