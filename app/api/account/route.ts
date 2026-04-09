@@ -206,7 +206,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as
     | {
-        action?: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
+        action?: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
         account?: StoredUser;
         currentEmail?: string;
         targetEmail?: string;
@@ -389,6 +389,51 @@ export async function POST(request: Request) {
             ...account.profile,
             friends: [...new Set([...account.profile.friends, currentEmail])],
             outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== currentEmail),
+          },
+        });
+      }
+
+      return account;
+    });
+  }
+
+  if (action === "cancel_friend_request") {
+    const currentEmail = body?.currentEmail?.toLowerCase() ?? "";
+    const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    if (!currentEmail || !targetEmail) {
+      return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only cancel requests from your own account." }, { status: 403 });
+    }
+
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
+    }
+
+    nextAccounts = accounts.map((account) => {
+      const email = getEmail(account);
+      if (email === currentEmail) {
+        const next = normalizeAccount({
+          ...account,
+          profile: {
+            ...account.profile,
+            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== targetEmail),
+          },
+        });
+        nextUser = next;
+        return next;
+      }
+
+      if (email === targetEmail) {
+        return normalizeAccount({
+          ...account,
+          profile: {
+            ...account.profile,
+            incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== currentEmail),
           },
         });
       }

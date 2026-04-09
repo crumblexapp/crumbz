@@ -1263,7 +1263,7 @@ function fromLocalDateTimeValue(value: string, fallback: string) {
 }
 
 async function mutateAccountState<TUser = StoredUser>(payload: {
-  action: "upsert_account" | "send_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
+  action: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
   account?: StoredUser;
   currentEmail?: string;
   targetEmail?: string;
@@ -3826,6 +3826,31 @@ export default function Page() {
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "friend request didn’t stick. try again.";
+        setError(message);
+        setSocialActionNotice(message);
+      });
+  };
+
+  const cancelFriendRequest = async (friendEmail: string) => {
+    const currentEmail = user.googleProfile?.email;
+    if (!currentEmail || !friendEmail) return;
+    if (!(await ensureAuthenticatedSession())) return;
+    setSocialActionNotice("");
+
+    void mutateAccountState({
+      action: "cancel_friend_request",
+      currentEmail,
+      targetEmail: friendEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+        setSocialActionNotice("friend request cancelled.");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "canceling that friend request failed. try once more.";
         setError(message);
         setSocialActionNotice(message);
       });
@@ -7136,9 +7161,22 @@ export default function Page() {
                 {liveProfile.outgoingFriendRequests.length ? (
                   <div className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">pending</p>
-                    <p className="mt-1 text-sm text-[#2C1A0E]">
-                      waiting on {liveProfile.outgoingFriendRequests.length} friend request{liveProfile.outgoingFriendRequests.length === 1 ? "" : "s"}.
-                    </p>
+                    <div className="mt-2 grid gap-2">
+                      {liveProfile.outgoingFriendRequests.map((requestEmail) => {
+                        const pendingFriend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
+                        return (
+                          <div key={requestEmail} className="flex items-center justify-between gap-3 rounded-[16px] bg-white px-3 py-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-[#2C1A0E]">{pendingFriend?.profile.fullName || "pending friend"}</p>
+                              <p className="truncate text-sm text-[#6c7289]">@{pendingFriend?.profile.username || requestEmail}</p>
+                            </div>
+                            <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => cancelFriendRequest(requestEmail)}>
+                              cancel
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null}
               </CardBody>
@@ -7814,7 +7852,9 @@ export default function Page() {
                         accept request
                       </Button>
                     ) : selectedProfileRequestPending ? (
-                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">request pending</Chip>
+                      <Button radius="full" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => selectedProfileEmail && cancelFriendRequest(selectedProfileEmail)}>
+                        cancel request
+                      </Button>
                     ) : (
                       <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => selectedProfileEmail && addFriend(selectedProfileEmail)}>
                         add to circle
