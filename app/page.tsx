@@ -1473,12 +1473,20 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
   const mediaUrls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
   const [activeIndex, setActiveIndex] = useState(0);
   const currentIndex = Math.min(activeIndex, mediaUrls.length - 1);
+  const effectiveMediaKind =
+    post.mediaKind !== "none"
+      ? post.mediaKind
+      : mediaUrls.length > 1
+        ? "carousel"
+        : mediaUrls.length === 1
+          ? "photo"
+          : "none";
 
-  if (post.mediaKind === "none" || !mediaUrls.length) {
+  if (effectiveMediaKind === "none" || !mediaUrls.length) {
     return null;
   }
 
-  if (post.mediaKind === "photo") {
+  if (effectiveMediaKind === "photo") {
     return (
       <div className="overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
         {/* uploaded dump images come straight from storage urls, so a plain img avoids remote loader issues here. */}
@@ -1493,7 +1501,7 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
     );
   }
 
-  if (post.mediaKind === "video") {
+  if (effectiveMediaKind === "video") {
     return (
       <div className={`${detail ? "overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]" : `${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}`}>
         <video src={mediaUrls[0]} controls className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-full w-full object-cover"} />
@@ -2569,14 +2577,12 @@ export default function Page() {
             </div>
           )}
 
-          {post.mediaKind !== "none" ? (
-            post.mediaUrls.length ? (
-              <PostMediaPreview post={post} detail={detail} />
-            ) : (
-              <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
-                this post’s media needs one re-upload from the admin side.
-              </div>
-            )
+          {post.mediaUrls.length ? (
+            <PostMediaPreview post={post} detail={detail} />
+          ) : post.mediaKind !== "none" ? (
+            <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
+              this post’s media needs one re-upload from the admin side.
+            </div>
           ) : null}
 
           {isFriendFeedCard && showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null}
