@@ -7733,7 +7733,7 @@ export default function Page() {
           </section>
         ) : null}
 
-        {selectedStoryPost || notificationsOpen ? null : (
+        {selectedStoryPost || notificationsOpen || selectedOwnPost || selectedProfileEmail ? null : (
           <nav
             className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
             style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
