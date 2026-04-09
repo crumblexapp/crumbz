@@ -542,6 +542,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "you can only update your own favorites." }, { status: 403 });
     }
 
+    let didAddFavorite = false;
+
     nextAccounts = accounts.map((account) => {
       if (getEmail(account) !== currentEmail) return account;
 
@@ -549,6 +551,8 @@ export async function POST(request: Request) {
       const previousFavoritePlaceIds = account.profile.favoritePlaceIds ?? [];
       const addedFavoritePlaceId =
         nextFavoritePlaceIds.find((placeId) => !previousFavoritePlaceIds.includes(placeId)) ?? null;
+      const removedFavoritePlaceId =
+        previousFavoritePlaceIds.find((placeId) => !nextFavoritePlaceIds.includes(placeId)) ?? null;
       const nextFavoriteActivities =
         addedFavoritePlaceId && body?.favoritePlace?.id === addedFavoritePlaceId
           ? [
@@ -563,9 +567,12 @@ export async function POST(request: Request) {
                 city: account.profile.city ?? "",
                 createdAt: new Date().toISOString(),
               },
-              ...(account.profile.favoriteActivities ?? []),
+              ...(account.profile.favoriteActivities ?? []).filter((activity) => activity.placeId !== addedFavoritePlaceId),
             ].slice(0, 30)
-          : account.profile.favoriteActivities ?? [];
+          : removedFavoritePlaceId
+            ? (account.profile.favoriteActivities ?? []).filter((activity) => activity.placeId !== removedFavoritePlaceId)
+            : account.profile.favoriteActivities ?? [];
+      didAddFavorite = Boolean(addedFavoritePlaceId && body?.favoritePlace?.id === addedFavoritePlaceId);
 
       const next = normalizeAccount({
         ...account,
@@ -586,7 +593,7 @@ export async function POST(request: Request) {
         ? body.favoritePlace.name
         : "a new food spot";
 
-    if (actorFriends.length && addedFavoritePlace) {
+    if (actorFriends.length && didAddFavorite && addedFavoritePlace) {
       pendingPush = {
         emails: actorFriends,
         title: `${getPublicName(actor)} saved ${addedFavoritePlace}`,
