@@ -5147,6 +5147,12 @@ export default function Page() {
     }
   };
 
+  const clearDailyPostPhoto = () => {
+    setDailyPostMediaUrls([]);
+    setDailyPostNotice("");
+    setDailyPostInputKey((current) => current + 1);
+  };
+
   const submitDailyPost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -7741,11 +7747,25 @@ export default function Page() {
                     aria-label={copy.profile.addPostPhoto}
                     disabled={isUploadingDailyPost}
                     onClick={() => dailyPostInputRef.current?.click()}
-                    className="flex h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
+                    className="relative flex h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
                   >
                     {dailyPostMediaUrls[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
+                        <button
+                          type="button"
+                          aria-label="remove selected photo"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            clearDailyPostPhoto();
+                          }}
+                          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
+                        >
+                          ×
+                        </button>
+                      </>
                     ) : (
                       <div className="text-center">
                         <div className="text-5xl leading-none">+</div>
