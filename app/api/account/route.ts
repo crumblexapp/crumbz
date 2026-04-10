@@ -75,6 +75,38 @@ function getEmail(account: StoredUser) {
   return account.googleProfile?.email?.toLowerCase() ?? "";
 }
 
+function mergeAccountForUpsert(existingAccount: StoredUser | null, incomingAccount: StoredUser) {
+  const mergedGoogleProfile =
+    incomingAccount.googleProfile || existingAccount?.googleProfile
+      ? {
+          name: incomingAccount.googleProfile?.name ?? existingAccount?.googleProfile?.name ?? "",
+          email: incomingAccount.googleProfile?.email ?? existingAccount?.googleProfile?.email ?? "",
+          picture: incomingAccount.googleProfile?.picture ?? existingAccount?.googleProfile?.picture,
+        }
+      : null;
+
+  if (!existingAccount) {
+    return normalizeAccount(incomingAccount);
+  }
+
+  return normalizeAccount({
+    ...existingAccount,
+    ...incomingAccount,
+    signedIn: incomingAccount.signedIn,
+    googleProfile: mergedGoogleProfile,
+    profile: {
+      ...existingAccount.profile,
+      ...incomingAccount.profile,
+      // Social graph and saved places should survive stale profile edits from old tabs/devices.
+      friends: existingAccount.profile.friends,
+      incomingFriendRequests: existingAccount.profile.incomingFriendRequests,
+      outgoingFriendRequests: existingAccount.profile.outgoingFriendRequests,
+      favoritePlaceIds: existingAccount.profile.favoritePlaceIds,
+      favoriteActivities: existingAccount.profile.favoriteActivities ?? [],
+    },
+  });
+}
+
 async function readAccounts() {
   const primary = await supabaseServer
     .from("app_state")
@@ -239,7 +271,8 @@ export async function POST(request: Request) {
     | null = null;
 
   if (action === "upsert_account") {
-    const account = body?.account ? normalizeAccount(body.account) : null;
+    const incomingAccount = body?.account ? normalizeAccount(body.account) : null;
+    const account = incomingAccount ? normalizeAccount(incomingAccount) : null;
     const email = account ? getEmail(account) : "";
     if (!account || !email) {
       return NextResponse.json({ ok: false, message: "missing account payload" }, { status: 400 });
@@ -250,22 +283,23 @@ export async function POST(request: Request) {
     }
 
     const existingAccount = accounts.find((item) => getEmail(item) === email) ?? null;
+    const mergedAccount = mergeAccountForUpsert(existingAccount, account);
     const existingReferralCode = existingAccount?.profile.referralCode?.trim().toUpperCase() ?? "";
-    const requestedReferralCode = account.profile.referralCode?.trim().toUpperCase() ?? "";
-    account.profile.referralCode = existingReferralCode || requestedReferralCode || generateReferralCode();
+    const requestedReferralCode = mergedAccount.profile.referralCode?.trim().toUpperCase() ?? "";
+    mergedAccount.profile.referralCode = existingReferralCode || requestedReferralCode || generateReferralCode();
 
-    const requestedReferrerCode = account.profile.referredByCode?.trim().toUpperCase() ?? "";
+    const requestedReferrerCode = mergedAccount.profile.referredByCode?.trim().toUpperCase() ?? "";
     const existingReferrerCode = existingAccount?.profile.referredByCode?.trim().toUpperCase() ?? "";
     const referredByCode = existingReferrerCode || requestedReferrerCode;
     const referrerAccount =
-      referredByCode && referredByCode !== account.profile.referralCode
+      referredByCode && referredByCode !== mergedAccount.profile.referralCode
         ? accounts.find((item) => item.profile.referralCode?.trim().toUpperCase() === referredByCode) ?? null
         : null;
-    account.profile.referredByCode = referrerAccount ? referredByCode : existingReferrerCode;
-    account.profile.referredByEmail = referrerAccount ? getEmail(referrerAccount) : existingAccount?.profile.referredByEmail ?? "";
-    account.profile.referralCompletedAt = account.profile.referralCompletedAt ?? existingAccount?.profile.referralCompletedAt ?? null;
+    mergedAccount.profile.referredByCode = referrerAccount ? referredByCode : existingReferrerCode;
+    mergedAccount.profile.referredByEmail = referrerAccount ? getEmail(referrerAccount) : existingAccount?.profile.referredByEmail ?? "";
+    mergedAccount.profile.referralCompletedAt = mergedAccount.profile.referralCompletedAt ?? existingAccount?.profile.referralCompletedAt ?? null;
 
-    const normalizedUsername = account.profile.username.trim().toLowerCase();
+    const normalizedUsername = mergedAccount.profile.username.trim().toLowerCase();
     if (normalizedUsername) {
       const usernameOwner = accounts.find(
         (item) => item.profile.username.trim().toLowerCase() === normalizedUsername && getEmail(item) !== email,
@@ -275,21 +309,21 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, message: "that username is already taken. pick another one." }, { status: 409 });
       }
 
-      account.profile.username = normalizedUsername;
+      mergedAccount.profile.username = normalizedUsername;
     }
 
     if (
       !existingAccount?.profile.referralCompletedAt &&
-      account.profile.fullName.trim() &&
-      account.profile.username.trim() &&
-      account.profile.city.trim() &&
-      typeof account.profile.isStudent === "boolean"
+      mergedAccount.profile.fullName.trim() &&
+      mergedAccount.profile.username.trim() &&
+      mergedAccount.profile.city.trim() &&
+      typeof mergedAccount.profile.isStudent === "boolean"
     ) {
-      account.profile.referralCompletedAt = new Date().toISOString();
+      mergedAccount.profile.referralCompletedAt = new Date().toISOString();
     }
 
-    nextAccounts = [...accounts.filter((item) => getEmail(item) !== email), account];
-    nextUser = account;
+    nextAccounts = [...accounts.filter((item) => getEmail(item) !== email), mergedAccount];
+    nextUser = mergedAccount;
   }
 
   if (action === "send_friend_request") {
@@ -724,7 +758,7 @@ export async function POST(request: Request) {
   }
 
   const savedAccounts = Array.isArray(savedData?.accounts) ? (savedData.accounts as StoredUser[]).map(normalizeAccount) : nextAccounts;
-  if (action !== "upsert_account" && nextUser) {
+  if (nextUser) {
     nextUser = savedAccounts.find((account) => getEmail(account) === getEmail(nextUser as StoredUser)) ?? nextUser;
   }
 

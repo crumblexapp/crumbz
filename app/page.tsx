@@ -3688,25 +3688,26 @@ export default function Page() {
         ? accounts.find((account) => account.profile.referralCode?.trim().toUpperCase() === pendingReferralCode) ?? null
         : null;
 
+    const sourceUser = liveAccount ?? user;
     const nextUser = {
-      ...user,
+      ...sourceUser,
       profile: {
         fullName: trimmedName,
         username: trimmedUsername,
         city: trimmedCity,
-        bio: user.profile.bio ?? "",
-        picture: liveProfile.picture ?? user.profile.picture ?? "",
+        bio: sourceUser.profile.bio ?? "",
+        picture: liveProfile.picture ?? sourceUser.profile.picture ?? "",
         isStudent: isStudentValue,
         schoolName: isStudentValue ? trimmedSchool : "",
-        friends: user.profile.friends,
-        incomingFriendRequests: user.profile.incomingFriendRequests,
-        outgoingFriendRequests: user.profile.outgoingFriendRequests,
-        favoritePlaceIds: user.profile.favoritePlaceIds,
-        favoriteActivities: user.profile.favoriteActivities ?? [],
-        referralCode: liveProfile.referralCode ?? user.profile.referralCode ?? "",
-        referredByCode: matchedReferrer?.profile.referralCode ?? liveProfile.referredByCode ?? user.profile.referredByCode ?? "",
-        referredByEmail: matchedReferrer?.googleProfile?.email ?? liveProfile.referredByEmail ?? user.profile.referredByEmail ?? "",
-        referralCompletedAt: liveProfile.referralCompletedAt ?? user.profile.referralCompletedAt ?? null,
+        friends: liveProfile.friends,
+        incomingFriendRequests: liveProfile.incomingFriendRequests,
+        outgoingFriendRequests: liveProfile.outgoingFriendRequests,
+        favoritePlaceIds: liveProfile.favoritePlaceIds,
+        favoriteActivities: liveProfile.favoriteActivities ?? sourceUser.profile.favoriteActivities ?? [],
+        referralCode: liveProfile.referralCode ?? sourceUser.profile.referralCode ?? "",
+        referredByCode: matchedReferrer?.profile.referralCode ?? liveProfile.referredByCode ?? sourceUser.profile.referredByCode ?? "",
+        referredByEmail: matchedReferrer?.googleProfile?.email ?? liveProfile.referredByEmail ?? sourceUser.profile.referredByEmail ?? "",
+        referralCompletedAt: liveProfile.referralCompletedAt ?? sourceUser.profile.referralCompletedAt ?? null,
       },
     };
 
