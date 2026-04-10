@@ -506,7 +506,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    accounts: accountState?.accounts ?? stateData?.accounts ?? [],
+    accounts: accountState?.accounts ?? [],
     posts: stateData?.posts ?? [],
     interactions: fallbackMeta.interactions,
     dare: fallbackMeta.dare ?? {},
@@ -621,7 +621,7 @@ export async function POST(request: Request) {
   const nextRow: Record<string, unknown> = {
     id: STATE_ROW_ID,
     updated_at: updates.updated_at,
-    accounts: stateData?.accounts ?? [],
+    accounts: [],
     posts: "posts" in updates ? updates.posts : stateData?.posts ?? [],
   };
 

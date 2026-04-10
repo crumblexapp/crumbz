@@ -108,28 +108,15 @@ function mergeAccountForUpsert(existingAccount: StoredUser | null, incomingAccou
 }
 
 async function readAccounts() {
-  const primary = await supabaseServer
+  const { data, error } = await supabaseServer
     .from("app_state")
     .select("accounts")
     .eq("id", ACCOUNTS_ROW_ID)
     .maybeSingle();
 
-  if (Array.isArray(primary.data?.accounts) && primary.data.accounts.length) {
-    return {
-      accounts: (primary.data.accounts as StoredUser[]).map(normalizeAccount),
-      error: primary.error,
-    };
-  }
-
-  const fallback = await supabaseServer
-    .from("app_state")
-    .select("accounts")
-    .eq("id", "crumbz-app-state")
-    .maybeSingle();
-
   return {
-    accounts: Array.isArray(fallback.data?.accounts) ? (fallback.data.accounts as StoredUser[]).map(normalizeAccount) : [],
-    error: primary.error ?? fallback.error,
+    accounts: Array.isArray(data?.accounts) ? (data.accounts as StoredUser[]).map(normalizeAccount) : [],
+    error,
   };
 }
 

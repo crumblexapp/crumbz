@@ -14,6 +14,10 @@ insert into public.app_state (id)
 values ('crumbz-app-state')
 on conflict (id) do nothing;
 
+insert into public.app_state (id)
+values ('crumbz-accounts-state')
+on conflict (id) do nothing;
+
 insert into storage.buckets (id, name, public)
 values ('crumbz-media', 'crumbz-media', true)
 on conflict (id) do nothing;
