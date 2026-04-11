@@ -58,6 +58,8 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
+const ADMIN_PUBLIC_NAME = "crumbz";
+const ADMIN_PUBLIC_HANDLE = "@crumbz.pl";
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -2294,7 +2296,7 @@ export default function Page() {
         {
           id: "crumbz-story-rail",
           postId: adminStorySequence[0]?.id ?? null,
-          label: "crumbz",
+          label: ADMIN_PUBLIC_HANDLE,
           detail: adminStorySequence.length > 1 ? `${adminStorySequence.length} stories` : adminStorySequence[0]?.title ?? "live",
           picture: adminProfilePicture,
           ring: "#F5A623",
@@ -2305,7 +2307,7 @@ export default function Page() {
         {
           id: "crumbz-placeholder",
           postId: null,
-          label: "crumbz",
+          label: ADMIN_PUBLIC_HANDLE,
           detail: "coming soon",
           picture: adminProfilePicture,
           ring: "#F5A623",
@@ -2585,7 +2587,7 @@ export default function Page() {
           )}
           <div className="min-w-0 flex-1">
             <p className="break-words font-semibold text-[#2C1A0E]">
-              {isStudentPost ? authorUsername : "crumbz"}
+              {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
             </p>
             {isSundayDump && isStudentPost ? (
               profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
@@ -6790,7 +6792,12 @@ export default function Page() {
                   {posts.map((post) => {
                     const bucket = getInteractionBucket(interactions, post.id);
                     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
-                    const adminPostUsername = authorAccount?.profile.username?.trim() ? `@${authorAccount.profile.username.trim()}` : post.authorName;
+                    const adminPostUsername =
+                      post.authorRole === "student"
+                        ? authorAccount?.profile.username?.trim()
+                          ? `@${authorAccount.profile.username.trim()}`
+                          : post.authorName
+                        : ADMIN_PUBLIC_HANDLE;
                     return (
                       <Card key={post.id} className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                         <CardHeader className="flex items-start justify-between gap-3 px-5 pb-0 pt-5">
@@ -8507,9 +8514,9 @@ export default function Page() {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <Avatar src={adminProfilePicture} name="crumbz" className="h-11 w-11 bg-[#F5A623] text-white" />
+                        <Avatar src={adminProfilePicture} name={ADMIN_PUBLIC_NAME} className="h-11 w-11 bg-[#F5A623] text-white" />
                         <div>
-                          <p className="text-sm font-semibold text-white">crumbz</p>
+                          <p className="text-sm font-semibold text-white">{ADMIN_PUBLIC_HANDLE}</p>
                           <p className="text-xs uppercase tracking-[0.18em] text-white/70">
                             story {selectedStoryPostIndex + 1} of {adminStorySequence.length} • {selectedStoryPost.createdAt}
                           </p>
