@@ -1943,6 +1943,19 @@ export default function Page() {
     if (!matchedAccount?.googleProfile?.email) return;
     setSelectedProfileEmail(matchedAccount.googleProfile.email);
   }, [accounts, user.signedIn]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const tabParam = new URLSearchParams(window.location.search).get("tab")?.trim().toLowerCase();
+    if (!tabParam) return;
+
+    const validTabs: StudentTab[] = ["feed", "favorites", "rewards", "social", "profile"];
+    if (!validTabs.includes(tabParam as StudentTab)) return;
+
+    setStudentTab(tabParam as StudentTab);
+  }, []);
+
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = getAccountPicture(adminAccount);

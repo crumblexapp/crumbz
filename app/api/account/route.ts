@@ -254,7 +254,7 @@ export async function POST(request: Request) {
   let nextAccounts = [...accounts];
   let nextUser: StoredUser | null = null;
   let pendingPush:
-    | { emails: string[]; title: string; body: string; tag: string }
+    | { emails: string[]; title: string; body: string; url?: string; tag: string }
     | null = null;
 
   if (action === "upsert_account") {
@@ -367,6 +367,7 @@ export async function POST(request: Request) {
       emails: [targetEmail],
       title: copy.title,
       body: copy.body,
+      url: "/?tab=social",
       tag: `friend-request-${currentEmail}-${targetEmail}`,
     };
   }
@@ -753,7 +754,7 @@ export async function POST(request: Request) {
     await sendPushToEmails(pendingPush.emails, {
       title: pendingPush.title,
       body: pendingPush.body,
-      url: "/",
+      url: pendingPush.url ?? "/",
       tag: pendingPush.tag,
     });
   }
