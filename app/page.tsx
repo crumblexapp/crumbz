@@ -1279,6 +1279,19 @@ function formatNow() {
   });
 }
 
+function getDisplayTimestamp(value: string, fallbackOffset = 0) {
+  const match = value.trim().match(/^(\d{1,2}) ([A-Za-z]{3}), (\d{2}):(\d{2})$/);
+  if (!match) return Date.now() - fallbackOffset;
+
+  const [, dayRaw, monthRaw, hourRaw, minuteRaw] = match;
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const monthIndex = months.indexOf(monthRaw.toLowerCase());
+  if (monthIndex === -1) return Date.now() - fallbackOffset;
+
+  const now = new Date();
+  return new Date(now.getFullYear(), monthIndex, Number(dayRaw), Number(hourRaw), Number(minuteRaw)).getTime();
+}
+
 function getPostTimestamp(post: Pick<AppPost, "createdAtIso">) {
   const timestamp = Date.parse(post.createdAtIso);
   return Number.isNaN(timestamp) ? 0 : timestamp;
@@ -1716,6 +1729,8 @@ export default function Page() {
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
+  const [likesViewerPostId, setLikesViewerPostId] = useState<string | null>(null);
+  const [likesViewerSearch, setLikesViewerSearch] = useState("");
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
     title: "",
@@ -2150,6 +2165,30 @@ export default function Page() {
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
   const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
+  const likesViewerPost =
+    (likesViewerPostId ? currentUserAllPosts.find((post) => post.id === likesViewerPostId) : null) ??
+    (selectedOwnPost?.id === likesViewerPostId ? selectedOwnPost : null);
+  const likesViewerBucket = likesViewerPost ? getInteractionBucket(interactions, likesViewerPost.id) : null;
+  const likesViewerRows = (likesViewerBucket?.likes ?? [])
+    .slice()
+    .reverse()
+    .filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail)
+    .map((like) => {
+      const account = accountByEmail.get(like.authorEmail.toLowerCase()) ?? null;
+      const username = account?.profile.username ? `@${account.profile.username}` : "";
+      const fullName = account?.profile.fullName || like.authorName || username || like.authorEmail;
+      return {
+        email: like.authorEmail,
+        username,
+        fullName,
+        picture: getAccountPicture(account),
+      };
+    })
+    .filter((row) => {
+      const query = likesViewerSearch.trim().toLowerCase();
+      if (!query) return true;
+      return row.fullName.toLowerCase().includes(query) || row.username.toLowerCase().includes(query);
+    });
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfileUsername = selectedProfileAccount?.profile.username.trim().toLowerCase() ?? "";
   const selectedProfileAuthoredPosts = selectedProfileEmail
@@ -2168,6 +2207,8 @@ export default function Page() {
   const selectedProfileIsFriend = Boolean(selectedProfileEmailLower && liveProfile.friends.includes(selectedProfileEmailLower));
   const selectedProfileRequestPending = Boolean(selectedProfileEmailLower && liveProfile.outgoingFriendRequests.includes(selectedProfileEmailLower));
   const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && liveProfile.incomingFriendRequests.includes(selectedProfileEmailLower));
+  const selectedProfileFollowersCount = selectedProfileAccount?.profile.friends.length ?? 0;
+  const selectedProfileBio = selectedProfileAccount?.profile.bio?.trim() ?? "";
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -2366,7 +2407,55 @@ export default function Page() {
     )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 8);
+  const ownPostActivityNotifications = posts
+    .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
+    .flatMap((post) => {
+      const bucket = getInteractionBucket(interactions, post.id);
+
+      return [
+        ...bucket.likes
+          .filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail)
+          .slice()
+          .reverse()
+          .map((like, index) => ({
+            id: `like-${post.id}-${like.authorEmail.toLowerCase()}-${like.createdAt}-${index}`,
+            kind: "post_like" as const,
+            title: `${like.authorName} liked your post`,
+            detail: post.taggedPlaceName ? `${post.taggedPlaceName} is getting love.` : post.title || "your post got a like.",
+            postId: post.id,
+            picture: getAccountPicture(accountByEmail.get(like.authorEmail.toLowerCase()) ?? null),
+            sortTime: getDisplayTimestamp(like.createdAt, index),
+          })),
+        ...bucket.comments
+          .filter((comment) => !comment.hidden && comment.authorEmail.toLowerCase() !== currentUserEmail)
+          .slice()
+          .reverse()
+          .map((comment, index) => ({
+            id: `comment-${comment.id}`,
+            kind: "post_comment" as const,
+            title: `${comment.authorName} commented on your post`,
+            detail: comment.text,
+            postId: post.id,
+            picture: getAccountPicture(accountByEmail.get(comment.authorEmail.toLowerCase()) ?? null),
+            sortTime: getDisplayTimestamp(comment.createdAt, index),
+          })),
+        ...bucket.shares
+          .filter((share) => share.authorEmail.toLowerCase() !== currentUserEmail)
+          .slice()
+          .reverse()
+          .map((share, index) => ({
+            id: `share-${share.id}`,
+            kind: "post_share" as const,
+            title: `${share.authorName} shared your post`,
+            detail: `${share.platform} share`,
+            postId: post.id,
+            picture: getAccountPicture(accountByEmail.get(share.authorEmail.toLowerCase()) ?? null),
+            sortTime: getDisplayTimestamp(share.createdAt, index),
+          })),
+      ];
+    });
   const rawNotificationItems = [
+    ...ownPostActivityNotifications,
     ...announcements.slice(0, 4).map((announcement) => {
       const copy = buildAnnouncementNotification({
         title: announcement.title,
@@ -2477,6 +2566,7 @@ export default function Page() {
   const notificationItems = rawNotificationItems
     .filter((item): item is NonNullable<(typeof rawNotificationItems)[number]> => Boolean(item))
     .sort((a, b) => ("sortTime" in b ? b.sortTime : 0) - ("sortTime" in a ? a.sortTime : 0)) as Array<
+    | { id: string; kind: "post_like" | "post_comment" | "post_share"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string; sortTime: number }
@@ -2491,6 +2581,11 @@ export default function Page() {
     const nextEmail = matchedAccount?.googleProfile?.email;
     if (!nextEmail) return;
     setSelectedProfileEmail(nextEmail);
+  };
+
+  const openProfileByEmail = (email: string) => {
+    if (!email) return;
+    setSelectedProfileEmail(email);
   };
 
   const renderCaptionWithTags = (text: string, className = "") => {
@@ -2586,9 +2681,15 @@ export default function Page() {
             />
           )}
           <div className="min-w-0 flex-1">
-            <p className="break-words font-semibold text-[#2C1A0E]">
-              {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
-            </p>
+            {isStudentPost && canOpenProfile ? (
+              <button type="button" onClick={() => openProfileByEmail(post.authorEmail)} className="break-words text-left font-semibold text-[#2C1A0E]">
+                {authorUsername}
+              </button>
+            ) : (
+              <p className="break-words font-semibold text-[#2C1A0E]">
+                {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
+              </p>
+            )}
             {isSundayDump && isStudentPost ? (
               profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
             ) : !isSundayDump ? (
@@ -2707,7 +2808,13 @@ export default function Page() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.likes.length} likes</span>
+            <button
+              type="button"
+              onClick={() => post.authorEmail.toLowerCase() === currentUserEmail && setLikesViewerPostId(post.id)}
+              className={`rounded-full bg-[#FFF6E0] px-3 py-2 ${post.authorEmail.toLowerCase() === currentUserEmail ? "transition hover:bg-[#FFE8B8]" : ""}`}
+            >
+              {bucket.likes.length} likes
+            </button>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{visibleComments.length} comments</span>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.shares.length} shares</span>
           </div>
@@ -8204,15 +8311,27 @@ export default function Page() {
           {(onClose) => (
             <>
               <ModalHeader className="flex items-start justify-between gap-3 border-b border-[#FFF0D0]">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend profile</p>
-                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
-                    {selectedProfileAccount?.profile.fullName || "friend"}
-                  </p>
-                  <p className="mt-2 text-sm text-[#2C1A0E]">
-                    @{selectedProfileAccount?.profile.username || "crumbz-user"}
-                    {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <Avatar
+                    src={getAccountPicture(selectedProfileAccount)}
+                    name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
+                    className="h-14 w-14 bg-[#FFF0D0] text-[#F5A623]"
+                  />
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend profile</p>
+                    <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                      {selectedProfileAccount?.profile.fullName || "friend"}
+                    </p>
+                    <p className="mt-2 text-sm text-[#2C1A0E]">
+                      @{selectedProfileAccount?.profile.username || "crumbz-user"}
+                      {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedProfileFollowersCount} followers</Chip>
+                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedProfileAuthoredPosts.length} posts</Chip>
+                    </div>
+                    {selectedProfileBio ? <p className="mt-3 max-w-[18rem] text-sm leading-6 text-[#6c7289]">{selectedProfileBio}</p> : null}
+                  </div>
                 </div>
                 <Button
                   radius="full"
@@ -8789,7 +8908,13 @@ export default function Page() {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                          <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.likes.length ?? 0} likes</span>
+                          <button
+                            type="button"
+                            onClick={() => setLikesViewerPostId(selectedOwnPost.id)}
+                            className="rounded-full bg-[#FFF6E0] px-3 py-2 transition hover:bg-[#FFE8B8]"
+                          >
+                            {selectedOwnPostBucket?.likes.length ?? 0} likes
+                          </button>
                           <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostVisibleComments.length} comments</span>
                           <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.shares.length ?? 0} shares</span>
                         </div>
@@ -8831,6 +8956,68 @@ export default function Page() {
                     </div>
                   </div>
                 ) : null}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(likesViewerPost)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLikesViewerPostId(null);
+            setLikesViewerSearch("");
+          }
+        }}
+        placement="bottom-center"
+        scrollBehavior="inside"
+      >
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">reactions</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                    {likesViewerBucket?.likes.length ?? 0} likes
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-6 pt-5">
+                <Input
+                  radius="full"
+                  placeholder="search people"
+                  value={likesViewerSearch}
+                  onValueChange={setLikesViewerSearch}
+                  classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
+                />
+                {likesViewerRows.length ? (
+                  <div className="space-y-3">
+                    {likesViewerRows.map((row) => (
+                      <button
+                        key={`${row.email}-${row.username}`}
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          openProfileByEmail(row.email);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-[18px] bg-white px-3 py-3 text-left ring-1 ring-[#FFF0D0]"
+                      >
+                        <Avatar src={row.picture} name={row.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#2C1A0E]">{row.username || row.fullName}</p>
+                          <p className="truncate text-sm text-[#6c7289]">{row.fullName}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6c7289]">no likes to show yet.</p>
+                )}
               </ModalBody>
             </>
           )}
