@@ -2166,7 +2166,7 @@ export default function Page() {
     : -1;
   const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
   const likesViewerPost =
-    (likesViewerPostId ? currentUserAllPosts.find((post) => post.id === likesViewerPostId) : null) ??
+    (likesViewerPostId ? posts.find((post) => post.id === likesViewerPostId) : null) ??
     (selectedOwnPost?.id === likesViewerPostId ? selectedOwnPost : null);
   const likesViewerBucket = likesViewerPost ? getInteractionBucket(interactions, likesViewerPost.id) : null;
   const likesViewerRows = (likesViewerBucket?.likes ?? [])
@@ -2209,6 +2209,11 @@ export default function Page() {
   const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && liveProfile.incomingFriendRequests.includes(selectedProfileEmailLower));
   const selectedProfileFollowersCount = selectedProfileAccount?.profile.friends.length ?? 0;
   const selectedProfileBio = selectedProfileAccount?.profile.bio?.trim() ?? "";
+  const profileDrawerOwner =
+    profileDrawer === "followers" && selectedProfileAccount && !selectedProfileIsOwn
+      ? selectedProfileAccount
+      : liveAccount ?? user;
+  const profileDrawerFollowerEmails = (profileDrawerOwner?.profile.friends ?? []).filter((email) => email.toLowerCase() !== ADMIN_EMAIL);
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -8312,22 +8317,30 @@ export default function Page() {
             <>
               <ModalHeader className="flex items-start justify-between gap-3 border-b border-[#FFF0D0]">
                 <div className="flex items-start gap-3">
-                  <Avatar
-                    src={getAccountPicture(selectedProfileAccount)}
-                    name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
-                    className="h-14 w-14 bg-[#FFF0D0] text-[#F5A623]"
-                  />
+                  <div className="h-20 w-20 overflow-hidden rounded-[28px] bg-[#FFF0D0] shadow-[0_10px_24px_rgba(44,26,14,0.08)]">
+                    <Avatar
+                      src={getAccountPicture(selectedProfileAccount)}
+                      name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
+                      className="h-full w-full rounded-none bg-[#FFF0D0] text-[#F5A623]"
+                    />
+                  </div>
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend profile</p>
-                    <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                    <p className="mt-1 max-w-[12rem] break-words font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
                       {selectedProfileAccount?.profile.fullName || "friend"}
                     </p>
-                    <p className="mt-2 text-sm text-[#2C1A0E]">
+                    <p className="mt-2 max-w-[13rem] break-all text-sm text-[#2C1A0E]">
                       @{selectedProfileAccount?.profile.username || "crumbz-user"}
                       {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedProfileFollowersCount} followers</Chip>
+                      <button
+                        type="button"
+                        onClick={() => setProfileDrawer("followers")}
+                        className="rounded-full bg-[#FFF0D0] px-3 py-1 text-sm text-[#2C1A0E] transition hover:bg-[#FFE8B8]"
+                      >
+                        {selectedProfileFollowersCount} followers
+                      </button>
                       <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedProfileAuthoredPosts.length} posts</Chip>
                     </div>
                     {selectedProfileBio ? <p className="mt-3 max-w-[18rem] text-sm leading-6 text-[#6c7289]">{selectedProfileBio}</p> : null}
@@ -8407,11 +8420,17 @@ export default function Page() {
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0] bg-[#fffaf2]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {profileDrawer === "followers" ? "your followers" : "your favorites"}
+                    {profileDrawer === "followers"
+                      ? selectedProfileAccount && !selectedProfileIsOwn
+                        ? `${selectedProfileAccount.profile.fullName || selectedProfileAccount.profile.username}'s followers`
+                        : "your followers"
+                      : "your favorites"}
                   </p>
                   <p className="mt-2 text-sm text-[#6c7289]">
                     {profileDrawer === "followers"
-                      ? "your crumbz circle lives here."
+                      ? selectedProfileAccount && !selectedProfileIsOwn
+                        ? "their crumbz circle lives here."
+                        : "your crumbz circle lives here."
                       : "the spots you’ve saved most recently."}
                   </p>
                 </div>
@@ -8419,11 +8438,11 @@ export default function Page() {
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="bg-[#fffaf2] pb-8 pt-5">
+              <ModalBody className="bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
                 {profileDrawer === "followers" ? (
-                  liveProfile.friends.length ? (
+                  profileDrawerFollowerEmails.length ? (
                     <div className="grid gap-3">
-                      {liveProfile.friends.map((friendEmail) => {
+                      {profileDrawerFollowerEmails.map((friendEmail) => {
                         const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
                         if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
 
@@ -8440,7 +8459,7 @@ export default function Page() {
                             <Avatar src={getAccountPicture(friend)} name={friend.profile.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-[#2C1A0E]">{friend.profile.fullName}</p>
-                              <p className="truncate text-sm text-[#6c7289]">@{friend.profile.username}</p>
+                              <p className="break-all text-sm text-[#6c7289]">@{friend.profile.username}</p>
                             </div>
                           </button>
                         );
@@ -8987,7 +9006,7 @@ export default function Page() {
                   close
                 </Button>
               </ModalHeader>
-              <ModalBody className="gap-4 bg-[#fffaf2] pb-6 pt-5">
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
                 <Input
                   radius="full"
                   placeholder="search people"
