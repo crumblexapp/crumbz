@@ -299,7 +299,7 @@ type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dum
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
-type ProfilePostTab = "friend-review" | "post" | "sunday-dump";
+type ProfilePostTab = "all" | "friend-review" | "post" | "sunday-dump";
 type AppNavigationState = {
   studentTab: StudentTab;
   notificationsOpen: boolean;
@@ -1331,13 +1331,15 @@ function groupLikesForNotifications(likes: PostLike[], gapMs = 2 * 60 * 60 * 100
   }, []);
 }
 
-function getProfilePostTabForPost(post: Pick<AppPost, "type" | "cta">): ProfilePostTab {
+function getProfilePostTabForPost(post: Pick<AppPost, "type" | "cta">): Exclude<ProfilePostTab, "all"> {
   if (post.type === "weekly-dump") return "sunday-dump";
   return post.cta === "friend review" ? "friend-review" : "post";
 }
 
 function getProfilePostTabLabel(tab: ProfilePostTab) {
   switch (tab) {
+    case "all":
+      return "all";
     case "friend-review":
       return "friend review";
     case "sunday-dump":
@@ -1781,7 +1783,8 @@ export default function Page() {
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
-  const [selectedProfilePostTab, setSelectedProfilePostTab] = useState<ProfilePostTab>("post");
+  const [selectedProfilePostTab, setSelectedProfilePostTab] = useState<ProfilePostTab>("all");
+  const [selectedProfilePostFiltersOpen, setSelectedProfilePostFiltersOpen] = useState(false);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
@@ -2252,9 +2255,10 @@ export default function Page() {
         .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     : [];
   const selectedProfileFavoriteCount = selectedProfileAccount?.profile.favoritePlaceIds?.length ?? 0;
-  const selectedProfileFilteredPosts = selectedProfileAuthoredPosts.filter(
-    (post) => getProfilePostTabForPost(post) === selectedProfilePostTab,
-  );
+  const selectedProfileFilteredPosts =
+    selectedProfilePostTab === "all"
+      ? selectedProfileAuthoredPosts
+      : selectedProfileAuthoredPosts.filter((post) => getProfilePostTabForPost(post) === selectedProfilePostTab);
   const selectedProfileTaggedPosts = selectedProfileUsername
     ? [...studentDailyPosts, ...studentWeeklyDumps]
         .filter((post) => post.authorEmail.toLowerCase() !== selectedProfileEmail?.toLowerCase())
@@ -2657,17 +2661,19 @@ export default function Page() {
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
   const notificationCount = unreadNotificationItems.length;
 
-  const openProfileByUsername = (username: string, profilePostTab: ProfilePostTab = "post") => {
+  const openProfileByUsername = (username: string, profilePostTab: ProfilePostTab = "all") => {
     const matchedAccount = accountByUsername.get(username.trim().toLowerCase());
     const nextEmail = matchedAccount?.googleProfile?.email;
     if (!nextEmail) return;
     setSelectedProfilePostTab(profilePostTab);
+    setSelectedProfilePostFiltersOpen(profilePostTab !== "all");
     setSelectedProfileEmail(nextEmail);
   };
 
-  const openProfileByEmail = (email: string, profilePostTab: ProfilePostTab = "post") => {
+  const openProfileByEmail = (email: string, profilePostTab: ProfilePostTab = "all") => {
     if (!email) return;
     setSelectedProfilePostTab(profilePostTab);
+    setSelectedProfilePostFiltersOpen(profilePostTab !== "all");
     setSelectedProfileEmail(email);
   };
 
@@ -2729,7 +2735,6 @@ export default function Page() {
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const ctaLabel = post.cta === "live now" ? "post" : post.cta;
-    const profilePostTab = getProfilePostTabForPost(post);
     const commentUsernamesByEmail = new Map(
       accounts
         .filter((account) => account.googleProfile?.email && account.profile.username)
@@ -2776,24 +2781,26 @@ export default function Page() {
                 {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
               </p>
             )}
-            {!isSundayDump ? (
-              <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
-              </p>
-            ) : null}
-          </div>
-          <div className="ml-auto flex w-full justify-end">
-            {isStudentPost ? (
-              <button
-                type="button"
-                onClick={() => openProfileByEmail(post.authorEmail, profilePostTab)}
-                className="flex justify-end"
-              >
-                <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-              </button>
-            ) : (
-              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-            )}
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              {!isSundayDump ? (
+                <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                  {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
+                </p>
+              ) : (
+                <span />
+              )}
+              {isStudentPost ? (
+                <button
+                  type="button"
+                  onClick={() => openProfileByEmail(post.authorEmail)}
+                  className="ml-auto flex shrink-0 justify-end"
+                >
+                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+                </button>
+              ) : (
+                <Chip className="ml-auto shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardBody className="gap-4 p-5">
@@ -4181,7 +4188,8 @@ export default function Page() {
 
   const closeSelectedProfile = () => {
     setSelectedProfileEmail(null);
-    setSelectedProfilePostTab("post");
+    setSelectedProfilePostTab("all");
+    setSelectedProfilePostFiltersOpen(false);
 
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
@@ -8395,6 +8403,7 @@ export default function Page() {
         onOpenChange={(open) => !open && closeSelectedProfile()}
         size="full"
         scrollBehavior="inside"
+        hideCloseButton
       >
         <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
           {(onClose) => (
@@ -8447,10 +8456,17 @@ export default function Page() {
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFavoriteCount}</p>
                           <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
                         </button>
-                        <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProfilePostFiltersOpen(true);
+                            setSelectedProfilePostTab("all");
+                          }}
+                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        >
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileAuthoredPosts.length}</p>
                           <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
-                        </div>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -8490,21 +8506,23 @@ export default function Page() {
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">posts</p>
                           <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileFilteredPosts.length}</Chip>
                         </div>
-                        <Tabs
-                          selectedKey={selectedProfilePostTab}
-                          onSelectionChange={(key) => setSelectedProfilePostTab(key as ProfilePostTab)}
-                          aria-label="profile posts"
-                          classNames={{
-                            tabList: "grid w-full grid-cols-3 gap-1 rounded-[24px] bg-[#FFF0D0] p-1",
-                            cursor: "rounded-full bg-white",
-                            tab: "h-10 min-w-0 px-2 text-xs font-medium text-[#2C1A0E]",
-                            tabContent: "truncate group-data-[selected=true]:text-[#2C1A0E]",
-                          }}
-                        >
-                          {(["friend-review", "post", "sunday-dump"] as ProfilePostTab[]).map((tab) => (
-                            <Tab key={tab} title={getProfilePostTabLabel(tab)} />
-                          ))}
-                        </Tabs>
+                        {selectedProfilePostFiltersOpen ? (
+                          <Tabs
+                            selectedKey={selectedProfilePostTab}
+                            onSelectionChange={(key) => setSelectedProfilePostTab(key as ProfilePostTab)}
+                            aria-label="profile posts"
+                            classNames={{
+                              tabList: "grid w-full grid-cols-4 gap-1 rounded-[24px] bg-[#FFF0D0] p-1",
+                              cursor: "rounded-full bg-white",
+                              tab: "h-10 min-w-0 px-2 text-xs font-medium text-[#2C1A0E]",
+                              tabContent: "truncate group-data-[selected=true]:text-[#2C1A0E]",
+                            }}
+                          >
+                            {(["all", "friend-review", "post", "sunday-dump"] as ProfilePostTab[]).map((tab) => (
+                              <Tab key={tab} title={getProfilePostTabLabel(tab)} />
+                            ))}
+                          </Tabs>
+                        ) : null}
                         {selectedProfileFilteredPosts.length ? (
                           selectedProfileFilteredPosts.map((post) => renderFeedCard(post))
                         ) : (
