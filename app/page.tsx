@@ -1292,6 +1292,44 @@ function getDisplayTimestamp(value: string, fallbackOffset = 0) {
   return new Date(now.getFullYear(), monthIndex, Number(dayRaw), Number(hourRaw), Number(minuteRaw)).getTime();
 }
 
+function formatNotificationActorList(names: string[]) {
+  const cleanedNames = names.map((name) => name.trim()).filter(Boolean);
+  if (!cleanedNames.length) return "someone";
+
+  const uniqueNames = [...new Set(cleanedNames)];
+  const visibleNames = uniqueNames.slice(0, 4);
+  const remainingCount = uniqueNames.length - visibleNames.length;
+  const namesLabel = visibleNames.join(", ");
+
+  return remainingCount > 0 ? `${namesLabel} +${remainingCount} more` : namesLabel;
+}
+
+function groupLikesForNotifications(likes: PostLike[], gapMs = 2 * 60 * 60 * 1000) {
+  const sortedLikes = likes
+    .slice()
+    .sort((a, b) => getDisplayTimestamp(a.createdAt) - getDisplayTimestamp(b.createdAt));
+
+  return sortedLikes.reduce<PostLike[][]>((groups, like) => {
+    const currentGroup = groups[groups.length - 1];
+    if (!currentGroup?.length) {
+      groups.push([like]);
+      return groups;
+    }
+
+    const previousLike = currentGroup[currentGroup.length - 1];
+    const currentLikeTime = getDisplayTimestamp(like.createdAt);
+    const previousLikeTime = getDisplayTimestamp(previousLike.createdAt);
+
+    if (currentLikeTime - previousLikeTime >= gapMs) {
+      groups.push([like]);
+      return groups;
+    }
+
+    currentGroup.push(like);
+    return groups;
+  }, []);
+}
+
 function getPostTimestamp(post: Pick<AppPost, "createdAtIso">) {
   const timestamp = Date.parse(post.createdAtIso);
   return Number.isNaN(timestamp) ? 0 : timestamp;
@@ -2172,7 +2210,6 @@ export default function Page() {
   const likesViewerRows = (likesViewerBucket?.likes ?? [])
     .slice()
     .reverse()
-    .filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail)
     .map((like) => {
       const account = accountByEmail.get(like.authorEmail.toLowerCase()) ?? null;
       const username = account?.profile.username ? `@${account.profile.username}` : "";
@@ -2416,21 +2453,28 @@ export default function Page() {
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .flatMap((post) => {
       const bucket = getInteractionBucket(interactions, post.id);
+      const likeTargetLabel = post.cta === "friend review" ? "friend review" : "post";
+      const groupedLikeNotifications = groupLikesForNotifications(
+        bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail),
+      )
+        .map((group) => {
+          const latestLike = group[group.length - 1] ?? null;
+          if (!latestLike) return null;
+
+          return {
+            id: `like-group-${post.id}-${latestLike.authorEmail.toLowerCase()}-${latestLike.createdAt}`,
+            kind: "post_like" as const,
+            title: `${formatNotificationActorList(group.map((like) => like.authorName))} liked your ${likeTargetLabel}`,
+            detail: "",
+            postId: post.id,
+            picture: getAccountPicture(accountByEmail.get(latestLike.authorEmail.toLowerCase()) ?? null),
+            sortTime: getDisplayTimestamp(latestLike.createdAt),
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
       return [
-        ...bucket.likes
-          .filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail)
-          .slice()
-          .reverse()
-          .map((like, index) => ({
-            id: `like-${post.id}-${like.authorEmail.toLowerCase()}-${like.createdAt}-${index}`,
-            kind: "post_like" as const,
-            title: `${like.authorName} liked your post`,
-            detail: post.taggedPlaceName ? `${post.taggedPlaceName} is getting love.` : post.title || "your post got a like.",
-            postId: post.id,
-            picture: getAccountPicture(accountByEmail.get(like.authorEmail.toLowerCase()) ?? null),
-            sortTime: getDisplayTimestamp(like.createdAt, index),
-          })),
+        ...groupedLikeNotifications,
         ...bucket.comments
           .filter((comment) => !comment.hidden && comment.authorEmail.toLowerCase() !== currentUserEmail)
           .slice()
@@ -2645,7 +2689,9 @@ export default function Page() {
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
-    const showPostBody = Boolean(post.body.trim()) && (!isStudentPost || post.body.trim() !== profileMeta);
+    const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
+    const trimmedPostBody = post.body.trim();
+    const showPostBody = Boolean(trimmedPostBody) && (!isStudentPost || (trimmedPostBody !== profileMeta && trimmedPostBody !== schoolName));
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const ctaLabel = post.cta === "live now" ? "post" : post.cta;
@@ -2661,7 +2707,7 @@ export default function Page() {
         key={post.id}
         className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
-        <CardHeader className="flex flex-wrap items-start gap-3 px-5 pb-0 pt-5">
+        <CardHeader className="flex flex-wrap items-start gap-x-3 gap-y-2 px-5 pb-0 pt-5">
           {canOpenProfile ? (
             <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
               <Avatar
@@ -2685,7 +2731,7 @@ export default function Page() {
               className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
             />
           )}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[11rem]">
             {isStudentPost && canOpenProfile ? (
               <button type="button" onClick={() => openProfileByEmail(post.authorEmail)} className="break-words text-left font-semibold text-[#2C1A0E]">
                 {authorUsername}
@@ -2695,15 +2741,13 @@ export default function Page() {
                 {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
               </p>
             )}
-            {isSundayDump && isStudentPost ? (
-              profileMeta ? <p className="text-sm text-[#6c7289]">{profileMeta}</p> : null
-            ) : !isSundayDump ? (
+            {!isSundayDump ? (
               <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                 {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
               </p>
             ) : null}
           </div>
-          <Chip className="max-w-full shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+          <Chip className="max-w-full basis-full bg-[#FFF0D0] text-[#F5A623] sm:ml-auto sm:basis-auto">{ctaLabel}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
@@ -2815,8 +2859,8 @@ export default function Page() {
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
             <button
               type="button"
-              onClick={() => post.authorEmail.toLowerCase() === currentUserEmail && setLikesViewerPostId(post.id)}
-              className={`rounded-full bg-[#FFF6E0] px-3 py-2 ${post.authorEmail.toLowerCase() === currentUserEmail ? "transition hover:bg-[#FFE8B8]" : ""}`}
+              onClick={() => setLikesViewerPostId(post.id)}
+              className="rounded-full bg-[#FFF6E0] px-3 py-2 transition hover:bg-[#FFE8B8]"
             >
               {bucket.likes.length} likes
             </button>
@@ -6934,9 +6978,7 @@ export default function Page() {
                               <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
-                                    <p className="text-sm font-semibold text-[#2C1A0E]">
-                                      {comment.authorName} • {comment.schoolName}
-                                    </p>
+                                    <p className="text-sm font-semibold text-[#2C1A0E]">{comment.authorName}</p>
                                     <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
                                     {comment.hidden ? (
                                       <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">hidden from students</p>
@@ -7542,10 +7584,7 @@ export default function Page() {
                     return (
                       <div key={requestEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{requester.profile.fullName}</p>
-                        <p className="text-sm text-[#2C1A0E]">
-                          @{requester.profile.username}
-                          {requester.profile.schoolName ? ` • ${requester.profile.schoolName}` : ""}
-                        </p>
+                        <p className="text-sm text-[#2C1A0E]">@{requester.profile.username}</p>
                         <div className="mt-3 flex gap-2">
                           <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => acceptFriendRequest(requestEmail)}>
                             {copy.common.accept}
@@ -7628,10 +7667,7 @@ export default function Page() {
                     return (
                       <div key={friendEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{friend.profile.fullName}</p>
-                        <p className="text-sm text-[#2C1A0E]">
-                          @{friend.profile.username}
-                          {friend.profile.schoolName ? ` • ${friend.profile.schoolName}` : ""}
-                        </p>
+                        <p className="text-sm text-[#2C1A0E]">@{friend.profile.username}</p>
                         <div className="mt-3 flex gap-2">
                           <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={() => setSelectedProfileEmail(friendEmail)}>
                             {copy.common.viewProfile}
@@ -8219,7 +8255,7 @@ export default function Page() {
                       <Avatar src={item.picture} name={item.title} className="h-11 w-11 bg-[#F5A623] text-white" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-[#2C1A0E]">{item.title}</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p>
+                        {item.detail ? <p className="mt-1 text-sm text-[#2C1A0E]">{item.detail}</p> : null}
                         {item.kind === "friend_request" ? (
                           <div className="mt-3 flex gap-2">
                             <Button
