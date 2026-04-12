@@ -2747,7 +2747,7 @@ export default function Page() {
               </p>
             ) : null}
           </div>
-          <Chip className="max-w-full basis-full bg-[#FFF0D0] text-[#F5A623] sm:ml-auto sm:basis-auto">{ctaLabel}</Chip>
+          <Chip className="ml-auto max-w-full basis-full justify-self-end text-right bg-[#FFF0D0] text-[#F5A623] sm:basis-auto">{ctaLabel}</Chip>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
@@ -8351,48 +8351,60 @@ export default function Page() {
         <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
           {(onClose) => (
             <>
-              <ModalHeader className="flex items-start justify-between gap-3 border-b border-[#FFF0D0]">
-                <div className="flex items-start gap-3">
-                  <div className="h-20 w-20 overflow-hidden rounded-[28px] bg-[#FFF0D0] shadow-[0_10px_24px_rgba(44,26,14,0.08)]">
-                    <Avatar
-                      src={getAccountPicture(selectedProfileAccount)}
-                      name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
-                      className="h-full w-full rounded-none bg-[#FFF0D0] text-[#F5A623]"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">friend profile</p>
-                    <p className="mt-1 max-w-[12rem] break-words font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
-                      {selectedProfileAccount?.profile.fullName || "friend"}
-                    </p>
-                    <p className="mt-2 max-w-[13rem] break-all text-sm text-[#2C1A0E]">
-                      @{selectedProfileAccount?.profile.username || "crumbz-user"}
-                      {selectedProfileAccount?.profile.schoolName ? ` • ${selectedProfileAccount.profile.schoolName}` : ""}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setProfileDrawer("followers")}
-                        className="rounded-full bg-[#FFF0D0] px-3 py-1 text-sm text-[#2C1A0E] transition hover:bg-[#FFE8B8]"
-                      >
-                        {selectedProfileFollowersCount} followers
-                      </button>
-                      <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">{selectedProfileAuthoredPosts.length} posts</Chip>
+              <ModalHeader className="border-b border-[#FFF0D0]">
+                <div className="w-full">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E] sm:text-[2.2rem]">
+                        @{selectedProfileAccount?.profile.username || "crumbz-user"}
+                      </p>
+                      <p className="mt-2 text-sm text-[#6c7289]">their crumbz profile</p>
                     </div>
-                    {selectedProfileBio ? <p className="mt-3 max-w-[18rem] text-sm leading-6 text-[#6c7289]">{selectedProfileBio}</p> : null}
+                    <Button
+                      radius="full"
+                      variant="light"
+                      className="shrink-0 text-[#2C1A0E]"
+                      onPress={() => {
+                        closeSelectedProfile();
+                        onClose();
+                      }}
+                    >
+                      close
+                    </Button>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
+                    <div className="flex justify-start">
+                      <Avatar
+                        src={getAccountPicture(selectedProfileAccount)}
+                        name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
+                        className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                      />
+                    </div>
+                    <div className="min-w-0 pt-2">
+                      <div className="grid grid-cols-2 gap-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setProfileDrawer("followers")}
+                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        >
+                          <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFollowersCount}</p>
+                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
+                        </button>
+                        <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center">
+                          <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileAuthoredPosts.length}</p>
+                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-1">
+                    <p className="text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
+                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(selectedProfileAccount?.profile.city || "", selectedProfileAccount?.profile.schoolName || "")}</p>
+                    {selectedProfileBio ? <p className="pt-2 text-sm leading-6 text-[#6c7289]">{selectedProfileBio}</p> : null}
                   </div>
                 </div>
-                <Button
-                  radius="full"
-                  variant="light"
-                  className="text-[#2C1A0E]"
-                  onPress={() => {
-                    closeSelectedProfile();
-                    onClose();
-                  }}
-                >
-                  close
-                </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {!selectedProfileIsOwn ? (
@@ -8456,11 +8468,7 @@ export default function Page() {
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0] bg-[#fffaf2]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {profileDrawer === "followers"
-                      ? selectedProfileAccount && !selectedProfileIsOwn
-                        ? `${selectedProfileAccount.profile.fullName || selectedProfileAccount.profile.username}'s followers`
-                        : "your followers"
-                      : "your favorites"}
+                    {profileDrawer === "followers" ? "followers" : "your favorites"}
                   </p>
                   <p className="mt-2 text-sm text-[#6c7289]">
                     {profileDrawer === "followers"
