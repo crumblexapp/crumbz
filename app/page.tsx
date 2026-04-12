@@ -299,6 +299,7 @@ type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dum
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
+type ProfilePostTab = "friend-review" | "post" | "sunday-dump";
 type AppNavigationState = {
   studentTab: StudentTab;
   notificationsOpen: boolean;
@@ -1330,6 +1331,22 @@ function groupLikesForNotifications(likes: PostLike[], gapMs = 2 * 60 * 60 * 100
   }, []);
 }
 
+function getProfilePostTabForPost(post: Pick<AppPost, "type" | "cta">): ProfilePostTab {
+  if (post.type === "weekly-dump") return "sunday-dump";
+  return post.cta === "friend review" ? "friend-review" : "post";
+}
+
+function getProfilePostTabLabel(tab: ProfilePostTab) {
+  switch (tab) {
+    case "friend-review":
+      return "friend review";
+    case "sunday-dump":
+      return "sunday dumps";
+    default:
+      return "post";
+  }
+}
+
 function getPostTimestamp(post: Pick<AppPost, "createdAtIso">) {
   const timestamp = Date.parse(post.createdAtIso);
   return Number.isNaN(timestamp) ? 0 : timestamp;
@@ -1764,6 +1781,7 @@ export default function Page() {
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
+  const [selectedProfilePostTab, setSelectedProfilePostTab] = useState<ProfilePostTab>("post");
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
@@ -2233,6 +2251,10 @@ export default function Page() {
         .filter((post) => post.authorEmail.toLowerCase() === selectedProfileEmail.toLowerCase())
         .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     : [];
+  const selectedProfileFavoriteCount = selectedProfileAccount?.profile.favoritePlaceIds?.length ?? 0;
+  const selectedProfileFilteredPosts = selectedProfileAuthoredPosts.filter(
+    (post) => getProfilePostTabForPost(post) === selectedProfilePostTab,
+  );
   const selectedProfileTaggedPosts = selectedProfileUsername
     ? [...studentDailyPosts, ...studentWeeklyDumps]
         .filter((post) => post.authorEmail.toLowerCase() !== selectedProfileEmail?.toLowerCase())
@@ -2247,10 +2269,13 @@ export default function Page() {
   const selectedProfileFollowersCount = selectedProfileAccount?.profile.friends.length ?? 0;
   const selectedProfileBio = selectedProfileAccount?.profile.bio?.trim() ?? "";
   const profileDrawerOwner =
-    profileDrawer === "followers" && selectedProfileAccount && !selectedProfileIsOwn
+    profileDrawer && selectedProfileAccount && !selectedProfileIsOwn
       ? selectedProfileAccount
       : liveAccount ?? user;
   const profileDrawerFollowerEmails = (profileDrawerOwner?.profile.friends ?? []).filter((email) => email.toLowerCase() !== ADMIN_EMAIL);
+  const profileDrawerFavoriteSpots = profileDrawerOwner?.googleProfile?.email?.toLowerCase() === selectedProfileEmailLower && !selectedProfileIsOwn
+    ? selectedProfileLikedSpots
+    : profileLikedSpots;
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -2302,27 +2327,33 @@ export default function Page() {
   const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
   const dailyPostCity = liveProfile.city || currentFavoriteCity || "Warsaw";
   const dailyPostCityCenter = cityCenters[normalizeCityKey(dailyPostCity)] ?? favoriteCityCenter;
-  const profileLikedSpots = favoritePlaceIds
-    .map(
-      (placeId) =>
-        favoritePlaces.find((place) => place.id === placeId) ??
-        allFoodSpots.find((place) => place.id === placeId) ??
-        (() => {
-          const activity = favoriteActivities.find((item) => item.placeId === placeId) ?? null;
-          if (!activity) return null;
+  const resolveFavoritePlaces = (placeIds: string[], activities: FavoriteActivity[]) =>
+    placeIds
+      .map(
+        (placeId) =>
+          favoritePlaces.find((place) => place.id === placeId) ??
+          allFoodSpots.find((place) => place.id === placeId) ??
+          (() => {
+            const activity = activities.find((item) => item.placeId === placeId) ?? null;
+            if (!activity) return null;
 
-          return {
-            id: activity.placeId,
-            name: activity.placeName,
-            kind: activity.placeKind,
-            lat: activity.lat,
-            lon: activity.lon,
-            address: activity.placeAddress,
-          } satisfies FavoritePlace;
-        })() ??
-        null,
-    )
-    .filter((place): place is FavoritePlace => Boolean(place));
+            return {
+              id: activity.placeId,
+              name: activity.placeName,
+              kind: activity.placeKind,
+              lat: activity.lat,
+              lon: activity.lon,
+              address: activity.placeAddress,
+            } satisfies FavoritePlace;
+          })() ??
+          null,
+      )
+      .filter((place): place is FavoritePlace => Boolean(place));
+  const profileLikedSpots = resolveFavoritePlaces(favoritePlaceIds, favoriteActivities);
+  const selectedProfileLikedSpots = resolveFavoritePlaces(
+    selectedProfileAccount?.profile.favoritePlaceIds ?? [],
+    selectedProfileAccount?.profile.favoriteActivities ?? [],
+  );
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
@@ -2625,15 +2656,17 @@ export default function Page() {
   const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
   const notificationCount = unreadNotificationItems.length;
 
-  const openProfileByUsername = (username: string) => {
+  const openProfileByUsername = (username: string, profilePostTab: ProfilePostTab = "post") => {
     const matchedAccount = accountByUsername.get(username.trim().toLowerCase());
     const nextEmail = matchedAccount?.googleProfile?.email;
     if (!nextEmail) return;
+    setSelectedProfilePostTab(profilePostTab);
     setSelectedProfileEmail(nextEmail);
   };
 
-  const openProfileByEmail = (email: string) => {
+  const openProfileByEmail = (email: string, profilePostTab: ProfilePostTab = "post") => {
     if (!email) return;
+    setSelectedProfilePostTab(profilePostTab);
     setSelectedProfileEmail(email);
   };
 
@@ -2695,6 +2728,7 @@ export default function Page() {
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const ctaLabel = post.cta === "live now" ? "post" : post.cta;
+    const profilePostTab = getProfilePostTabForPost(post);
     const commentUsernamesByEmail = new Map(
       accounts
         .filter((account) => account.googleProfile?.email && account.profile.username)
@@ -2747,7 +2781,19 @@ export default function Page() {
               </p>
             ) : null}
           </div>
-          <Chip className="ml-auto max-w-full basis-full justify-self-end text-right bg-[#FFF0D0] text-[#F5A623] sm:basis-auto">{ctaLabel}</Chip>
+          <div className="ml-auto flex w-full justify-end">
+            {isStudentPost ? (
+              <button
+                type="button"
+                onClick={() => openProfileByEmail(post.authorEmail, profilePostTab)}
+                className="flex justify-end"
+              >
+                <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+              </button>
+            ) : (
+              <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+            )}
+          </div>
         </CardHeader>
         <CardBody className="gap-4 p-5">
           {isSundayDump ? (
@@ -4134,6 +4180,7 @@ export default function Page() {
 
   const closeSelectedProfile = () => {
     setSelectedProfileEmail(null);
+    setSelectedProfilePostTab("post");
 
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
@@ -8355,7 +8402,7 @@ export default function Page() {
                 <div className="w-full">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E] sm:text-[2.2rem]">
+                      <p className="break-all font-[family-name:var(--font-young-serif)] text-[1.55rem] leading-none text-[#2C1A0E] sm:text-[2.1rem]">
                         @{selectedProfileAccount?.profile.username || "crumbz-user"}
                       </p>
                       <p className="mt-2 text-sm text-[#6c7289]">their crumbz profile</p>
@@ -8382,7 +8429,7 @@ export default function Page() {
                       />
                     </div>
                     <div className="min-w-0 pt-2">
-                      <div className="grid grid-cols-2 gap-1 text-center">
+                      <div className="grid grid-cols-3 gap-1 text-center">
                         <button
                           type="button"
                           onClick={() => setProfileDrawer("followers")}
@@ -8390,6 +8437,14 @@ export default function Page() {
                         >
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFollowersCount}</p>
                           <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProfileDrawer("favorites")}
+                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        >
+                          <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFavoriteCount}</p>
+                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
                         </button>
                         <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center">
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileAuthoredPosts.length}</p>
@@ -8432,9 +8487,30 @@ export default function Page() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">posts</p>
-                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileAuthoredPosts.length}</Chip>
+                          <Chip className="bg-[#FFF0D0] text-[#F5A623]">{selectedProfileFilteredPosts.length}</Chip>
                         </div>
-                        {selectedProfileAuthoredPosts.map((post) => renderFeedCard(post))}
+                        <Tabs
+                          selectedKey={selectedProfilePostTab}
+                          onSelectionChange={(key) => setSelectedProfilePostTab(key as ProfilePostTab)}
+                          aria-label="profile posts"
+                          classNames={{
+                            tabList: "grid w-full grid-cols-3 gap-1 rounded-[24px] bg-[#FFF0D0] p-1",
+                            cursor: "rounded-full bg-white",
+                            tab: "h-10 min-w-0 px-2 text-xs font-medium text-[#2C1A0E]",
+                            tabContent: "truncate group-data-[selected=true]:text-[#2C1A0E]",
+                          }}
+                        >
+                          {(["friend-review", "post", "sunday-dump"] as ProfilePostTab[]).map((tab) => (
+                            <Tab key={tab} title={getProfilePostTabLabel(tab)} />
+                          ))}
+                        </Tabs>
+                        {selectedProfileFilteredPosts.length ? (
+                          selectedProfileFilteredPosts.map((post) => renderFeedCard(post))
+                        ) : (
+                          <div className="rounded-[22px] bg-white p-4 text-sm text-[#2C1A0E]">
+                            no {getProfilePostTabLabel(selectedProfilePostTab)} yet.
+                          </div>
+                        )}
                       </div>
                     ) : null}
                     {selectedProfileTaggedPosts.length ? (
@@ -8468,14 +8544,14 @@ export default function Page() {
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0] bg-[#fffaf2]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {profileDrawer === "followers" ? "followers" : "your favorites"}
+                    {profileDrawer === "followers" ? "followers" : "favorites"}
                   </p>
                   <p className="mt-2 text-sm text-[#6c7289]">
                     {profileDrawer === "followers"
                       ? selectedProfileAccount && !selectedProfileIsOwn
                         ? "their crumbz circle lives here."
                         : "your crumbz circle lives here."
-                      : "the spots you’ve saved most recently."}
+                      : "the spots saved on this crumbz profile."}
                   </p>
                 </div>
                 <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
@@ -8514,9 +8590,9 @@ export default function Page() {
                       no followers yet.
                     </div>
                   )
-                ) : profileLikedSpots.length ? (
+                ) : profileDrawerFavoriteSpots.length ? (
                   <div className="grid gap-3">
-                    {profileLikedSpots.map((place) => (
+                    {profileDrawerFavoriteSpots.map((place) => (
                       <button
                         key={place.id}
                         type="button"
