@@ -2273,9 +2273,6 @@ export default function Page() {
       ? selectedProfileAccount
       : liveAccount ?? user;
   const profileDrawerFollowerEmails = (profileDrawerOwner?.profile.friends ?? []).filter((email) => email.toLowerCase() !== ADMIN_EMAIL);
-  const profileDrawerFavoriteSpots = profileDrawerOwner?.googleProfile?.email?.toLowerCase() === selectedProfileEmailLower && !selectedProfileIsOwn
-    ? selectedProfileLikedSpots
-    : profileLikedSpots;
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -2354,6 +2351,10 @@ export default function Page() {
     selectedProfileAccount?.profile.favoritePlaceIds ?? [],
     selectedProfileAccount?.profile.favoriteActivities ?? [],
   );
+  const profileDrawerFavoriteSpots =
+    profileDrawerOwner?.googleProfile?.email?.toLowerCase() === selectedProfileEmailLower && !selectedProfileIsOwn
+      ? selectedProfileLikedSpots
+      : profileLikedSpots;
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
