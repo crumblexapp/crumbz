@@ -4678,6 +4678,12 @@ export default function Page() {
       return;
     }
 
+    if (targetPost?.authorEmail.toLowerCase() === currentUserEmail) {
+      setNotificationsOpen(false);
+      openOwnPost(targetPost);
+      return;
+    }
+
     setStudentTab("feed");
     setNotificationsOpen(false);
     window.setTimeout(() => {
