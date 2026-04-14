@@ -349,7 +349,7 @@ export default function FavoritesMap({
         <div className="border-t border-[#eadfcf] bg-[#fffaf2] p-4">
           <div className="rounded-[30px] border border-white/80 bg-[#fffaf2]/96 p-4 shadow-[0_24px_60px_rgba(43,21,48,0.12)] backdrop-blur">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2b1530]"
@@ -361,13 +361,15 @@ export default function FavoritesMap({
                   {selectedMutualFans.length ? copy.map.friendSaves(selectedMutualFans.length) : copy.map.newFoodSpot}
                 </span>
               </div>
-              <p className="mt-3 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">{selectedPreviewPlace.name}</p>
+              <p className="mt-3 break-words pr-1 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">
+                {selectedPreviewPlace.name}
+              </p>
               <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPreviewPlace.address}</p>
             </div>
             <button
               type="button"
               onClick={() => onToggleFavorite(selectedPreviewPlace)}
-              className={`flex h-14 w-14 items-center justify-center rounded-[20px] ${
+              className={`mt-1 flex h-14 w-14 shrink-0 items-center justify-center self-start rounded-[20px] ${
                 favoriteIds.includes(selectedPreviewPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
               }`}
               aria-label={`heart ${selectedPreviewPlace.name}`}
