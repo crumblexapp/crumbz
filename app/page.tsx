@@ -1772,6 +1772,8 @@ export default function Page() {
   const [postSignupPlaceResults, setPostSignupPlaceResults] = useState<FavoritePlace[]>([]);
   const [postSignupPlaceSearchLoading, setPostSignupPlaceSearchLoading] = useState(false);
   const [postSignupSelectedPlace, setPostSignupSelectedPlace] = useState<FavoritePlace | null>(null);
+  const [postSignupSelectedPlaces, setPostSignupSelectedPlaces] = useState<FavoritePlace[]>([]);
+  const [isSavingPostSignupFavorites, setIsSavingPostSignupFavorites] = useState(false);
   const [postSignupFriendQuery, setPostSignupFriendQuery] = useState("");
   const [postSignupNotice, setPostSignupNotice] = useState("");
   const [language, setLanguage] = useState<Language>(detectPreferredLanguage);
@@ -2303,6 +2305,7 @@ export default function Page() {
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     .slice(0, 6);
   const shouldShowCityPhotoFallback = liveProfile.friends.length === 0 && cityPhotoFallbackPosts.length > 0;
+  const shouldShowOnboardingCityPosts = liveProfile.friends.length === 0 && (onboardingCityPosts.length > 0 || adminFeedPosts.length > 0);
   const selectedOwnPost =
     selectedOwnPostSnapshot && selectedOwnPostSnapshot.id === selectedOwnPostId
       ? selectedOwnPostSnapshot
@@ -4809,6 +4812,8 @@ export default function Page() {
     setPostSignupPlaceResults([]);
     setPostSignupPlaceSearchLoading(false);
     setPostSignupSelectedPlace(null);
+    setPostSignupSelectedPlaces([]);
+    setIsSavingPostSignupFavorites(false);
     setPostSignupFriendQuery("");
     setPostSignupNotice("");
   };
@@ -4817,30 +4822,56 @@ export default function Page() {
     completePostSignupOnboarding();
   };
 
-  const savePostSignupFavoritePlace = async (place: FavoritePlace) => {
-    const placeId = place.id;
-    const nextFavoritePlaceIds = favoritePlaceIds.includes(placeId) ? favoritePlaceIds : [...favoritePlaceIds, placeId];
+  const togglePostSignupFavoritePlace = (place: FavoritePlace) => {
+    const exists = postSignupSelectedPlaces.some((item) => item.id === place.id);
+    setPostSignupSelectedPlace(exists && postSignupSelectedPlace?.id === place.id ? null : place);
+    setPostSignupSelectedPlaces((current) => (exists ? current.filter((item) => item.id !== place.id) : [...current, place]));
+    setPostSignupNotice("");
+  };
+
+  const continueFromPostSignupFavorites = async () => {
+    if (!postSignupSelectedPlaces.length) {
+      setPostSignupNotice(copy.onboarding.saveFavoritesFirst);
+      return;
+    }
+
+    setIsSavingPostSignupFavorites(true);
 
     try {
-      const result = await mutateAccountState({
-        action: "update_favorites",
-        currentEmail: user.googleProfile?.email ?? "",
-        favoritePlaceIds: nextFavoritePlaceIds,
-        favoritePlace: place,
-      });
+      let nextFavoritePlaceIds = [...favoritePlaceIds];
+      let latestResult: { accounts: StoredUser[]; user?: StoredUser | null } | null = null;
 
-      setAccounts(result.accounts);
-      if (result.user) {
-        persistUser(result.user as StoredUser);
+      for (const place of postSignupSelectedPlaces) {
+        if (nextFavoritePlaceIds.includes(place.id)) continue;
+
+        nextFavoritePlaceIds = [...nextFavoritePlaceIds, place.id];
+        latestResult = await mutateAccountState({
+          action: "update_favorites",
+          currentEmail: user.googleProfile?.email ?? "",
+          favoritePlaceIds: nextFavoritePlaceIds,
+          favoritePlace: place,
+        });
       }
 
-      setPostSignupSelectedPlace(place);
-      setPostSignupNotice(`${place.name} is in your favorites now.`);
+      if (latestResult) {
+        setAccounts(latestResult.accounts);
+        if (latestResult.user) {
+          persistUser(latestResult.user as StoredUser);
+        }
+      }
+
+      setPostSignupNotice(
+        postSignupSelectedPlaces.length === 1
+          ? `${postSignupSelectedPlaces[0].name} is in your favorites now.`
+          : `${postSignupSelectedPlaces.length} spots are in your favorites now.`,
+      );
       setPostSignupPlaceQuery("");
       setPostSignupPlaceResults([]);
       setPostSignupOnboardingStep(2);
     } catch (error) {
-      setPostSignupNotice(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
+      setPostSignupNotice(error instanceof Error ? error.message : "saving those spots didn’t stick. try again.");
+    } finally {
+      setIsSavingPostSignupFavorites(false);
     }
   };
 
@@ -6733,15 +6764,14 @@ export default function Page() {
                     {displayedSearchResults.length ? (
                       <div className="grid gap-2">
                         {displayedSearchResults.map((place) => {
-                          const isSelected = postSignupSelectedPlace?.id === place.id;
+                          const isSelected = postSignupSelectedPlaces.some((item) => item.id === place.id);
 
                           return (
                           <button
                             key={place.id}
                             type="button"
                             onClick={() => {
-                              setPostSignupSelectedPlace(place);
-                              setPostSignupNotice("");
+                              togglePostSignupFavoritePlace(place);
                             }}
                             className={`rounded-[22px] border px-4 py-4 text-left transition-colors ${
                               isSelected
@@ -6774,33 +6804,62 @@ export default function Page() {
                             key={place.id}
                             type="button"
                             onClick={() => {
-                              setPostSignupSelectedPlace(place);
-                              setPostSignupNotice("");
+                              togglePostSignupFavoritePlace(place);
                             }}
-                            className="flex items-center justify-between rounded-[22px] bg-[#FFF7E8] px-4 py-4 text-left"
+                            className={`flex items-center justify-between rounded-[22px] border px-4 py-4 text-left transition-colors ${
+                              postSignupSelectedPlaces.some((item) => item.id === place.id)
+                                ? "border-[#F5A623] bg-[#fff4dd] shadow-[0_10px_24px_rgba(245,166,35,0.16)]"
+                                : "border-transparent bg-[#FFF7E8]"
+                            }`}
                           >
                             <div className="min-w-0">
                               <p className="truncate font-semibold text-[#2C1A0E]">{place.name}</p>
                               <p className="mt-1 truncate text-sm text-[#6c7289]">{place.address}</p>
                             </div>
-                            <span className="text-[#B56D19]">→</span>
+                            <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                              postSignupSelectedPlaces.some((item) => item.id === place.id)
+                                ? "bg-[#F5A623] text-white"
+                                : "text-[#B56D19]"
+                            }`}>
+                              {postSignupSelectedPlaces.some((item) => item.id === place.id) ? "✓" : "→"}
+                            </span>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {postSignupSelectedPlace ? (
+                    {postSignupSelectedPlaces.length ? (
                       <div className="rounded-[24px] border border-[#FFD7A1] bg-[#fff9ef] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.pickedSpot}</p>
-                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{postSignupSelectedPlace.name}</p>
-                        <p className="mt-1 text-sm text-[#6c7289]">{postSignupSelectedPlace.address}</p>
-                        <Button radius="full" className="mt-4 bg-[#F5A623] text-white" onPress={() => void savePostSignupFavoritePlace(postSignupSelectedPlace)}>
-                          {copy.onboarding.addToFavorites}
-                        </Button>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.pickedSpot}</p>
+                          <Chip className="bg-[#FFF0D0] text-[#B56D19]">{copy.onboarding.selectedSpots(postSignupSelectedPlaces.length)}</Chip>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {postSignupSelectedPlaces.map((place) => (
+                            <button
+                              key={place.id}
+                              type="button"
+                              onClick={() => togglePostSignupFavoritePlace(place)}
+                              className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[#2C1A0E]"
+                            >
+                              {place.name} ×
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
 
-                    <div className="mt-auto flex flex-col items-start gap-3 pt-2">
+                    <div className="mt-auto flex w-full flex-col items-start gap-3 pt-6">
+                      <Button
+                        radius="full"
+                        size="lg"
+                        className="w-full bg-[#2C1A0E] text-white disabled:opacity-50"
+                        isLoading={isSavingPostSignupFavorites}
+                        isDisabled={!postSignupSelectedPlaces.length}
+                        onPress={() => void continueFromPostSignupFavorites()}
+                      >
+                        {copy.onboarding.continue}
+                      </Button>
                       <button type="button" onClick={() => setPostSignupOnboardingStep(2)} className="text-sm font-medium text-[#6c7289]">
                         {copy.onboarding.skipForNow}
                       </button>
@@ -6849,6 +6908,7 @@ export default function Page() {
                       </div>
                     </div>
 
+                    {shouldShowOnboardingCityPosts ? (
                     <div>
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -6876,6 +6936,7 @@ export default function Page() {
                         ))}
                       </div>
                     </div>
+                    ) : null}
 
                     <div className="mt-auto flex flex-col gap-3 pt-2">
                       <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={completePostSignupOnboarding}>
