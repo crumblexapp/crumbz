@@ -1796,6 +1796,7 @@ export default function Page() {
   const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({});
   const [openReplyComposerId, setOpenReplyComposerId] = useState<string | null>(null);
   const [openCommentReactionPickerId, setOpenCommentReactionPickerId] = useState<string | null>(null);
+  const [commentReactionViewer, setCommentReactionViewer] = useState<{ postId: string; commentId: string; emoji: string } | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
@@ -2263,6 +2264,22 @@ export default function Page() {
       const query = likesViewerSearch.trim().toLowerCase();
       if (!query) return true;
       return row.fullName.toLowerCase().includes(query) || row.username.toLowerCase().includes(query);
+    });
+  const commentReactionViewerPost = commentReactionViewer ? posts.find((post) => post.id === commentReactionViewer.postId) ?? null : null;
+  const commentReactionViewerComment =
+    commentReactionViewerPost && commentReactionViewer
+      ? getInteractionBucket(interactions, commentReactionViewerPost.id).comments.find((comment) => comment.id === commentReactionViewer.commentId) ?? null
+      : null;
+  const commentReactionViewerRows = (commentReactionViewerComment?.reactions ?? [])
+    .filter((reaction) => reaction.emoji === commentReactionViewer?.emoji)
+    .map((reaction) => {
+      const account = accountByEmail.get(reaction.authorEmail.toLowerCase()) ?? null;
+      return {
+        email: reaction.authorEmail,
+        username: account?.profile.username ? `@${account.profile.username}` : "",
+        fullName: account?.profile.fullName || reaction.authorName || reaction.authorEmail,
+        picture: getAccountPicture(account),
+      };
     });
   const selectedProfileAccount = selectedProfileEmail ? accountByEmail.get(selectedProfileEmail.toLowerCase()) ?? null : null;
   const selectedProfileUsername = selectedProfileAccount?.profile.username.trim().toLowerCase() ?? "";
@@ -2740,12 +2757,7 @@ export default function Page() {
     const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const canReply = currentUserEmail === postAuthorEmail.toLowerCase() || currentUserEmail === comment.authorEmail.toLowerCase();
-    const reactionSummary = Array.from(
-      (comment.reactions ?? []).reduce((acc, reaction) => {
-        acc.set(reaction.emoji, (acc.get(reaction.emoji) ?? 0) + 1);
-        return acc;
-      }, new Map<string, number>()),
-    );
+    const reactionSummary = [...new Set((comment.reactions ?? []).map((reaction) => reaction.emoji))];
     const replyComposerKey = `${postId}:${comment.id}`;
     const reactionPickerId = `${postId}:${comment.id}`;
 
@@ -2779,10 +2791,15 @@ export default function Page() {
 
         {reactionSummary.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {reactionSummary.map(([emoji, count]) => (
-              <span key={`${comment.id}-${emoji}`} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#2C1A0E]">
-                {emoji} {count}
-              </span>
+            {reactionSummary.map((emoji) => (
+              <button
+                key={`${comment.id}-${emoji}`}
+                type="button"
+                onClick={() => setCommentReactionViewer({ postId, commentId: comment.id, emoji })}
+                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#2C1A0E]"
+              >
+                {emoji}
+              </button>
             ))}
           </div>
         ) : null}
@@ -9375,6 +9392,60 @@ export default function Page() {
                   </div>
                 ) : (
                   <p className="text-sm text-[#6c7289]">no likes to show yet.</p>
+                )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(commentReactionViewer)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCommentReactionViewer(null);
+          }
+        }}
+        placement="bottom-center"
+        scrollBehavior="inside"
+      >
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">comment reactions</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                    {commentReactionViewer?.emoji ?? ""} reactions
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-4 bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
+                {commentReactionViewerRows.length ? (
+                  <div className="space-y-3">
+                    {commentReactionViewerRows.map((row) => (
+                      <button
+                        key={`${row.email}-${row.username}`}
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          openProfileByEmail(row.email);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-[18px] bg-white px-3 py-3 text-left ring-1 ring-[#FFF0D0]"
+                      >
+                        <Avatar src={row.picture} name={row.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#2C1A0E]">{row.username || row.fullName}</p>
+                          <p className="truncate text-sm text-[#6c7289]">{row.fullName}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6c7289]">no reactions to show yet.</p>
                 )}
               </ModalBody>
             </>
