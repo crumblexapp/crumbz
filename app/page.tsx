@@ -5068,6 +5068,7 @@ export default function Page() {
     const trimmedCta = composer.cta.trim();
     const hasTaggedPlace = Boolean(adminPostTaggedPlace);
     const hasMedia = composer.mediaKind !== "none";
+    const hasAttachedMedia = composer.mediaUrls.length > 0;
 
     if (isUploadingMedia) {
       setStorageNotice("media is still uploading. wait a second, then publish.");
@@ -5084,8 +5085,8 @@ export default function Page() {
       return;
     }
 
-    if (composer.mediaKind !== "none" && !composer.mediaUrls.length) {
-      setStorageNotice("add the media file first so students can actually see it.");
+    if (composer.mediaKind !== "none" && !hasAttachedMedia) {
+      setStorageNotice("your media file is not attached yet. wait for the preview to show up, or pick the file again.");
       return;
     }
 
@@ -6881,8 +6882,10 @@ export default function Page() {
                                   setComposer((current) => ({
                                     ...current,
                                     mediaKind: (typeof selected === "string" ? selected : "none") as MediaKind,
-                                    mediaUrls: typeof selected === "string" && selected !== "none" ? current.mediaUrls : [],
+                                    mediaUrls:
+                                      typeof selected === "string" && selected !== "none" && selected === current.mediaKind ? current.mediaUrls : [],
                                   }));
+                                  setStorageNotice("");
                                   setComposerMediaInputKey((current) => current + 1);
                                 }}
                                 classNames={{
@@ -7051,6 +7054,11 @@ export default function Page() {
                                       </p>
                                     </div>
                                   ) : null}
+                                  <p className="text-sm text-[#6c7289]">
+                                    {composer.mediaUrls.length
+                                      ? `${composer.mediaUrls.length} ${composer.mediaKind === "carousel" ? "file(s) ready" : "file ready"} for this post.`
+                                      : "no media attached yet."}
+                                  </p>
                                   {composer.mediaUrls.length ? (
                                     <div className="rounded-[20px] bg-[#FFF0D0] p-3">
                                       <PostMediaPreview
