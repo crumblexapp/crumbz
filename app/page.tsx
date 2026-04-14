@@ -1795,6 +1795,8 @@ export default function Page() {
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
   const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({});
   const [openReplyComposerId, setOpenReplyComposerId] = useState<string | null>(null);
+  const [openCommentReactionPickerId, setOpenCommentReactionPickerId] = useState<string | null>(null);
+  const [highlightedCommentReaction, setHighlightedCommentReaction] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
@@ -1823,6 +1825,7 @@ export default function Page() {
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const favoritesMapSectionRef = useRef<HTMLElement | null>(null);
+  const commentReactionPressTimerRef = useRef<number | null>(null);
   const userRef = useRef(user);
   const accountsRef = useRef(accounts);
   const isApplyingHistoryNavigationRef = useRef(false);
@@ -2746,9 +2749,43 @@ export default function Page() {
       }, new Map<string, number>()),
     );
     const replyComposerKey = `${postId}:${comment.id}`;
+    const reactionPickerId = `${postId}:${comment.id}`;
 
     return (
-      <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
+      <div
+        key={comment.id}
+        className="relative rounded-[18px] bg-[#FFF0D0] p-3"
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse") return;
+          beginCommentReactionLongPress(reactionPickerId);
+        }}
+        onPointerMove={(event) => {
+          if (openCommentReactionPickerId !== reactionPickerId) return;
+          updateHighlightedReactionFromPoint(event.clientX, event.clientY);
+        }}
+        onPointerUp={() => endCommentReactionGesture(postId, comment.id)}
+        onPointerCancel={() => {
+          clearCommentReactionPressTimer();
+          setOpenCommentReactionPickerId(null);
+          setHighlightedCommentReaction(null);
+        }}
+      >
+        {openCommentReactionPickerId === reactionPickerId ? (
+          <div className="absolute -top-14 left-2 right-2 z-20 flex items-center justify-between gap-1 rounded-full bg-[#2C1A0E] px-2 py-2 shadow-[0_18px_40px_rgba(44,26,14,0.24)]">
+            {COMMENT_REACTION_OPTIONS.map((emoji) => (
+              <button
+                key={`${comment.id}-${emoji}`}
+                type="button"
+                data-comment-reaction-emoji={emoji}
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-[1.35rem] transition ${
+                  highlightedCommentReaction === emoji ? "bg-white text-[#2C1A0E] scale-110" : "text-white"
+                }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <p className="text-sm font-semibold text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
         <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
 
@@ -2762,28 +2799,13 @@ export default function Page() {
           </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap gap-2">
-          {COMMENT_REACTION_OPTIONS.map((emoji) => {
-            const reacted = (comment.reactions ?? []).some(
-              (reaction) => reaction.authorEmail.toLowerCase() === currentUserEmail && reaction.emoji === emoji,
-            );
-
-            return (
-              <button
-                key={`${comment.id}-${emoji}`}
-                type="button"
-                onClick={() => toggleCommentReaction(postId, comment.id, emoji)}
-                className={`rounded-full px-2.5 py-1 text-sm transition ${reacted ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}`}
-              >
-                {emoji}
-              </button>
-            );
-          })}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-[#6c7289]">hold to react</p>
           {canReply ? (
             <button
               type="button"
               onClick={() => setOpenReplyComposerId((current) => (current === replyComposerKey ? null : replyComposerKey))}
-              className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#2C1A0E]"
+              className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-[#6c7289]"
             >
               reply
             </button>
@@ -5677,6 +5699,38 @@ export default function Page() {
       [draftKey]: "",
     }));
     setOpenReplyComposerId(null);
+  };
+
+  const clearCommentReactionPressTimer = () => {
+    if (!commentReactionPressTimerRef.current) return;
+    clearTimeout(commentReactionPressTimerRef.current);
+    commentReactionPressTimerRef.current = null;
+  };
+
+  const updateHighlightedReactionFromPoint = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY)?.closest("[data-comment-reaction-emoji]");
+    const emoji = element instanceof HTMLElement ? element.dataset.commentReactionEmoji ?? null : null;
+    setHighlightedCommentReaction(emoji);
+    return emoji;
+  };
+
+  const beginCommentReactionLongPress = (pickerId: string) => {
+    clearCommentReactionPressTimer();
+    commentReactionPressTimerRef.current = window.setTimeout(() => {
+      setOpenCommentReactionPickerId(pickerId);
+      setHighlightedCommentReaction(null);
+      commentReactionPressTimerRef.current = null;
+    }, 280);
+  };
+
+  const endCommentReactionGesture = (postId: string, commentId: string) => {
+    clearCommentReactionPressTimer();
+    if (openCommentReactionPickerId !== `${postId}:${commentId}`) return;
+    if (highlightedCommentReaction) {
+      toggleCommentReaction(postId, commentId, highlightedCommentReaction);
+    }
+    setOpenCommentReactionPickerId(null);
+    setHighlightedCommentReaction(null);
   };
 
   const sharePost = async (postId: string) => {
