@@ -93,6 +93,50 @@ function dedupeByKey<T extends JsonRecord>(items: T[], getKey: (item: T) => stri
   });
 }
 
+function mergeCommentReactions(currentValue: unknown, proposedValue: unknown) {
+  const currentReactions = normalizeObjectArray(currentValue);
+  const proposedReactions = normalizeObjectArray(proposedValue);
+
+  return dedupeByKey(
+    [...currentReactions, ...proposedReactions],
+    (reaction) =>
+      [
+        normalizeText(reaction.emoji),
+        normalizeEmail(reaction.authorEmail),
+        normalizeText(reaction.createdAt),
+      ].join(":"),
+  );
+}
+
+function mergeCommentReplies(currentValue: unknown, proposedValue: unknown) {
+  const currentReplies = normalizeObjectArray(currentValue);
+  const proposedReplies = normalizeObjectArray(proposedValue);
+
+  return dedupeByKey(
+    [...currentReplies, ...proposedReplies],
+    (reply) => normalizeText(reply.id) || [normalizeEmail(reply.authorEmail), normalizeText(reply.createdAt)].join(":"),
+  );
+}
+
+function mergeCommentRecords(currentComment: JsonRecord | null, proposedComment: JsonRecord | null) {
+  if (!currentComment) return proposedComment;
+  if (!proposedComment) return currentComment;
+
+  const merged = {
+    ...currentComment,
+    ...proposedComment,
+  };
+
+  if ("hidden" in currentComment) {
+    merged.hidden = currentComment.hidden;
+  }
+
+  merged.reactions = mergeCommentReactions(currentComment.reactions, proposedComment.reactions);
+  merged.replies = mergeCommentReplies(currentComment.replies, proposedComment.replies);
+
+  return merged;
+}
+
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -375,23 +419,37 @@ function mergeInteractionsForUser(currentRaw: unknown, proposedRaw: unknown, ver
       const currentBucket = current[postId] ?? { comments: [], shares: [], likes: [] };
       const proposedBucket = proposed[postId] ?? { comments: [], shares: [], likes: [] };
 
-      const preservedComments = currentBucket.comments.filter((comment) => normalizeEmail(comment.authorEmail) !== verifiedEmail);
-      const preservedCommentIds = new Set(preservedComments.map((comment) => String(comment.id ?? "")).filter(Boolean));
-      const nextOwnComments = dedupeByKey(
-        proposedBucket.comments
-          .filter(
-            (comment) =>
-              normalizeEmail(comment.authorEmail) === verifiedEmail &&
-              typeof comment.id === "string" &&
-              !preservedCommentIds.has(comment.id),
-          )
-          .map((comment) => {
-            const nextComment = { ...comment };
-            delete nextComment.hidden;
-            return nextComment;
-          }),
-        (comment) => String(comment.id ?? ""),
-      );
+      const commentsById = new Map<string, JsonRecord>();
+      const commentsWithoutId: JsonRecord[] = [];
+
+      currentBucket.comments.forEach((comment) => {
+        const commentId = normalizeText(comment.id);
+        if (!commentId) {
+          commentsWithoutId.push(comment);
+          return;
+        }
+
+        commentsById.set(commentId, comment);
+      });
+
+      proposedBucket.comments.forEach((comment) => {
+        const commentId = normalizeText(comment.id);
+        const sanitizedComment = { ...comment };
+        delete sanitizedComment.hidden;
+
+        if (!commentId) {
+          commentsWithoutId.push(sanitizedComment);
+          return;
+        }
+
+        const currentComment = commentsById.get(commentId) ?? null;
+        commentsById.set(commentId, mergeCommentRecords(currentComment, sanitizedComment) as JsonRecord);
+      });
+
+      const nextComments = [
+        ...commentsWithoutId,
+        ...Array.from(commentsById.values()),
+      ];
 
       const preservedShares = currentBucket.shares.filter((share) => normalizeEmail(share.authorEmail) !== verifiedEmail);
       const nextOwnShares = dedupeByKey(
@@ -406,7 +464,7 @@ function mergeInteractionsForUser(currentRaw: unknown, proposedRaw: unknown, ver
       return [
         postId,
         {
-          comments: [...preservedComments, ...nextOwnComments],
+          comments: nextComments,
           shares: [...preservedShares, ...nextOwnShares],
           likes: [...preservedLikes, ...nextOwnLikes],
         },
