@@ -953,9 +953,13 @@ function isStandaloneDisplayMode() {
   return iosStandalone || window.matchMedia("(display-mode: standalone)").matches;
 }
 
-function getReferralLink(referralCode: string) {
+function getReferralLink(referralCode: string, profileUsername?: string) {
   if (typeof window === "undefined") return "";
   const url = new URL(window.location.origin);
+  const trimmedUsername = profileUsername?.trim().toLowerCase();
+  if (trimmedUsername) {
+    url.searchParams.set("profile", trimmedUsername);
+  }
   url.searchParams.set("ref", referralCode);
   return url.toString();
 }
@@ -1957,8 +1961,9 @@ export default function Page() {
   const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
   const postSignupReferralUrl = useMemo(() => {
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
-    return referralCode ? getReferralLink(referralCode) : "";
-  }, [liveProfile.referralCode]);
+    const referralUsername = liveProfile.username?.trim().toLowerCase();
+    return referralCode ? getReferralLink(referralCode, referralUsername) : "";
+  }, [liveProfile.referralCode, liveProfile.username]);
   const copy = useMemo(() => translations[language], [language]);
   const navigationState = useMemo<AppNavigationState>(
     () => ({
@@ -4530,12 +4535,13 @@ export default function Page() {
 
   const shareReferralLink = async () => {
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
+    const referralUsername = liveProfile.username?.trim().toLowerCase();
     if (!referralCode) {
       setReferralNotice("your referral link is getting ready. try again in a second.");
       return;
     }
 
-    const referralLink = getReferralLink(referralCode);
+    const referralLink = getReferralLink(referralCode, referralUsername);
     if (!referralLink) {
       setReferralNotice("that referral link didn’t load right. try again in a sec.");
       return;
@@ -4990,12 +4996,13 @@ export default function Page() {
     if (typeof window === "undefined") return;
 
     const referralCode = liveProfile.referralCode?.trim().toUpperCase();
+    const referralUsername = liveProfile.username?.trim().toLowerCase();
     if (!referralCode) {
       setReferralNotice("your referral link is getting ready. try again in a second.");
       return;
     }
 
-    const referralLink = getReferralLink(referralCode);
+    const referralLink = getReferralLink(referralCode, referralUsername);
     if (!referralLink) {
       setReferralNotice("that referral link didn’t load right. try again in a sec.");
       return;
