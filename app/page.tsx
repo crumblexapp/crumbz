@@ -1808,6 +1808,11 @@ export default function Page() {
   const [dailyPostPlaceQuery, setDailyPostPlaceQuery] = useState("");
   const [dailyPostPlaceResults, setDailyPostPlaceResults] = useState<FavoritePlace[]>([]);
   const [dailyPostPlaceSearchLoading, setDailyPostPlaceSearchLoading] = useState(false);
+  const [adminPostCity, setAdminPostCity] = useState<string>(cityOptions[0]);
+  const [adminPostTaggedPlace, setAdminPostTaggedPlace] = useState<FavoritePlace | null>(null);
+  const [adminPostPlaceQuery, setAdminPostPlaceQuery] = useState("");
+  const [adminPostPlaceResults, setAdminPostPlaceResults] = useState<FavoritePlace[]>([]);
+  const [adminPostPlaceSearchLoading, setAdminPostPlaceSearchLoading] = useState(false);
   const [dailyPostTasteTag, setDailyPostTasteTag] = useState<AppPost["tasteTag"]>("");
   const [dailyPostPriceTag, setDailyPostPriceTag] = useState<AppPost["priceTag"]>("");
   const [isUploadingDailyPost, setIsUploadingDailyPost] = useState(false);
@@ -2388,6 +2393,7 @@ export default function Page() {
   const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
   const dailyPostCity = liveProfile.city || currentFavoriteCity || "Warsaw";
   const dailyPostCityCenter = cityCenters[normalizeCityKey(dailyPostCity)] ?? favoriteCityCenter;
+  const adminPostCityCenter = cityCenters[normalizeCityKey(adminPostCity)] ?? favoriteCityCenter;
   const resolveFavoritePlaces = (placeIds: string[], activities: FavoriteActivity[]) =>
     placeIds
       .map(
@@ -3734,6 +3740,48 @@ export default function Page() {
   }, [dailyPostCity, dailyPostCityCenter, dailyPostPlaceQuery, favoritePlaces]);
 
   useEffect(() => {
+    const query = adminPostPlaceQuery.trim();
+
+    if (query.length < 2) {
+      setAdminPostPlaceResults([]);
+      setAdminPostPlaceSearchLoading(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setAdminPostPlaceSearchLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          city: adminPostCity,
+          query,
+          lat: String(adminPostCityCenter[0]),
+          lon: String(adminPostCityCenter[1]),
+        });
+        const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
+        const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
+        const liveResults = (payload.places ?? []).slice(0, 8);
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(adminPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+
+        setAdminPostPlaceResults((liveResults.length ? liveResults : fallbackResults).slice(0, 8));
+      } catch {
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(adminPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+        setAdminPostPlaceResults(fallbackResults.slice(0, 8));
+      } finally {
+        setAdminPostPlaceSearchLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [adminPostCity, adminPostCityCenter, adminPostPlaceQuery, favoritePlaces]);
+
+  useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   }, [accounts]);
@@ -4993,6 +5041,11 @@ export default function Page() {
     setEditingPostId(null);
     setPendingDeletePostId(null);
     setStorageNotice(notice);
+    setAdminPostCity(liveProfile.city || currentFavoriteCity || cityOptions[0]);
+    setAdminPostTaggedPlace(null);
+    setAdminPostPlaceQuery("");
+    setAdminPostPlaceResults([]);
+    setAdminPostPlaceSearchLoading(false);
     setComposer({
       title: "",
       body: "",
@@ -5051,13 +5104,13 @@ export default function Page() {
       authorEmail: ADMIN_EMAIL,
       schoolName: "",
       weekKey: "",
-      taggedPlaceId: "",
-      taggedPlaceName: "",
-      taggedPlaceKind: "",
-      taggedPlaceAddress: "",
-      taggedPlaceLat: null,
-      taggedPlaceLon: null,
-      taggedPlaceCity: "",
+      taggedPlaceId: adminPostTaggedPlace?.id ?? "",
+      taggedPlaceName: adminPostTaggedPlace?.name ?? "",
+      taggedPlaceKind: adminPostTaggedPlace?.kind ?? "",
+      taggedPlaceAddress: adminPostTaggedPlace?.address ?? "",
+      taggedPlaceLat: adminPostTaggedPlace?.lat ?? null,
+      taggedPlaceLon: adminPostTaggedPlace?.lon ?? null,
+      taggedPlaceCity: adminPostTaggedPlace ? adminPostCity : "",
       tasteTag: "",
       priceTag: "",
     };
@@ -5144,8 +5197,26 @@ export default function Page() {
   };
 
   const startEditingPost = (post: AppPost) => {
+    const taggedCity = post.taggedPlaceCity || liveProfile.city || currentFavoriteCity || cityOptions[0];
+    const taggedCityCenter = cityCenters[normalizeCityKey(taggedCity)] ?? favoriteCityCenter;
     setPendingDeletePostId(null);
     setEditingPostId(post.id);
+    setAdminPostCity(taggedCity);
+    setAdminPostTaggedPlace(
+      post.taggedPlaceId && post.taggedPlaceName
+        ? {
+            id: post.taggedPlaceId,
+            name: post.taggedPlaceName,
+            kind: post.taggedPlaceKind || "food spot",
+            lat: post.taggedPlaceLat ?? taggedCityCenter[0],
+            lon: post.taggedPlaceLon ?? taggedCityCenter[1],
+            address: post.taggedPlaceAddress,
+          }
+        : null,
+    );
+    setAdminPostPlaceQuery("");
+    setAdminPostPlaceResults([]);
+    setAdminPostPlaceSearchLoading(false);
     setComposer({
       title: post.title,
       body: post.body,
@@ -6860,6 +6931,80 @@ export default function Page() {
                                 onValueChange={(value) => setComposer((current) => ({ ...current, cta: value }))}
                                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                               />
+                              <div className="space-y-3 rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] p-4">
+                                <div>
+                                  <p className="text-sm font-medium text-[#2C1A0E]">tag a shop for this post</p>
+                                  <p className="mt-1 text-sm text-[#6c7289]">use this when crumbz is working from a spot, dropping a chapter there, or sending people to a specific place.</p>
+                                </div>
+                                <Select
+                                  label="city"
+                                  labelPlacement="outside"
+                                  radius="lg"
+                                  selectedKeys={[adminPostCity]}
+                                  onSelectionChange={(keys) => {
+                                    const selected = Array.from(keys)[0];
+                                    if (typeof selected !== "string" || selected === adminPostCity) return;
+                                    setAdminPostCity(selected);
+                                    setAdminPostTaggedPlace(null);
+                                    setAdminPostPlaceQuery("");
+                                    setAdminPostPlaceResults([]);
+                                    if (storageNotice) setStorageNotice("");
+                                  }}
+                                  classNames={{
+                                    trigger: "bg-white shadow-none border border-[#FFF0D0]",
+                                  }}
+                                >
+                                  {cityOptions.map((city) => (
+                                    <SelectItem key={city}>{city}</SelectItem>
+                                  ))}
+                                </Select>
+                                <Input
+                                  label="shop"
+                                  labelPlacement="outside"
+                                  value={adminPostPlaceQuery}
+                                  onValueChange={(value) => {
+                                    setAdminPostPlaceQuery(value);
+                                    if (storageNotice) setStorageNotice("");
+                                  }}
+                                  placeholder={`search in ${adminPostCity}`}
+                                  startContent={<span className="text-[#B56D19]">⌕</span>}
+                                  classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
+                                />
+                                {adminPostTaggedPlace ? (
+                                  <div className="flex items-start justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
+                                    <div className="min-w-0">
+                                      <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{adminPostTaggedPlace.kind}</p>
+                                      <p className="mt-1 text-base font-semibold text-[#2C1A0E]">{adminPostTaggedPlace.name}</p>
+                                      <p className="mt-1 text-sm text-[#6c7289]">{adminPostTaggedPlace.address}</p>
+                                    </div>
+                                    <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setAdminPostTaggedPlace(null)}>
+                                      change
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                {adminPostPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">searching spots...</p> : null}
+                                {adminPostPlaceResults.length ? (
+                                  <div className="grid gap-2">
+                                    {adminPostPlaceResults.map((place) => (
+                                      <button
+                                        key={place.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setAdminPostTaggedPlace(place);
+                                          setAdminPostPlaceQuery("");
+                                          setAdminPostPlaceResults([]);
+                                          if (storageNotice) setStorageNotice("");
+                                        }}
+                                        className="rounded-[18px] bg-white px-4 py-3 text-left"
+                                      >
+                                        <p className="text-sm font-semibold text-[#2C1A0E]">{place.name}</p>
+                                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#B56D19]">{place.kind}</p>
+                                        <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
                               {composer.mediaKind !== "none" ? (
                                 <div className="grid gap-3">
                                   <label className="text-sm font-medium text-[#2C1A0E]">
