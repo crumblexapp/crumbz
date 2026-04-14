@@ -6699,6 +6699,16 @@ export default function Page() {
 
                 {postSignupOnboardingStep === 1 ? (
                   <div className="flex flex-1 flex-col gap-5 p-6">
+                    {(() => {
+                      const displayedSearchResults = postSignupSelectedPlace
+                        ? [
+                            postSignupSelectedPlace,
+                            ...postSignupPlaceResults.filter((place) => place.id !== postSignupSelectedPlace.id).slice(0, 2),
+                          ]
+                        : postSignupPlaceResults.slice(0, 5);
+
+                      return (
+                        <>
                     <Input
                       radius="full"
                       value={postSignupPlaceQuery}
@@ -6714,9 +6724,12 @@ export default function Page() {
 
                     {postSignupPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">{copy.onboarding.lookingUpSpots}</p> : null}
 
-                    {postSignupPlaceResults.length ? (
+                    {displayedSearchResults.length ? (
                       <div className="grid gap-2">
-                        {postSignupPlaceResults.slice(0, 5).map((place) => (
+                        {displayedSearchResults.map((place) => {
+                          const isSelected = postSignupSelectedPlace?.id === place.id;
+
+                          return (
                           <button
                             key={place.id}
                             type="button"
@@ -6724,12 +6737,26 @@ export default function Page() {
                               setPostSignupSelectedPlace(place);
                               setPostSignupNotice("");
                             }}
-                            className="rounded-[22px] border border-[#FFF0D0] bg-white px-4 py-4 text-left"
+                            className={`rounded-[22px] border px-4 py-4 text-left transition-colors ${
+                              isSelected
+                                ? "border-[#F5A623] bg-[#fff4dd] shadow-[0_10px_24px_rgba(245,166,35,0.16)]"
+                                : "border-[#FFF0D0] bg-white"
+                            }`}
                           >
-                            <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
-                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
+                                <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                              </div>
+                              {isSelected ? (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5A623] text-sm font-semibold text-white">
+                                  ✓
+                                </span>
+                              ) : null}
+                            </div>
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
 
@@ -6773,6 +6800,9 @@ export default function Page() {
                       </button>
                       {postSignupNotice ? <p className="text-sm text-[#B56D19]">{postSignupNotice}</p> : null}
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : null}
 
