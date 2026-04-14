@@ -1345,6 +1345,32 @@ function groupLikesForNotifications(likes: PostLike[], gapMs = 2 * 60 * 60 * 100
   }, []);
 }
 
+function groupTimedNotificationItems<T extends { createdAt: string }>(items: T[], gapMs = 2 * 60 * 60 * 1000) {
+  const sortedItems = items
+    .slice()
+    .sort((a, b) => getDisplayTimestamp(a.createdAt) - getDisplayTimestamp(b.createdAt));
+
+  return sortedItems.reduce<T[][]>((groups, item) => {
+    const currentGroup = groups[groups.length - 1];
+    if (!currentGroup?.length) {
+      groups.push([item]);
+      return groups;
+    }
+
+    const previousItem = currentGroup[currentGroup.length - 1];
+    const currentTime = getDisplayTimestamp(item.createdAt);
+    const previousTime = getDisplayTimestamp(previousItem.createdAt);
+
+    if (currentTime - previousTime >= gapMs) {
+      groups.push([item]);
+      return groups;
+    }
+
+    currentGroup.push(item);
+    return groups;
+  }, []);
+}
+
 function getProfilePostTabForPost(post: Pick<AppPost, "type" | "cta">): Exclude<ProfilePostTab, "all"> {
   if (post.type === "weekly-dump") return "sunday-dump";
   return post.cta === "friend review" ? "friend-review" : "post";
@@ -2573,8 +2599,56 @@ export default function Page() {
           })),
       ];
     });
+  const ownCommentActivityNotifications = posts.flatMap((post) => {
+    const bucket = getInteractionBucket(interactions, post.id);
+
+    return bucket.comments
+      .filter((comment) => comment.authorEmail.toLowerCase() === currentUserEmail)
+      .flatMap((comment) => {
+        const groupedReactionNotifications = groupTimedNotificationItems(
+          (comment.reactions ?? []).filter((reaction) => reaction.authorEmail.toLowerCase() !== currentUserEmail),
+        )
+          .map((group) => {
+            const latestReaction = group[group.length - 1] ?? null;
+            if (!latestReaction) return null;
+
+            return {
+              id: `comment-reaction-${post.id}-${comment.id}-${latestReaction.authorEmail.toLowerCase()}-${latestReaction.createdAt}`,
+              kind: "comment_reaction" as const,
+              title: `${formatNotificationActorList(group.map((reaction) => reaction.authorName))} reacted to your comment`,
+              detail: comment.text,
+              postId: post.id,
+              picture: getAccountPicture(accountByEmail.get(latestReaction.authorEmail.toLowerCase()) ?? null),
+              sortTime: getDisplayTimestamp(latestReaction.createdAt),
+            };
+          })
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+        const groupedReplyNotifications = groupTimedNotificationItems(
+          (comment.replies ?? []).filter((reply) => reply.authorEmail.toLowerCase() !== currentUserEmail),
+        )
+          .map((group) => {
+            const latestReply = group[group.length - 1] ?? null;
+            if (!latestReply) return null;
+
+            return {
+              id: `comment-reply-${post.id}-${comment.id}-${latestReply.authorEmail.toLowerCase()}-${latestReply.createdAt}`,
+              kind: "comment_reply" as const,
+              title: `${formatNotificationActorList(group.map((reply) => reply.authorName))} replied to your comment`,
+              detail: comment.text,
+              postId: post.id,
+              picture: getAccountPicture(accountByEmail.get(latestReply.authorEmail.toLowerCase()) ?? null),
+              sortTime: getDisplayTimestamp(latestReply.createdAt),
+            };
+          })
+          .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+        return [...groupedReactionNotifications, ...groupedReplyNotifications];
+      });
+  });
   const rawNotificationItems = [
     ...ownPostActivityNotifications,
+    ...ownCommentActivityNotifications,
     ...announcements.slice(0, 4).map((announcement) => {
       const copy = buildAnnouncementNotification({
         title: announcement.title,
@@ -2685,7 +2759,7 @@ export default function Page() {
   const notificationItems = rawNotificationItems
     .filter((item): item is NonNullable<(typeof rawNotificationItems)[number]> => Boolean(item))
     .sort((a, b) => ("sortTime" in b ? b.sortTime : 0) - ("sortTime" in a ? a.sortTime : 0)) as Array<
-    | { id: string; kind: "post_like" | "post_comment" | "post_share"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
+    | { id: string; kind: "post_like" | "post_comment" | "post_share" | "comment_reaction" | "comment_reply"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
     | { id: string; kind: "dare_reminder"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "announcement"; title: string; detail: string; picture?: string; sortTime: number }
     | { id: string; kind: "friend_request"; title: string; detail: string; email: string; picture?: string; sortTime: number }

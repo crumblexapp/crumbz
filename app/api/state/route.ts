@@ -141,6 +141,56 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function formatActorList(names: string[]) {
+  const cleanedNames = [...new Set(names.map((name) => normalizeText(name)).filter(Boolean))];
+  if (!cleanedNames.length) return "someone";
+
+  const visibleNames = cleanedNames.slice(0, 3);
+  const remainingCount = cleanedNames.length - visibleNames.length;
+  const namesLabel = visibleNames.join(", ");
+  return remainingCount > 0 ? `${namesLabel} +${remainingCount} more` : namesLabel;
+}
+
+function parseDisplayTimestamp(value: unknown) {
+  const text = normalizeText(value);
+  const parsed = Date.parse(text);
+  if (!Number.isNaN(parsed)) return parsed;
+
+  const match = text.match(/^(\d{1,2}) ([A-Za-z]{3}), (\d{2}):(\d{2})$/);
+  if (!match) return 0;
+
+  const [, dayRaw, monthRaw, hourRaw, minuteRaw] = match;
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const monthIndex = months.indexOf(monthRaw.toLowerCase());
+  if (monthIndex === -1) return 0;
+
+  const now = new Date();
+  return new Date(now.getFullYear(), monthIndex, Number(dayRaw), Number(hourRaw), Number(minuteRaw)).getTime();
+}
+
+function groupTimedItems<T extends JsonRecord>(items: T[], gapMs = 2 * 60 * 60 * 1000) {
+  const sortedItems = items
+    .slice()
+    .sort((a, b) => parseDisplayTimestamp(a.createdAt) - parseDisplayTimestamp(b.createdAt));
+
+  return sortedItems.reduce<T[][]>((groups, item) => {
+    const currentGroup = groups[groups.length - 1];
+    if (!currentGroup?.length) {
+      groups.push([item]);
+      return groups;
+    }
+
+    const previousItem = currentGroup[currentGroup.length - 1];
+    if (parseDisplayTimestamp(item.createdAt) - parseDisplayTimestamp(previousItem.createdAt) >= gapMs) {
+      groups.push([item]);
+      return groups;
+    }
+
+    currentGroup.push(item);
+    return groups;
+  }, []);
+}
+
 function extractTaggedUsernames(value: unknown) {
   const text = normalizeText(value);
   if (!text) return [];
@@ -350,6 +400,86 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
         url: `/?post=${encodeURIComponent(postId)}`,
         tag: `tagged-post-${postId}`,
       });
+    }),
+  );
+}
+
+async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previousInteractionsRaw: unknown) {
+  if (!webPushEnabled) return;
+
+  const nextInteractions = normalizeInteractionsMap(nextInteractionsRaw);
+  const previousInteractions = normalizeInteractionsMap(previousInteractionsRaw);
+
+  await Promise.all(
+    Object.entries(nextInteractions).map(async ([postId, nextBucket]) => {
+      const previousCommentsById = new Map(
+        (previousInteractions[postId]?.comments ?? [])
+          .map((comment) => [normalizeText(comment.id), comment] as const)
+          .filter(([commentId]) => Boolean(commentId)),
+      );
+
+      await Promise.all(
+        nextBucket.comments.map(async (comment) => {
+          const commentId = normalizeText(comment.id);
+          const commentOwnerEmail = normalizeEmail(comment.authorEmail);
+          if (!commentId || !commentOwnerEmail) return;
+
+          const previousComment = previousCommentsById.get(commentId) ?? null;
+          const previousReactions = normalizeObjectArray(previousComment?.reactions);
+          const nextReactions = normalizeObjectArray(comment.reactions);
+          const previousReactionKeys = new Set(
+            previousReactions.map((reaction) => [normalizeText(reaction.emoji), normalizeEmail(reaction.authorEmail), normalizeText(reaction.createdAt)].join(":")),
+          );
+          const newReactions = nextReactions.filter((reaction) => {
+            const actorEmail = normalizeEmail(reaction.authorEmail);
+            if (!actorEmail || actorEmail === commentOwnerEmail) return false;
+            const key = [normalizeText(reaction.emoji), actorEmail, normalizeText(reaction.createdAt)].join(":");
+            return !previousReactionKeys.has(key);
+          });
+
+          const previousReplies = normalizeObjectArray(previousComment?.replies);
+          const nextReplies = normalizeObjectArray(comment.replies);
+          const previousReplyKeys = new Set(
+            previousReplies.map((reply) => normalizeText(reply.id) || [normalizeEmail(reply.authorEmail), normalizeText(reply.createdAt)].join(":")),
+          );
+          const newReplies = nextReplies.filter((reply) => {
+            const actorEmail = normalizeEmail(reply.authorEmail);
+            if (!actorEmail || actorEmail === commentOwnerEmail) return false;
+            const key = normalizeText(reply.id) || [actorEmail, normalizeText(reply.createdAt)].join(":");
+            return !previousReplyKeys.has(key);
+          });
+
+          const groupedReactionNotifications = groupTimedItems(newReactions).map((group) => {
+            const latest = group[group.length - 1] ?? null;
+            if (!latest) return null;
+
+            return sendPushToEmails([commentOwnerEmail], {
+              title: `${formatActorList(group.map((reaction) => normalizeText(reaction.authorName) || "someone"))} reacted to your comment`,
+              body: normalizeText(comment.text) || "open crumbz to see the comment.",
+              url: `/?post=${encodeURIComponent(postId)}`,
+              tag: `comment-reaction-${postId}-${commentId}-${normalizeText(latest.createdAt)}`,
+            });
+          });
+
+          const groupedReplyNotifications = groupTimedItems(newReplies).map((group) => {
+            const latest = group[group.length - 1] ?? null;
+            if (!latest) return null;
+
+            return sendPushToEmails([commentOwnerEmail], {
+              title: `${formatActorList(group.map((reply) => normalizeText(reply.authorName) || "someone"))} replied to your comment`,
+              body: normalizeText(comment.text) || "open crumbz to see the thread.",
+              url: `/?post=${encodeURIComponent(postId)}`,
+              tag: `comment-reply-${postId}-${commentId}-${normalizeText(latest.createdAt)}`,
+            });
+          });
+
+          await Promise.all(
+            [...groupedReactionNotifications, ...groupedReplyNotifications].filter(
+              (task): task is Promise<void> => Boolean(task),
+            ),
+          );
+        }),
+      );
     }),
   );
 }
@@ -716,6 +846,10 @@ export async function POST(request: Request) {
 
   if ("posts" in updates && !identity.isAdmin) {
     await sendFriendPostPush(nextRow.posts, stateData?.posts, accountState?.accounts ?? stateData?.accounts ?? []);
+  }
+
+  if ("interactions" in (body ?? {}) && !identity.isAdmin) {
+    await sendCommentInteractionPush(nextInteractions, fallbackMeta.interactions);
   }
 
   if ("posts" in updates && identity.isAdmin) {
