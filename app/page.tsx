@@ -51,6 +51,8 @@ const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
 const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
 const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
 const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
+const POST_SIGNUP_ONBOARDING_PENDING_PREFIX = "crumbz-post-signup-onboarding-pending-v1";
+const POST_SIGNUP_ONBOARDING_DONE_PREFIX = "crumbz-post-signup-onboarding-done-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -683,6 +685,14 @@ function readUser(): StoredUser {
   }
 
   return normalized;
+}
+
+function getPostSignupOnboardingPendingKey(email: string) {
+  return `${POST_SIGNUP_ONBOARDING_PENDING_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getPostSignupOnboardingDoneKey(email: string) {
+  return `${POST_SIGNUP_ONBOARDING_DONE_PREFIX}:${email.toLowerCase()}`;
 }
 
 async function getAuthAccessToken() {
@@ -1756,6 +1766,14 @@ export default function Page() {
   const [referralNotice, setReferralNotice] = useState("");
   const [pendingReferralCode, setPendingReferralCode] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
+  const [postSignupOnboardingOpen, setPostSignupOnboardingOpen] = useState(false);
+  const [postSignupOnboardingStep, setPostSignupOnboardingStep] = useState(0);
+  const [postSignupPlaceQuery, setPostSignupPlaceQuery] = useState("");
+  const [postSignupPlaceResults, setPostSignupPlaceResults] = useState<FavoritePlace[]>([]);
+  const [postSignupPlaceSearchLoading, setPostSignupPlaceSearchLoading] = useState(false);
+  const [postSignupSelectedPlace, setPostSignupSelectedPlace] = useState<FavoritePlace | null>(null);
+  const [postSignupFriendQuery, setPostSignupFriendQuery] = useState("");
+  const [postSignupNotice, setPostSignupNotice] = useState("");
   const [language, setLanguage] = useState<Language>(detectPreferredLanguage);
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -2259,6 +2277,15 @@ export default function Page() {
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const onboardingCityPosts = [...studentDailyPosts, ...studentWeeklyDumps]
+    .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+    .filter((post) => {
+      const authorCity = accountByEmail.get(post.authorEmail.toLowerCase())?.profile.city ?? "";
+      const postCity = post.taggedPlaceCity ?? authorCity;
+      return normalizeCityKey(postCity) === normalizeCityKey(liveProfile.city);
+    })
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+    .slice(0, 3);
   const selectedOwnPost =
     selectedOwnPostSnapshot && selectedOwnPostSnapshot.id === selectedOwnPostId
       ? selectedOwnPostSnapshot
@@ -2388,6 +2415,19 @@ export default function Page() {
 
     return username === normalizedFriendQuery;
   });
+  const normalizedPostSignupFriendQuery = postSignupFriendQuery.trim().replace(/^@+/, "").toLowerCase();
+  const exactPostSignupFriendMatch = accounts.find((account) => {
+    const email = account.googleProfile?.email ?? "";
+    const username = account.profile.username?.trim().toLowerCase() ?? "";
+    if (!normalizedPostSignupFriendQuery || !username) return false;
+    if (email.toLowerCase() === ADMIN_EMAIL) return false;
+    if (email.toLowerCase() === currentUserEmail) return false;
+    if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (liveProfile.incomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+
+    return username === normalizedPostSignupFriendQuery;
+  });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
   const favoriteActivities = liveProfile.favoriteActivities ?? [];
   const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
@@ -2418,6 +2458,23 @@ export default function Page() {
       )
       .filter((place): place is FavoritePlace => Boolean(place));
   const profileLikedSpots = resolveFavoritePlaces(favoritePlaceIds, favoriteActivities);
+  const postSignupPopularPlaces = allFoodSpots
+    .map((place) => {
+      const saves = accounts.filter((account) => {
+        if (!(account.profile.favoritePlaceIds ?? []).includes(place.id)) return false;
+        const matchingActivity = (account.profile.favoriteActivities ?? []).find((activity) => activity.placeId === place.id);
+        const placeCity = matchingActivity?.city || account.profile.city;
+        return normalizeCityKey(placeCity) === normalizeCityKey(liveProfile.city);
+      }).length;
+
+      return {
+        ...place,
+        saves,
+      };
+    })
+    .filter((place) => place.saves > 0)
+    .sort((a, b) => b.saves - a.saves || a.name.localeCompare(b.name))
+    .slice(0, 5);
   const selectedProfileLikedSpots = resolveFavoritePlaces(
     selectedProfileAccount?.profile.favoritePlaceIds ?? [],
     selectedProfileAccount?.profile.favoriteActivities ?? [],
@@ -3602,6 +3659,25 @@ export default function Page() {
   }, [user.signedIn]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !user.signedIn || isAdmin || needsOnboarding) {
+      setPostSignupOnboardingOpen(false);
+      return;
+    }
+
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+
+    const hasPendingOnboarding = window.localStorage.getItem(getPostSignupOnboardingPendingKey(email)) === "true";
+    const hasCompletedOnboarding = window.localStorage.getItem(getPostSignupOnboardingDoneKey(email)) === "true";
+
+    if (hasPendingOnboarding && !hasCompletedOnboarding) {
+      setPostSignupOnboardingOpen(true);
+      setPostSignupOnboardingStep(0);
+      setPostSignupNotice("");
+    }
+  }, [isAdmin, needsOnboarding, user.googleProfile?.email, user.signedIn]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || user.signedIn) {
       setShowInstallPrompt(false);
       setInstallPromptMode(null);
@@ -3687,6 +3763,56 @@ export default function Page() {
       window.clearTimeout(timeoutId);
     };
   }, [currentFavoriteCity, isAdmin, user.signedIn]);
+
+  useEffect(() => {
+    if (!postSignupOnboardingOpen) return;
+
+    const query = postSignupPlaceQuery.trim();
+    if (query.length < 2) {
+      setPostSignupPlaceResults([]);
+      setPostSignupPlaceSearchLoading(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      setPostSignupPlaceSearchLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          city: liveProfile.city || dailyPostCity,
+          query,
+          lat: String(dailyPostCityCenter[0]),
+          lon: String(dailyPostCityCenter[1]),
+        });
+        const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
+        const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
+        const liveResults = (payload.places ?? []).slice(0, 8);
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(liveProfile.city || dailyPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+
+        setPostSignupPlaceResults((liveResults.length ? liveResults : fallbackResults).slice(0, 8));
+      } catch {
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(liveProfile.city || dailyPostCity)].filter(
+          (place, index, list) =>
+            place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
+        );
+        setPostSignupPlaceResults(fallbackResults.slice(0, 8));
+      } finally {
+        setPostSignupPlaceSearchLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    dailyPostCity,
+    dailyPostCityCenter,
+    favoritePlaces,
+    liveProfile.city,
+    postSignupOnboardingOpen,
+    postSignupPlaceQuery,
+  ]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
@@ -4045,6 +4171,10 @@ export default function Page() {
             setAccounts(sharedAccounts);
           }
           persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(getPostSignupOnboardingPendingKey(profile.email), "true");
+            window.localStorage.removeItem(getPostSignupOnboardingDoneKey(profile.email));
+          }
           setFullName(profile.name);
           setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
           setIsStudent(null);
@@ -4647,6 +4777,73 @@ export default function Page() {
       .catch((error) => {
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
       });
+  };
+
+  const completePostSignupOnboarding = () => {
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (typeof window !== "undefined" && email) {
+      window.localStorage.setItem(getPostSignupOnboardingDoneKey(email), "true");
+      window.localStorage.removeItem(getPostSignupOnboardingPendingKey(email));
+    }
+
+    setPostSignupOnboardingOpen(false);
+    setPostSignupOnboardingStep(0);
+    setPostSignupPlaceQuery("");
+    setPostSignupPlaceResults([]);
+    setPostSignupPlaceSearchLoading(false);
+    setPostSignupSelectedPlace(null);
+    setPostSignupFriendQuery("");
+    setPostSignupNotice("");
+  };
+
+  const skipPostSignupWelcome = () => {
+    completePostSignupOnboarding();
+  };
+
+  const savePostSignupFavoritePlace = async (place: FavoritePlace) => {
+    const placeId = place.id;
+    const nextFavoritePlaceIds = favoritePlaceIds.includes(placeId) ? favoritePlaceIds : [...favoritePlaceIds, placeId];
+
+    try {
+      const result = await mutateAccountState({
+        action: "update_favorites",
+        currentEmail: user.googleProfile?.email ?? "",
+        favoritePlaceIds: nextFavoritePlaceIds,
+        favoritePlace: place,
+      });
+
+      setAccounts(result.accounts);
+      if (result.user) {
+        persistUser(result.user as StoredUser);
+      }
+
+      setPostSignupSelectedPlace(place);
+      setPostSignupNotice(`${place.name} is in your favorites now.`);
+      setPostSignupPlaceQuery("");
+      setPostSignupPlaceResults([]);
+      setPostSignupOnboardingStep(2);
+    } catch (error) {
+      setPostSignupNotice(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
+    }
+  };
+
+  const copyPostSignupProfileLink = async () => {
+    if (!profileShareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(profileShareUrl);
+      setPostSignupNotice("profile link copied.");
+    } catch {
+      setPostSignupNotice("copy didn’t work here, but your profile link is ready below.");
+    }
+  };
+
+  const sendPostSignupFriendRequest = async () => {
+    const friendEmail = exactPostSignupFriendMatch?.googleProfile?.email ?? "";
+    if (!friendEmail) return;
+
+    await addFriend(friendEmail);
+    setPostSignupFriendQuery("");
   };
 
   const sendAnnouncement = (event: FormEvent<HTMLFormElement>) => {
@@ -6403,6 +6600,256 @@ export default function Page() {
                 enter crumbz
               </Button>
             </form>
+          </motion.section>
+        </div>
+      </main>
+    );
+  }
+
+  if (postSignupOnboardingOpen) {
+    const progressDots = [0, 1, 2];
+    const firstName = user.profile.fullName.split(" ")[0] || liveProfile.fullName.split(" ")[0] || "friend";
+
+    return (
+      <main className="min-h-screen bg-white text-[#2C1A0E]">
+        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.92),_transparent_28%),linear-gradient(180deg,_#fff8ec_0%,_#fff2dc_100%)] px-5 py-6 font-[family-name:var(--font-manrope)]">
+          <motion.section
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex-1"
+          >
+            <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+              <CardBody className="gap-5 p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      src={currentUserPicture}
+                      name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
+                      className="h-14 w-14 bg-[#FFF0D0] text-[#F5A623]"
+                    />
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.24em] text-[#B56D19]">
+                        {postSignupOnboardingStep === 0 ? "welcome" : `step ${postSignupOnboardingStep} of 3`}
+                      </p>
+                      <p className="mt-1 text-sm text-[#6c7289]">setting up your first real crumbz moments.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {progressDots.map((dot) => (
+                      <span
+                        key={dot}
+                        className={`h-2.5 w-2.5 rounded-full ${dot <= postSignupOnboardingStep ? "bg-[#F5A623]" : "bg-[#FFE1B0]"}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {postSignupOnboardingStep === 0 ? (
+                  <div className="space-y-5">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.35rem] leading-none text-[#2C1A0E]">
+                        welcome to crumbz, {firstName.toLowerCase()}
+                      </p>
+                      <p className="mt-3 text-base leading-7 text-[#6c7289]">find food through people you trust, then build a feed that actually feels personal.</p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {[
+                        "save a spot you already love",
+                        "find friends who know where to eat",
+                        `peek at what people in ${liveProfile.city} are posting`,
+                      ].map((item) => (
+                        <div key={item} className="rounded-[24px] bg-[#FFF7E8] px-4 py-4 text-base text-[#2C1A0E]">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-3 pt-2">
+                      <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={() => setPostSignupOnboardingStep(1)}>
+                        let&apos;s go
+                      </Button>
+                      <button type="button" onClick={skipPostSignupWelcome} className="text-sm font-medium text-[#6c7289]">
+                        skip for now
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {postSignupOnboardingStep === 1 ? (
+                  <div className="space-y-5">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        where&apos;s a spot you love in {liveProfile.city}?
+                      </p>
+                      <p className="mt-3 text-base leading-7 text-[#6c7289]">save one place and your account already starts feeling like yours.</p>
+                    </div>
+
+                    <Input
+                      radius="full"
+                      value={postSignupPlaceQuery}
+                      onValueChange={(value) => {
+                        setPostSignupPlaceQuery(value);
+                        setPostSignupSelectedPlace(null);
+                        setPostSignupNotice("");
+                      }}
+                      placeholder="search restaurants, cafes, bars..."
+                      startContent={<span className="text-[#B56D19]">🔍</span>}
+                      classNames={{ inputWrapper: "bg-[#FFF7E8] border border-[#FFF0D0] shadow-none" }}
+                    />
+
+                    {postSignupPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">looking up good spots near you...</p> : null}
+
+                    {postSignupPlaceResults.length ? (
+                      <div className="grid gap-2">
+                        {postSignupPlaceResults.slice(0, 5).map((place) => (
+                          <button
+                            key={place.id}
+                            type="button"
+                            onClick={() => {
+                              setPostSignupSelectedPlace(place);
+                              setPostSignupNotice("");
+                            }}
+                            className="rounded-[22px] border border-[#FFF0D0] bg-white px-4 py-4 text-left"
+                          >
+                            <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">popular in {liveProfile.city}</p>
+                      <div className="mt-3 grid gap-2">
+                        {(postSignupPopularPlaces.length ? postSignupPopularPlaces : getFallbackFavoritePlaces(liveProfile.city).slice(0, 5)).map((place) => (
+                          <button
+                            key={place.id}
+                            type="button"
+                            onClick={() => {
+                              setPostSignupSelectedPlace(place);
+                              setPostSignupNotice("");
+                            }}
+                            className="flex items-center justify-between rounded-[22px] bg-[#FFF7E8] px-4 py-4 text-left"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-[#2C1A0E]">{place.name}</p>
+                              <p className="mt-1 truncate text-sm text-[#6c7289]">{place.address}</p>
+                            </div>
+                            <span className="text-[#B56D19]">→</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {postSignupSelectedPlace ? (
+                      <div className="rounded-[24px] border border-[#FFD7A1] bg-[#fff9ef] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">picked spot</p>
+                        <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{postSignupSelectedPlace.name}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">{postSignupSelectedPlace.address}</p>
+                        <Button radius="full" className="mt-4 bg-[#F5A623] text-white" onPress={() => void savePostSignupFavoritePlace(postSignupSelectedPlace)}>
+                          add to favorites
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col items-start gap-3">
+                      <button type="button" onClick={() => setPostSignupOnboardingStep(2)} className="text-sm font-medium text-[#6c7289]">
+                        skip for now
+                      </button>
+                      {postSignupNotice ? <p className="text-sm text-[#B56D19]">{postSignupNotice}</p> : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {postSignupOnboardingStep === 2 ? (
+                  <div className="space-y-5">
+                    <div>
+                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                        your feed gets better fast
+                      </p>
+                      <p className="mt-3 text-base leading-7 text-[#6c7289]">
+                        add a friend if you want, then peek at what people in {liveProfile.city} are eating while your circle grows.
+                      </p>
+                    </div>
+
+                    <div className="rounded-[26px] bg-[#FFF7E8] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">find friends</p>
+                      <Input
+                        radius="full"
+                        value={postSignupFriendQuery}
+                        onValueChange={(value) => {
+                          setPostSignupFriendQuery(value);
+                          setPostSignupNotice("");
+                        }}
+                        placeholder="search by username"
+                        classNames={{ inputWrapper: "mt-3 bg-white border border-[#FFF0D0] shadow-none" }}
+                      />
+                      {exactPostSignupFriendMatch ? (
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-[20px] bg-white p-3">
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-[#2C1A0E]">{exactPostSignupFriendMatch.profile.fullName || exactPostSignupFriendMatch.googleProfile?.name}</p>
+                            <p className="truncate text-sm text-[#6c7289]">@{exactPostSignupFriendMatch.profile.username}</p>
+                          </div>
+                          <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => void sendPostSignupFriendRequest()}>
+                            add
+                          </Button>
+                        </div>
+                      ) : postSignupFriendQuery.trim() ? (
+                        <p className="mt-3 text-sm text-[#6c7289]">no exact username match yet. you can still share your link below.</p>
+                      ) : null}
+
+                      <div className="mt-4 rounded-[20px] border border-[#FFD7A1] bg-[#fff9ef] p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">share your profile</p>
+                        <p className="mt-2 break-all rounded-[16px] bg-white px-3 py-3 text-sm text-[#2C1A0E]">{profileShareUrl}</p>
+                        <Button radius="full" variant="flat" className="mt-3 bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => void copyPostSignupProfileLink()}>
+                          copy link
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">what&apos;s happening in {liveProfile.city}</p>
+                          <p className="mt-1 text-sm text-[#6c7289]">a few real posts so the app already feels alive.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{onboardingCityPosts.length || adminFeedPosts.length ? "live" : "soon"}</Chip>
+                      </div>
+
+                      <div className="mt-3 grid gap-3">
+                        {(onboardingCityPosts.length ? onboardingCityPosts : adminFeedPosts.slice(0, 3)).map((post) => (
+                          <div key={post.id} className="overflow-hidden rounded-[24px] border border-[#FFF0D0] bg-white">
+                            {post.mediaUrls[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={post.mediaUrls[0]} alt={post.title || post.taggedPlaceName || "city post"} className="h-40 w-full object-cover" loading="lazy" />
+                            ) : null}
+                            <div className="p-4">
+                              <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{post.taggedPlaceName || post.type}</p>
+                              <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{post.authorName}</p>
+                              <p className="mt-1 text-sm text-[#6c7289]">{(post.body || post.title || "fresh food post").slice(0, 110)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 pt-2">
+                      <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={completePostSignupOnboarding}>
+                        go to feed
+                      </Button>
+                      <button type="button" onClick={completePostSignupOnboarding} className="text-sm font-medium text-[#6c7289]">
+                        finish later
+                      </button>
+                      {postSignupNotice || socialActionNotice ? (
+                        <p className="text-sm text-[#B56D19]">{postSignupNotice || socialActionNotice}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </CardBody>
+            </Card>
           </motion.section>
         </div>
       </main>
