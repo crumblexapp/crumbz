@@ -5063,6 +5063,12 @@ export default function Page() {
   };
 
   const publishComposerPost = () => {
+    const trimmedTitle = composer.title.trim();
+    const trimmedBody = composer.body.trim();
+    const trimmedCta = composer.cta.trim();
+    const hasTaggedPlace = Boolean(adminPostTaggedPlace);
+    const hasMedia = composer.mediaKind !== "none";
+
     if (isUploadingMedia) {
       setStorageNotice("media is still uploading. wait a second, then publish.");
       return;
@@ -5083,11 +5089,16 @@ export default function Page() {
       return;
     }
 
+    if (composer.type !== "story" && !trimmedTitle && !trimmedBody && !trimmedCta && !hasTaggedPlace && !hasMedia) {
+      setStorageNotice("add at least one thing first: a title, body, cta, shop, or media.");
+      return;
+    }
+
     const nextPost: AppPost = {
       id: editingPostId ?? `${Date.now()}`,
-      title: composer.title.trim(),
-      body: composer.body.trim(),
-      cta: composer.cta.trim() || "live now",
+      title: trimmedTitle,
+      body: trimmedBody,
+      cta: trimmedCta,
       type: composer.type,
       createdAt: editingPostId
         ? posts.find((post) => post.id === editingPostId)?.createdAt ?? formatNow()
@@ -7100,18 +7111,36 @@ export default function Page() {
                               <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminLiveStoryPosts.length} live</Chip>
                             </div>
                             {adminLiveStoryPosts.length ? (
-                              adminLiveStoryPosts.map((post) => (
+                              adminLiveStoryPosts.map((post) => {
+                                const trimmedTitle = post.title.trim();
+                                const trimmedBody = post.body.trim();
+
+                                return (
                                 <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
-                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                      {trimmedTitle ? <p className="font-semibold text-[#2C1A0E]">{post.title}</p> : null}
+                                      <p className={`${trimmedTitle ? "mt-1 " : ""}text-xs uppercase tracking-[0.18em] text-[#2C1A0E]`}>
                                         story • {post.createdAt}
                                       </p>
                                     </div>
                                     <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
                                   </div>
-                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.taggedPlaceName ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openPostPlace(post)}
+                                      className="mt-2 flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                                        <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                                        {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                                      </div>
+                                      <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                                    </button>
+                                  ) : null}
+                                  {trimmedBody ? <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p> : null}
                                   {post.mediaKind !== "none" ? (
                                     <div className="mt-3">
                                       {post.mediaUrls.length ? (
@@ -7159,7 +7188,8 @@ export default function Page() {
                                     )}
                                   </div>
                                 </div>
-                              ))
+                              );
+                              })
                             ) : (
                               <p className="text-sm text-[#2C1A0E]">no live stories right now.</p>
                             )}
@@ -7177,16 +7207,34 @@ export default function Page() {
                             </div>
                             {adminActionNotice ? <p className="text-sm text-[#2C1A0E]">{adminActionNotice}</p> : null}
                             {adminArchivedStoryPosts.length ? (
-                              adminArchivedStoryPosts.map((post) => (
+                              adminArchivedStoryPosts.map((post) => {
+                                const trimmedTitle = post.title.trim();
+                                const trimmedBody = post.body.trim();
+
+                                return (
                                 <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
-                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">story • {post.createdAt}</p>
+                                      {trimmedTitle ? <p className="font-semibold text-[#2C1A0E]">{post.title}</p> : null}
+                                      <p className={`${trimmedTitle ? "mt-1 " : ""}text-xs uppercase tracking-[0.18em] text-[#2C1A0E]`}>story • {post.createdAt}</p>
                                     </div>
                                     <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
                                   </div>
-                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.taggedPlaceName ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openPostPlace(post)}
+                                      className="mt-2 flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                                        <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                                        {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                                      </div>
+                                      <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                                    </button>
+                                  ) : null}
+                                  {trimmedBody ? <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p> : null}
                                   {post.mediaKind !== "none" ? (
                                     <div className="mt-3">
                                       {post.mediaUrls.length ? (
@@ -7234,7 +7282,8 @@ export default function Page() {
                                     )}
                                   </div>
                                 </div>
-                              ))
+                              );
+                              })
                             ) : (
                               <p className="text-sm text-[#2C1A0E]">no archived stories yet.</p>
                             )}
@@ -7251,18 +7300,36 @@ export default function Page() {
                               <Chip className="bg-[#FFF0D0] text-[#F5A623]">{adminPostArchive.length} total</Chip>
                             </div>
                             {adminPostArchive.length ? (
-                              adminPostArchive.map((post) => (
+                              adminPostArchive.map((post) => {
+                                const trimmedTitle = post.title.trim();
+                                const trimmedBody = post.body.trim();
+
+                                return (
                                 <div key={post.id} className="rounded-[22px] bg-[#FFF0D0] p-4">
                                   <div className="flex items-start justify-between gap-3">
                                     <div>
-                                      <p className="font-semibold text-[#2C1A0E]">{post.title}</p>
-                                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                                      {trimmedTitle ? <p className="font-semibold text-[#2C1A0E]">{post.title}</p> : null}
+                                      <p className={`${trimmedTitle ? "mt-1 " : ""}text-xs uppercase tracking-[0.18em] text-[#2C1A0E]`}>
                                         {post.type} • {post.createdAt}
                                       </p>
                                     </div>
                                     <Chip className="bg-white text-[#2C1A0E]">{post.mediaKind}</Chip>
                                   </div>
-                                  <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p>
+                                  {post.taggedPlaceName ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openPostPlace(post)}
+                                      className="mt-2 flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                                        <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                                        {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                                      </div>
+                                      <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                                    </button>
+                                  ) : null}
+                                  {trimmedBody ? <p className="mt-2 text-sm text-[#2C1A0E]">{post.body}</p> : null}
                                   {post.mediaKind !== "none" ? (
                                     <div className="mt-3">
                                       {post.mediaUrls.length ? (
@@ -7310,7 +7377,8 @@ export default function Page() {
                                     )}
                                   </div>
                                 </div>
-                              ))
+                              );
+                              })
                             ) : (
                               <p className="text-sm text-[#2C1A0E]">no archived posts yet.</p>
                             )}
