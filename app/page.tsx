@@ -6398,9 +6398,9 @@ export default function Page() {
             <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(47,23,20,0.08)]">
               <CardBody className="gap-5 p-6">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-[#2C1A0E]">start here</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-[#2C1A0E]">{copy.auth.startHere}</p>
                   <h1 className="mt-4 font-[family-name:var(--font-young-serif)] text-[2.1rem] leading-[1.02] text-[#2C1A0E]">
-                    sign up or log in
+                    {copy.auth.signUpOrLogIn}
                   </h1>
                   <div className="mt-3 flex gap-2">
                     <Button
@@ -6411,7 +6411,7 @@ export default function Page() {
                         setError("");
                       }}
                     >
-                      sign up with google
+                      {copy.auth.signUpWithGoogle}
                     </Button>
                     <Button
                       radius="full"
@@ -6421,13 +6421,13 @@ export default function Page() {
                         setError("");
                       }}
                     >
-                      log in with google
+                      {copy.auth.logInWithGoogle}
                     </Button>
                   </div>
                   <p className="mt-4 text-sm leading-7 text-[#2C1A0E]">
                     {authMode === "signup"
-                      ? "new people sign up first, then fill in name, city, and whether they're a student."
-                      : "returning people log in and land on the homepage straight away."}
+                      ? copy.auth.signupBody
+                      : copy.auth.loginBody}
                   </p>
                 </div>
 
@@ -6435,7 +6435,7 @@ export default function Page() {
                   <div className="flex flex-col items-center gap-3">
                     <div ref={googleButtonRef} className="min-h-11" />
                     {!googleReady ? (
-                      <p className="text-center text-sm text-[#2C1A0E]">loading google sign-in…</p>
+                      <p className="text-center text-sm text-[#2C1A0E]">{copy.auth.loadingGoogle}</p>
                     ) : null}
                     {googleInitError ? (
                       <Button
@@ -6450,13 +6450,13 @@ export default function Page() {
                           }
                         }}
                       >
-                        retry google sign-in
+                        {copy.auth.retryGoogle}
                       </Button>
                     ) : null}
                   </div>
                 ) : (
                   <div className="rounded-[24px] border border-dashed border-[#FFF0D0] bg-[#FFF0D0] p-4 text-sm leading-6 text-[#2C1A0E]">
-                    add `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and the real google button will appear here.
+                    {copy.auth.missingGoogleClientId}
                   </div>
                 )}
 
@@ -6486,9 +6486,9 @@ export default function Page() {
                 className="h-16 w-16 bg-[#F5A623] text-white"
               />
               <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[#2C1A0E]">one more step</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#2C1A0E]">{copy.auth.finishStep}</p>
                 <h1 className="mt-1 font-[family-name:var(--font-young-serif)] text-4xl leading-none">
-                  finish your profile
+                  {copy.auth.finishProfile}
                 </h1>
                 <p className="mt-1 text-sm text-[#2C1A0E]">{user.googleProfile?.email}</p>
               </div>
@@ -6496,16 +6496,16 @@ export default function Page() {
 
             <form className="mt-6 grid gap-4" onSubmit={finishOnboarding}>
               <Input
-                label="full name"
+                label={copy.auth.fullName}
                 labelPlacement="outside"
-                placeholder="your full name"
+                placeholder={copy.auth.fullNamePlaceholder}
                 radius="lg"
                 value={fullNameValue}
                 onValueChange={setFullName}
                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
               />
               <Input
-                label="username"
+                label={copy.auth.username}
                 labelPlacement="outside"
                 placeholder="joeydoesntsharefood"
                 radius="lg"
@@ -6514,10 +6514,10 @@ export default function Page() {
                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
               />
               <Select
-                label="city"
+                label={copy.auth.city}
                 labelPlacement="outside"
                 radius="lg"
-                placeholder="pick your city"
+                placeholder={copy.auth.cityPlaceholder}
                 selectedKeys={cityValue ? [cityValue] : []}
                 onSelectionChange={(keys) => {
                   const selected = Array.from(keys)[0];
@@ -6535,7 +6535,7 @@ export default function Page() {
                 ))}
               </Select>
               <div>
-                <p className="mb-2 text-sm font-medium text-[#2C1A0E]">are you a student?</p>
+                <p className="mb-2 text-sm font-medium text-[#2C1A0E]">{copy.auth.studentQuestion}</p>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -6546,7 +6546,7 @@ export default function Page() {
                       setError("");
                     }}
                   >
-                    yes
+                    {copy.auth.yes}
                   </Button>
                   <Button
                     type="button"
@@ -6558,16 +6558,16 @@ export default function Page() {
                       setError("");
                     }}
                   >
-                    no
+                    {copy.auth.no}
                   </Button>
                 </div>
               </div>
               {shouldShowSchoolField ? (
                 matchingSchools.length ? (
                   <Select
-                    label="university or school"
+                    label={copy.auth.school}
                     labelPlacement="outside"
-                    placeholder="pick your school"
+                    placeholder={copy.auth.schoolPlaceholder}
                     radius="lg"
                     selectedKeys={schoolNameValue ? [schoolNameValue] : []}
                     onSelectionChange={(keys) => {
@@ -6585,9 +6585,9 @@ export default function Page() {
                   </Select>
                 ) : (
                   <Input
-                    label="university or school"
+                    label={copy.auth.school}
                     labelPlacement="outside"
-                    placeholder="type your school"
+                    placeholder={copy.auth.schoolTypePlaceholder}
                     radius="lg"
                     value={schoolNameValue}
                     onValueChange={setSchoolName}
@@ -6597,7 +6597,7 @@ export default function Page() {
               ) : null}
               {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
               <Button type="submit" radius="full" size="lg" className="bg-[#2C1A0E] font-semibold text-white">
-                enter crumbz
+                {copy.auth.enterCrumbz}
               </Button>
             </form>
           </motion.section>
@@ -6609,6 +6609,19 @@ export default function Page() {
   if (postSignupOnboardingOpen) {
     const progressDots = [0, 1, 2];
     const firstName = user.profile.fullName.split(" ")[0] || liveProfile.fullName.split(" ")[0] || "friend";
+    const onboardingStepLabel = postSignupOnboardingStep === 0 ? copy.onboarding.welcomeLabel : copy.onboarding.stepLabel(postSignupOnboardingStep);
+    const onboardingStepTitle =
+      postSignupOnboardingStep === 0
+        ? copy.onboarding.welcomeTitle(firstName.toLowerCase())
+        : postSignupOnboardingStep === 1
+          ? copy.onboarding.saveSpotTitle(liveProfile.city)
+          : copy.onboarding.feedTitle;
+    const onboardingStepBody =
+      postSignupOnboardingStep === 0
+        ? copy.onboarding.welcomeBody
+        : postSignupOnboardingStep === 1
+          ? copy.onboarding.saveSpotBody
+          : copy.onboarding.feedBody(liveProfile.city);
 
     return (
       <main className="min-h-screen bg-white text-[#2C1A0E]">
@@ -6619,47 +6632,43 @@ export default function Page() {
             transition={{ duration: 0.3 }}
             className="flex-1"
           >
-            <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
-              <CardBody className="gap-5 p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      src={currentUserPicture}
-                      name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
-                      className="h-14 w-14 bg-[#FFF0D0] text-[#F5A623]"
-                    />
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.24em] text-[#B56D19]">
-                        {postSignupOnboardingStep === 0 ? "welcome" : `step ${postSignupOnboardingStep} of 3`}
-                      </p>
-                      <p className="mt-1 text-sm text-[#6c7289]">setting up your first real crumbz moments.</p>
+            <Card className="overflow-hidden rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+              <CardBody className="flex min-h-[calc(100dvh-3rem)] flex-col p-0">
+                <div className="bg-[linear-gradient(180deg,_#fffaf2_0%,_#fff4e3_100%)] px-6 pb-7 pt-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        src={currentUserPicture}
+                        name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
+                        className="h-14 w-14 bg-[#FFF0D0] text-[#F5A623]"
+                      />
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-[#B56D19]">{onboardingStepLabel}</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">{copy.onboarding.setupMoments}</p>
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      {progressDots.map((dot) => (
+                        <span
+                          key={dot}
+                          className={`h-2.5 w-2.5 rounded-full ${dot <= postSignupOnboardingStep ? "bg-[#F5A623]" : "bg-[#FFE1B0]"}`}
+                        />
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {progressDots.map((dot) => (
-                      <span
-                        key={dot}
-                        className={`h-2.5 w-2.5 rounded-full ${dot <= postSignupOnboardingStep ? "bg-[#F5A623]" : "bg-[#FFE1B0]"}`}
-                      />
-                    ))}
+
+                  <div className="mt-7">
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2.55rem] leading-[0.95] text-[#2C1A0E]">
+                      {onboardingStepTitle}
+                    </p>
+                    <p className="mt-4 max-w-[18rem] text-base leading-7 text-[#6c7289]">{onboardingStepBody}</p>
                   </div>
                 </div>
 
                 {postSignupOnboardingStep === 0 ? (
-                  <div className="space-y-5">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.35rem] leading-none text-[#2C1A0E]">
-                        welcome to crumbz, {firstName.toLowerCase()}
-                      </p>
-                      <p className="mt-3 text-base leading-7 text-[#6c7289]">find food through people you trust, then build a feed that actually feels personal.</p>
-                    </div>
-
+                  <div className="flex flex-1 flex-col justify-between gap-6 p-6">
                     <div className="grid gap-3">
-                      {[
-                        "save a spot you already love",
-                        "find friends who know where to eat",
-                        `peek at what people in ${liveProfile.city} are posting`,
-                      ].map((item) => (
+                      {copy.onboarding.welcomeBullets.map((item) => (
                         <div key={item} className="rounded-[24px] bg-[#FFF7E8] px-4 py-4 text-base text-[#2C1A0E]">
                           {item}
                         </div>
@@ -6668,24 +6677,17 @@ export default function Page() {
 
                     <div className="flex flex-col gap-3 pt-2">
                       <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={() => setPostSignupOnboardingStep(1)}>
-                        let&apos;s go
+                        {copy.onboarding.letsGo}
                       </Button>
                       <button type="button" onClick={skipPostSignupWelcome} className="text-sm font-medium text-[#6c7289]">
-                        skip for now
+                        {copy.onboarding.skipForNow}
                       </button>
                     </div>
                   </div>
                 ) : null}
 
                 {postSignupOnboardingStep === 1 ? (
-                  <div className="space-y-5">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        where&apos;s a spot you love in {liveProfile.city}?
-                      </p>
-                      <p className="mt-3 text-base leading-7 text-[#6c7289]">save one place and your account already starts feeling like yours.</p>
-                    </div>
-
+                  <div className="flex flex-1 flex-col gap-5 p-6">
                     <Input
                       radius="full"
                       value={postSignupPlaceQuery}
@@ -6694,12 +6696,12 @@ export default function Page() {
                         setPostSignupSelectedPlace(null);
                         setPostSignupNotice("");
                       }}
-                      placeholder="search restaurants, cafes, bars..."
+                      placeholder={copy.onboarding.searchPlaces}
                       startContent={<span className="text-[#B56D19]">🔍</span>}
                       classNames={{ inputWrapper: "bg-[#FFF7E8] border border-[#FFF0D0] shadow-none" }}
                     />
 
-                    {postSignupPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">looking up good spots near you...</p> : null}
+                    {postSignupPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">{copy.onboarding.lookingUpSpots}</p> : null}
 
                     {postSignupPlaceResults.length ? (
                       <div className="grid gap-2">
@@ -6721,7 +6723,7 @@ export default function Page() {
                     ) : null}
 
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">popular in {liveProfile.city}</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.onboarding.popularIn(liveProfile.city)}</p>
                       <div className="mt-3 grid gap-2">
                         {(postSignupPopularPlaces.length ? postSignupPopularPlaces : getFallbackFavoritePlaces(liveProfile.city).slice(0, 5)).map((place) => (
                           <button
@@ -6745,18 +6747,18 @@ export default function Page() {
 
                     {postSignupSelectedPlace ? (
                       <div className="rounded-[24px] border border-[#FFD7A1] bg-[#fff9ef] p-4">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">picked spot</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.pickedSpot}</p>
                         <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{postSignupSelectedPlace.name}</p>
                         <p className="mt-1 text-sm text-[#6c7289]">{postSignupSelectedPlace.address}</p>
                         <Button radius="full" className="mt-4 bg-[#F5A623] text-white" onPress={() => void savePostSignupFavoritePlace(postSignupSelectedPlace)}>
-                          add to favorites
+                          {copy.onboarding.addToFavorites}
                         </Button>
                       </div>
                     ) : null}
 
-                    <div className="flex flex-col items-start gap-3">
+                    <div className="mt-auto flex flex-col items-start gap-3 pt-2">
                       <button type="button" onClick={() => setPostSignupOnboardingStep(2)} className="text-sm font-medium text-[#6c7289]">
-                        skip for now
+                        {copy.onboarding.skipForNow}
                       </button>
                       {postSignupNotice ? <p className="text-sm text-[#B56D19]">{postSignupNotice}</p> : null}
                     </div>
@@ -6764,18 +6766,9 @@ export default function Page() {
                 ) : null}
 
                 {postSignupOnboardingStep === 2 ? (
-                  <div className="space-y-5">
-                    <div>
-                      <p className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
-                        your feed gets better fast
-                      </p>
-                      <p className="mt-3 text-base leading-7 text-[#6c7289]">
-                        add a friend if you want, then peek at what people in {liveProfile.city} are eating while your circle grows.
-                      </p>
-                    </div>
-
+                  <div className="flex flex-1 flex-col gap-5 p-6">
                     <div className="rounded-[26px] bg-[#FFF7E8] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">find friends</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.findFriends}</p>
                       <Input
                         radius="full"
                         value={postSignupFriendQuery}
@@ -6783,7 +6776,7 @@ export default function Page() {
                           setPostSignupFriendQuery(value);
                           setPostSignupNotice("");
                         }}
-                        placeholder="search by username"
+                        placeholder={copy.onboarding.searchByUsername}
                         classNames={{ inputWrapper: "mt-3 bg-white border border-[#FFF0D0] shadow-none" }}
                       />
                       {exactPostSignupFriendMatch ? (
@@ -6793,18 +6786,18 @@ export default function Page() {
                             <p className="truncate text-sm text-[#6c7289]">@{exactPostSignupFriendMatch.profile.username}</p>
                           </div>
                           <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => void sendPostSignupFriendRequest()}>
-                            add
+                            {copy.onboarding.add}
                           </Button>
                         </div>
                       ) : postSignupFriendQuery.trim() ? (
-                        <p className="mt-3 text-sm text-[#6c7289]">no exact username match yet. you can still share your link below.</p>
+                        <p className="mt-3 text-sm text-[#6c7289]">{copy.onboarding.noExactUsernameMatch}</p>
                       ) : null}
 
                       <div className="mt-4 rounded-[20px] border border-[#FFD7A1] bg-[#fff9ef] p-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">share your profile</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.shareProfile}</p>
                         <p className="mt-2 break-all rounded-[16px] bg-white px-3 py-3 text-sm text-[#2C1A0E]">{profileShareUrl}</p>
                         <Button radius="full" variant="flat" className="mt-3 bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => void copyPostSignupProfileLink()}>
-                          copy link
+                          {copy.onboarding.copyLink}
                         </Button>
                       </div>
                     </div>
@@ -6812,10 +6805,10 @@ export default function Page() {
                     <div>
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">what&apos;s happening in {liveProfile.city}</p>
-                          <p className="mt-1 text-sm text-[#6c7289]">a few real posts so the app already feels alive.</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.whatsHappeningIn(liveProfile.city)}</p>
+                          <p className="mt-1 text-sm text-[#6c7289]">{copy.onboarding.cityPostsBody}</p>
                         </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{onboardingCityPosts.length || adminFeedPosts.length ? "live" : "soon"}</Chip>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{onboardingCityPosts.length || adminFeedPosts.length ? copy.onboarding.live : copy.onboarding.soon}</Chip>
                       </div>
 
                       <div className="mt-3 grid gap-3">
@@ -6823,24 +6816,24 @@ export default function Page() {
                           <div key={post.id} className="overflow-hidden rounded-[24px] border border-[#FFF0D0] bg-white">
                             {post.mediaUrls[0] ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={post.mediaUrls[0]} alt={post.title || post.taggedPlaceName || "city post"} className="h-40 w-full object-cover" loading="lazy" />
+                              <img src={post.mediaUrls[0]} alt={post.title || post.taggedPlaceName || copy.onboarding.cityPostAlt} className="h-40 w-full object-cover" loading="lazy" />
                             ) : null}
                             <div className="p-4">
                               <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{post.taggedPlaceName || post.type}</p>
                               <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{post.authorName}</p>
-                              <p className="mt-1 text-sm text-[#6c7289]">{(post.body || post.title || "fresh food post").slice(0, 110)}</p>
+                              <p className="mt-1 text-sm text-[#6c7289]">{(post.body || post.title || copy.onboarding.freshFoodPost).slice(0, 110)}</p>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 pt-2">
+                    <div className="mt-auto flex flex-col gap-3 pt-2">
                       <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={completePostSignupOnboarding}>
-                        go to feed
+                        {copy.onboarding.goToFeed}
                       </Button>
                       <button type="button" onClick={completePostSignupOnboarding} className="text-sm font-medium text-[#6c7289]">
-                        finish later
+                        {copy.onboarding.finishLater}
                       </button>
                       {postSignupNotice || socialActionNotice ? (
                         <p className="text-sm text-[#B56D19]">{postSignupNotice || socialActionNotice}</p>
