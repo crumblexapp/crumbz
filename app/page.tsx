@@ -302,6 +302,7 @@ type AppNavigationState = {
   notificationsOpen: boolean;
   selectedProfileEmail: string | null;
   profileDrawer: "followers" | "favorites" | null;
+  selectedOwnArchiveOpen: boolean;
   selectedOwnPostId: string | null;
   selectedStoryPostId: string | null;
   favoriteViewCity: string | null;
@@ -1830,6 +1831,7 @@ export default function Page() {
   const [profileDrawer, setProfileDrawer] = useState<"followers" | "favorites" | null>(null);
   const [selectedProfilePostTab, setSelectedProfilePostTab] = useState<ProfilePostTab>("all");
   const [selectedProfilePostFiltersOpen, setSelectedProfilePostFiltersOpen] = useState(false);
+  const [selectedOwnArchiveOpen, setSelectedOwnArchiveOpen] = useState(false);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
@@ -1900,6 +1902,7 @@ export default function Page() {
       notificationsOpen,
       selectedProfileEmail,
       profileDrawer,
+      selectedOwnArchiveOpen,
       selectedOwnPostId,
       selectedStoryPostId,
       favoriteViewCity,
@@ -1910,6 +1913,7 @@ export default function Page() {
       highlightedFavoritePlaceId,
       notificationsOpen,
       profileDrawer,
+      selectedOwnArchiveOpen,
       selectedOwnPostId,
       selectedProfileEmail,
       selectedStoryPostId,
@@ -1971,6 +1975,7 @@ export default function Page() {
       setNotificationsOpen(nextState.notificationsOpen);
       setSelectedProfileEmail(nextState.selectedProfileEmail);
       setProfileDrawer(nextState.profileDrawer);
+      setSelectedOwnArchiveOpen(nextState.selectedOwnArchiveOpen);
       setSelectedOwnPostId(nextState.selectedOwnPostId);
       setSelectedStoryPostId(nextState.selectedStoryPostId);
       setFavoriteViewCity(nextState.favoriteViewCity);
@@ -4965,10 +4970,89 @@ export default function Page() {
     setSelectedOwnPostId(post.id);
   };
 
+  const openOwnArchive = () => {
+    setSelectedOwnArchiveOpen(true);
+  };
+
+  const closeOwnArchive = () => {
+    setSelectedOwnArchiveOpen(false);
+  };
+
+  const openOwnArchivePost = (post: AppPost) => {
+    closeOwnArchive();
+    openOwnPost(post);
+  };
+
   const closeOwnPost = () => {
     setSelectedOwnPostSnapshot(null);
     setSelectedOwnPostId(null);
   };
+
+  const renderArchivePostGrid = (
+    posts: AppPost[],
+    onPostPress: (post: AppPost) => void,
+    options?: { interactive?: boolean; tileClassName?: string; labelSize?: "compact" | "default" },
+  ) => (
+    <div className="grid grid-cols-3 gap-2">
+      {posts.map((post) => (
+        options?.interactive === false ? (
+          <div
+            key={post.id}
+            className={`group relative aspect-square overflow-hidden bg-[#FFF7E8] text-left ${options?.tileClassName ?? "rounded-[20px]"}`}
+          >
+            {post.mediaUrls[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={post.mediaUrls[0]}
+                alt={post.title || "archive post"}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-full w-full items-end bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-3 text-left">
+                <p className="line-clamp-3 font-[family-name:var(--font-young-serif)] text-[1.1rem] leading-none text-[#2C1A0E]">
+                  {post.type === "weekly-dump" ? post.body || "sunday dump" : post.title || "post"}
+                </p>
+              </div>
+            )}
+            <div className={`absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent_0%,_rgba(44,26,14,0.68)_100%)] text-left ${options?.labelSize === "compact" ? "px-2 py-2" : "px-3 py-2"}`}>
+              <p className={`truncate font-semibold uppercase tracking-[0.16em] text-white ${options?.labelSize === "compact" ? "text-[10px]" : "text-xs"}`}>
+                {post.type === "weekly-dump" ? "sunday dump" : "post"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <button
+            key={post.id}
+            type="button"
+            onClick={() => onPostPress(post)}
+            className={`group relative aspect-square overflow-hidden bg-[#FFF7E8] text-left ${options?.tileClassName ?? "rounded-[20px]"}`}
+          >
+          {post.mediaUrls[0] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={post.mediaUrls[0]}
+              alt={post.title || "archive post"}
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-end bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-3 text-left">
+              <p className="line-clamp-3 font-[family-name:var(--font-young-serif)] text-[1.1rem] leading-none text-[#2C1A0E]">
+                {post.type === "weekly-dump" ? post.body || "sunday dump" : post.title || "post"}
+              </p>
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent_0%,_rgba(44,26,14,0.68)_100%)] px-3 py-2 text-left">
+            <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-white">
+              {post.type === "weekly-dump" ? "sunday dump" : "post"}
+            </p>
+          </div>
+        </button>
+        )
+      ))}
+    </div>
+  );
 
   const startPostFromPlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
     setFavoriteViewCity(cityName);
@@ -8337,10 +8421,14 @@ export default function Page() {
                   </div>
                   <div className="min-w-0 pt-2">
                     <div className="grid grid-cols-3 gap-1 text-center">
-                      <div className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center">
+                      <button
+                        type="button"
+                        onClick={openOwnArchive}
+                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                      >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
                         <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
-                      </div>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("followers")}
@@ -8675,48 +8763,26 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button type="button" onClick={openOwnArchive} className="text-left">
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
                       your archive
                     </h2>
-                  </div>
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserAllPosts.length}</Chip>
+                  </button>
+                  <button type="button" onClick={openOwnArchive}>
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserAllPosts.length}</Chip>
+                  </button>
                 </div>
 
                 {currentUserAllPosts.length ? (
-                  currentUserAllPosts.length >= 3 ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {currentUserAllPosts.map((post) => (
-                        <button
-                          key={post.id}
-                          type="button"
-                          onClick={() => openOwnPost(post)}
-                          className="group relative aspect-square overflow-hidden rounded-[20px] bg-[#FFF7E8]"
-                        >
-                          {post.mediaUrls[0] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={post.mediaUrls[0]} alt={post.title} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" />
-                          ) : (
-                            <div className="flex h-full w-full items-end bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-3 text-left">
-                              <p className="line-clamp-3 font-[family-name:var(--font-young-serif)] text-[1.3rem] leading-none text-[#2C1A0E]">
-                                {post.type === "weekly-dump" ? post.body || "sunday dump" : post.title}
-                              </p>
-                            </div>
-                          )}
-                          <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent_0%,_rgba(44,26,14,0.68)_100%)] px-3 py-2 text-left">
-                            <p className="truncate text-xs font-semibold uppercase tracking-[0.16em] text-white">
-                              {post.type === "weekly-dump" ? "sunday dump" : "post"}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {currentUserAllPosts.map((post) => renderFeedCard(post))}
-                    </div>
-                  )
+                  <button
+                    type="button"
+                    onClick={openOwnArchive}
+                    className="block w-full rounded-[24px] bg-[#FFF7E8] p-3 text-left"
+                  >
+                    {renderArchivePostGrid(currentUserAllPosts.slice(0, 6), () => undefined, { interactive: false, labelSize: "compact" })}
+                    <p className="mt-3 text-sm font-medium text-[#6c7289]">tap to open your full archive grid.</p>
+                  </button>
                 ) : (
                   <p className="text-sm text-[#6c7289]">post your first photo and it’ll live here as your personal archive.</p>
                 )}
@@ -8726,7 +8792,7 @@ export default function Page() {
           </section>
         ) : null}
 
-        {selectedStoryPost || notificationsOpen || selectedOwnPost || selectedProfileEmail ? null : (
+        {selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail ? null : (
           <nav
             className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
             style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
@@ -9450,6 +9516,40 @@ export default function Page() {
                     save bio
                   </Button>
                 </div>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={selectedOwnArchiveOpen}
+        onOpenChange={(open) => !open && closeOwnArchive()}
+        size="full"
+        scrollBehavior="inside"
+      >
+        <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                    your archive
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
+                {currentUserAllPosts.length ? (
+                  renderArchivePostGrid(currentUserAllPosts, openOwnArchivePost)
+                ) : (
+                  <div className="rounded-[22px] bg-white p-4 text-sm text-[#2C1A0E]">
+                    post your first photo and it’ll live here as your personal archive.
+                  </div>
+                )}
               </ModalBody>
             </>
           )}
