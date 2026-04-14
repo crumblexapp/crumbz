@@ -4986,6 +4986,24 @@ export default function Page() {
     setFavoriteLocationNotice(`map switched back to home: ${homeFavoriteCity}.`);
   };
 
+  const openOwnReferralLink = () => {
+    if (typeof window === "undefined") return;
+
+    const referralCode = liveProfile.referralCode?.trim().toUpperCase();
+    if (!referralCode) {
+      setReferralNotice("your referral link is getting ready. try again in a second.");
+      return;
+    }
+
+    const referralLink = getReferralLink(referralCode);
+    if (!referralLink) {
+      setReferralNotice("that referral link didn’t load right. try again in a sec.");
+      return;
+    }
+
+    window.location.assign(referralLink);
+  };
+
   const sendPostSignupFriendRequest = async () => {
     const friendEmail = exactPostSignupFriendMatch?.googleProfile?.email ?? "";
     if (!friendEmail) return;
@@ -8633,7 +8651,7 @@ export default function Page() {
                       <Button
                         radius="full"
                         className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
-                        onPress={() => setNotificationsOpen(true)}
+                        onPress={openOwnReferralLink}
                       >
                         {copy.feed.remindMe}
                       </Button>
