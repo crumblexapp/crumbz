@@ -2946,11 +2946,13 @@ export default function Page() {
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
+    const trimmedPostTitle = post.title.trim();
     const trimmedPostBody = post.body.trim();
     const showPostBody = Boolean(trimmedPostBody) && (!isStudentPost || (trimmedPostBody !== profileMeta && trimmedPostBody !== schoolName));
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
-    const ctaLabel = post.cta === "live now" ? "post" : post.cta;
+    const trimmedCta = post.cta.trim();
+    const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
     return (
       <Card
         id={`post-${post.id}`}
@@ -2999,7 +3001,7 @@ export default function Page() {
               ) : (
                 <span />
               )}
-              {isStudentPost ? (
+              {isStudentPost && ctaLabel ? (
                 <button
                   type="button"
                   onClick={() => openProfileByEmail(post.authorEmail)}
@@ -3007,9 +3009,9 @@ export default function Page() {
                 >
                   <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
                 </button>
-              ) : (
+              ) : ctaLabel ? (
                 <Chip className="ml-auto shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-              )}
+              ) : null}
             </div>
           </div>
         </CardHeader>
@@ -3018,12 +3020,14 @@ export default function Page() {
             showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null
           ) : isFriendFeedCard ? null : (
             <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
-              <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+              {trimmedPostTitle ? (
+                <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+              ) : null}
               {post.taggedPlaceName ? (
                 <button
                   type="button"
                   onClick={() => openPostPlace(post)}
-                  className="mt-3 flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]"
+                  className={`${trimmedPostTitle ? "mt-3" : ""} flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]`}
                 >
                   <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
@@ -5059,11 +5063,6 @@ export default function Page() {
   };
 
   const publishComposerPost = () => {
-    if (!composer.title.trim() || !composer.body.trim()) {
-      setStorageNotice("add a title and body first, then publish.");
-      return;
-    }
-
     if (isUploadingMedia) {
       setStorageNotice("media is still uploading. wait a second, then publish.");
       return;
