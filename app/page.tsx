@@ -69,10 +69,6 @@ const STORY_MAX_IMAGE_FILE_SIZE_BYTES = 30 * 1024 * 1024;
 const STORY_RATIO = 9 / 16;
 const STORY_RATIO_TOLERANCE = 0.02;
 const STORY_IMAGE_DIMENSIONS = { width: 1080, height: 1920 } as const;
-const CHAPTER_IMAGE_DIMENSIONS = [
-  { width: 1080, height: 1350 },
-  { width: 1080, height: 1080 },
-] as const;
 const COMMENT_REACTION_OPTIONS = ["❤️", "😂", "😭", "🔥", "🙏", "👍"] as const;
 const cityOptions = [
   "Warsaw",
@@ -5398,19 +5394,6 @@ export default function Page() {
           }
         }
       }
-    } else if (options.postType === "chapter" && options.mediaKind === "photo") {
-      for (const file of fileList) {
-        try {
-          const dimensions = await readImageDimensions(file);
-          if (!hasExactDimensions(dimensions, CHAPTER_IMAGE_DIMENSIONS)) {
-            options.setNotice("chapter photos need to be exactly 1080 x 1350 or 1080 x 1080.");
-              return null;
-            }
-        } catch {
-          options.setNotice("we couldn't read that image. try another jpg, png, or heic file.");
-          return null;
-        }
-      }
     }
 
     const filePayloads = await Promise.all(
@@ -6870,7 +6853,7 @@ export default function Page() {
                               {composer.type === "story" ? (
                                 <p className="text-sm text-[#6c7289]">stories stay live for 24 hours, then move into stories archive. use exactly 1080 x 1920 for story photos and videos. photos can be jpg or png up to 30mb. videos can be mp4 or mov up to 500mb and 1 to 60 seconds.</p>
                               ) : composer.type === "chapter" && composer.mediaKind === "photo" ? (
-                                <p className="text-sm text-[#6c7289]">chapter photos need to be exactly 1080 x 1350 or 1080 x 1080.</p>
+                                <p className="text-sm text-[#6c7289]">chapter photos work best as portrait or square, but they don’t need an exact size.</p>
                               ) : null}
                               <Select
                                 label="media type"
