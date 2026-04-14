@@ -64,6 +64,12 @@ function getPlaceAccent(kind: string) {
   if (normalized.includes("cafe") || normalized.includes("coffee")) return { bg: "#7b61ff", fg: "#f6f2ff", icon: "☕", chip: "#e5ddff" };
   if (normalized.includes("dessert") || normalized.includes("ice")) return { bg: "#ff5fa2", fg: "#fff2f8", icon: "🍰", chip: "#ffd9eb" };
   if (normalized.includes("bar") || normalized.includes("pub")) return { bg: "#2dbf8d", fg: "#eefdf7", icon: "🍸", chip: "#d7f7eb" };
+  if (normalized.includes("pizza")) return { bg: "#ef6c3d", fg: "#fff7f0", icon: "🍕", chip: "#ffd8cb" };
+  if (normalized.includes("burger") || normalized.includes("hamburger")) return { bg: "#b86b34", fg: "#fff6ee", icon: "🍔", chip: "#f3dac8" };
+  if (normalized.includes("sandwich")) return { bg: "#9b7b3e", fg: "#fff9ef", icon: "🥪", chip: "#efe1ba" };
+  if (normalized.includes("meal delivery") || normalized.includes("takeaway") || normalized.includes("fast food")) {
+    return { bg: "#f2a900", fg: "#fff8e7", icon: "🥡", chip: "#ffe7a7" };
+  }
   return { bg: "#fe8a01", fg: "#fff7ea", icon: "🍽", chip: "#ffe5bf" };
 }
 
@@ -150,7 +156,7 @@ export default function FavoritesMap({
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [previewedPlace, setPreviewedPlace] = useState<FavoritePlace | null>(null);
-  const defaultDisplayedPlaces = useMemo(() => places.slice(0, 24), [places]);
+  const defaultDisplayedPlaces = useMemo(() => places.slice(0, 50), [places]);
 
   const selectedPlace = useMemo(
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
@@ -161,7 +167,7 @@ export default function FavoritesMap({
     if (searchResults.length) return searchResults;
     if (!focusedPlace) return defaultDisplayedPlaces;
     if (defaultDisplayedPlaces.some((place) => place.id === focusedPlace.id)) return defaultDisplayedPlaces;
-    return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 24);
+    return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 50);
   }, [defaultDisplayedPlaces, focusedPlace, searchResults]);
 
   const mutualFansByPlace = useMemo(

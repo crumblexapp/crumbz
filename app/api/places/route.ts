@@ -10,7 +10,21 @@ type GooglePlace = {
 };
 
 const GOOGLE_MAPS_SERVER_API_KEY = process.env.GOOGLE_MAPS_SERVER_API_KEY ?? "";
-const FOOD_TYPES = ["restaurant", "cafe", "bakery", "bar", "coffee_shop", "fast_food", "meal_takeaway", "dessert_shop"];
+const FOOD_TYPES = [
+  "restaurant",
+  "cafe",
+  "bakery",
+  "bar",
+  "coffee_shop",
+  "fast_food",
+  "meal_takeaway",
+  "dessert_shop",
+  "pizza_restaurant",
+  "sandwich_shop",
+  "hamburger_restaurant",
+  "ice_cream_shop",
+  "meal_delivery",
+];
 
 function isFoodPlace(place: { kind: string; name: string; address: string }) {
   const haystack = `${place.kind} ${place.name} ${place.address}`.toLowerCase();
@@ -44,7 +58,7 @@ async function searchNearby(lat: number, lon: number, radius: number) {
     },
     body: JSON.stringify({
       includedTypes: FOOD_TYPES,
-      maxResultCount: 20,
+      maxResultCount: 50,
       rankPreference: "POPULARITY",
       locationRestriction: {
         circle: {
@@ -71,13 +85,15 @@ async function searchNearby(lat: number, lon: number, radius: number) {
 
 async function searchNearbyFallback(city: string, lat: number, lon: number) {
   const searches = await Promise.all(
-    ["restaurants", "cafes", "bakeries", "desserts"].map((term) => searchText(term, city || undefined, lat, lon)),
+    ["restaurants", "cafes", "bakeries", "desserts", "pizza", "burgers", "ice cream"].map((term) =>
+      searchText(term, city || undefined, lat, lon),
+    ),
   );
 
   return searches
     .flat()
     .filter((place, index, list) => list.findIndex((item) => item.id === place.id) === index)
-    .slice(0, 20);
+    .slice(0, 50);
 }
 
 async function searchText(rawQuery: string, city?: string, lat?: number, lon?: number) {
@@ -91,13 +107,13 @@ async function searchText(rawQuery: string, city?: string, lat?: number, lon?: n
     },
     body: JSON.stringify({
       textQuery,
-      pageSize: 12,
+      pageSize: 20,
       locationBias:
         typeof lat === "number" && typeof lon === "number"
           ? {
               circle: {
                 center: { latitude: lat, longitude: lon },
-                radius: 15000,
+                radius: 25000,
               },
             }
           : undefined,
@@ -131,7 +147,7 @@ export async function GET(request: Request) {
   const city = searchParams.get("city")?.trim() ?? "";
   const lat = Number(searchParams.get("lat"));
   const lon = Number(searchParams.get("lon"));
-  const radius = Number(searchParams.get("radius") ?? "3500");
+  const radius = Number(searchParams.get("radius") ?? "7000");
 
   try {
     const places = query

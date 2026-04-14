@@ -3815,7 +3815,7 @@ export default function Page() {
           city: currentFavoriteCity,
           lat: String(activeCenter[0]),
           lon: String(activeCenter[1]),
-          radius: "3500",
+          radius: "7000",
         });
         const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
 
