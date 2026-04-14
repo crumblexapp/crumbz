@@ -73,6 +73,7 @@ const CHAPTER_IMAGE_DIMENSIONS = [
   { width: 1080, height: 1350 },
   { width: 1080, height: 1080 },
 ] as const;
+const COMMENT_REACTION_OPTIONS = ["❤️", "😂", "😭", "🔥", "🙏", "👍"] as const;
 const cityOptions = [
   "Warsaw",
   "Kraków",
@@ -527,6 +528,19 @@ type PostComment = {
   text: string;
   createdAt: string;
   hidden?: boolean;
+  reactions?: Array<{
+    emoji: string;
+    authorEmail: string;
+    authorName: string;
+    createdAt: string;
+  }>;
+  replies?: Array<{
+    id: string;
+    authorEmail: string;
+    authorName: string;
+    text: string;
+    createdAt: string;
+  }>;
 };
 
 type PostShare = {
@@ -1779,6 +1793,8 @@ export default function Page() {
   const [weeklyDumpInputKey, setWeeklyDumpInputKey] = useState(0);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentPostId, setOpenCommentPostId] = useState<string | null>(null);
+  const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({});
+  const [openReplyComposerId, setOpenReplyComposerId] = useState<string | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
@@ -2719,6 +2735,99 @@ export default function Page() {
     return <p className={className}>{parts.length ? parts : text}</p>;
   };
 
+  const renderCommentThread = (postId: string, postAuthorEmail: string, comment: PostComment) => {
+    const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
+    const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+    const canReply = currentUserEmail === postAuthorEmail.toLowerCase() || currentUserEmail === comment.authorEmail.toLowerCase();
+    const reactionSummary = Array.from(
+      (comment.reactions ?? []).reduce((acc, reaction) => {
+        acc.set(reaction.emoji, (acc.get(reaction.emoji) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>()),
+    );
+    const replyComposerKey = `${postId}:${comment.id}`;
+
+    return (
+      <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
+        <p className="text-sm font-semibold text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+        <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
+
+        {reactionSummary.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {reactionSummary.map(([emoji, count]) => (
+              <span key={`${comment.id}-${emoji}`} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#2C1A0E]">
+                {emoji} {count}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {COMMENT_REACTION_OPTIONS.map((emoji) => {
+            const reacted = (comment.reactions ?? []).some(
+              (reaction) => reaction.authorEmail.toLowerCase() === currentUserEmail && reaction.emoji === emoji,
+            );
+
+            return (
+              <button
+                key={`${comment.id}-${emoji}`}
+                type="button"
+                onClick={() => toggleCommentReaction(postId, comment.id, emoji)}
+                className={`rounded-full px-2.5 py-1 text-sm transition ${reacted ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}`}
+              >
+                {emoji}
+              </button>
+            );
+          })}
+          {canReply ? (
+            <button
+              type="button"
+              onClick={() => setOpenReplyComposerId((current) => (current === replyComposerKey ? null : replyComposerKey))}
+              className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#2C1A0E]"
+            >
+              reply
+            </button>
+          ) : null}
+        </div>
+
+        {(comment.replies ?? []).length ? (
+          <div className="mt-4 space-y-2 border-l-2 border-[#F5D49A] pl-3">
+            {(comment.replies ?? []).map((reply) => {
+              const replyUsername = accountByEmail.get(reply.authorEmail.toLowerCase())?.profile.username;
+              return (
+                <div key={reply.id} className="rounded-[16px] bg-white/70 p-3">
+                  <p className="text-sm font-semibold text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                  <p className="mt-1 text-sm text-[#2C1A0E]">{reply.text}</p>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {openReplyComposerId === replyComposerKey ? (
+          <form className="mt-3 flex gap-2" onSubmit={(event) => addReplyToComment(event, postId, comment.id)}>
+            <Input
+              aria-label="reply to comment"
+              radius="full"
+              placeholder="reply to this comment"
+              value={commentReplyDrafts[replyComposerKey] ?? ""}
+              onValueChange={(value) =>
+                setCommentReplyDrafts((current) => ({
+                  ...current,
+                  [replyComposerKey]: value,
+                }))
+              }
+              classNames={{ inputWrapper: "bg-white border border-[#F5D49A]" }}
+            />
+            <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+              send
+            </Button>
+          </form>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderFeedCard = (post: AppPost, detail = false) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
@@ -2735,12 +2844,6 @@ export default function Page() {
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const ctaLabel = post.cta === "live now" ? "post" : post.cta;
-    const commentUsernamesByEmail = new Map(
-      accounts
-        .filter((account) => account.googleProfile?.email && account.profile.username)
-        .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", `@${account.profile.username}`]),
-    );
-
     return (
       <Card
         id={`post-${post.id}`}
@@ -2923,14 +3026,7 @@ export default function Page() {
           </div>
 
           <div className="space-y-3">
-            {visibleComments.map((comment) => (
-              <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
-                <p className="text-sm font-semibold text-[#2C1A0E]">
-                  {commentUsernamesByEmail.get(comment.authorEmail.toLowerCase()) || comment.authorName}
-                </p>
-                <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
-              </div>
-            ))}
+            {visibleComments.map((comment) => renderCommentThread(post.id, post.authorEmail, comment))}
 
             {openCommentPostId === post.id ? (
               <form className="flex gap-2" onSubmit={(event) => addComment(event, post.id)}>
@@ -5484,6 +5580,103 @@ export default function Page() {
       ...current,
       [postId]: "",
     }));
+  };
+
+  const toggleCommentReaction = (postId: string, commentId: string, emoji: string) => {
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
+    if (!authorEmail) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setInteractions((current) => {
+      const bucket = getInteractionBucket(current, postId);
+      const nextInteractions = {
+        ...current,
+        [postId]: {
+          ...bucket,
+          comments: bucket.comments.map((comment) => {
+            if (comment.id !== commentId) return comment;
+
+            const reactions = comment.reactions ?? [];
+            const alreadyReacted = reactions.some(
+              (reaction) => reaction.authorEmail.toLowerCase() === authorEmail && reaction.emoji === emoji,
+            );
+
+            return {
+              ...comment,
+              reactions: alreadyReacted
+                ? reactions.filter(
+                    (reaction) => !(reaction.authorEmail.toLowerCase() === authorEmail && reaction.emoji === emoji),
+                  )
+                : [
+                    ...reactions.filter((reaction) => reaction.authorEmail.toLowerCase() !== authorEmail),
+                    {
+                      emoji,
+                      authorEmail,
+                      authorName: user.profile.fullName,
+                      createdAt: formatNow(),
+                    },
+                  ],
+            };
+          }),
+        },
+      };
+
+      syncSharedState({
+        nextPosts: posts,
+        nextInteractions,
+      });
+
+      return nextInteractions;
+    });
+  };
+
+  const addReplyToComment = (event: FormEvent<HTMLFormElement>, postId: string, commentId: string) => {
+    event.preventDefault();
+    const draftKey = `${postId}:${commentId}`;
+    const draft = commentReplyDrafts[draftKey]?.trim();
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
+    if (!draft || !authorEmail) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setInteractions((current) => {
+      const bucket = getInteractionBucket(current, postId);
+      const nextInteractions = {
+        ...current,
+        [postId]: {
+          ...bucket,
+          comments: bucket.comments.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  replies: [
+                    ...(comment.replies ?? []),
+                    {
+                      id: `${Date.now()}-${commentId}`,
+                      authorEmail,
+                      authorName: user.profile.fullName,
+                      text: draft,
+                      createdAt: formatNow(),
+                    },
+                  ],
+                }
+              : comment,
+          ),
+        },
+      };
+
+      syncSharedState({
+        nextPosts: posts,
+        nextInteractions,
+      });
+
+      return nextInteractions;
+    });
+
+    setCommentReplyDrafts((current) => ({
+      ...current,
+      [draftKey]: "",
+    }));
+    setOpenReplyComposerId(null);
   };
 
   const sharePost = async (postId: string) => {
@@ -9084,16 +9277,7 @@ export default function Page() {
                         </div>
 
                         <div className="space-y-3">
-                          {selectedOwnPostVisibleComments.map((comment) => (
-                            <div key={comment.id} className="rounded-[18px] bg-[#FFF0D0] p-3">
-                              <p className="text-sm font-semibold text-[#2C1A0E]">
-                                {accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username
-                                  ? `@${accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username}`
-                                  : comment.authorName}
-                              </p>
-                              <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
-                            </div>
-                          ))}
+                          {selectedOwnPostVisibleComments.map((comment) => renderCommentThread(selectedOwnPost.id, selectedOwnPost.authorEmail, comment))}
 
                           {openCommentPostId === selectedOwnPost.id ? (
                             <form className="flex gap-2" onSubmit={(event) => addComment(event, selectedOwnPost.id)}>
