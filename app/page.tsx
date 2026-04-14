@@ -53,6 +53,7 @@ const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
 const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
 const POST_SIGNUP_ONBOARDING_PENDING_PREFIX = "crumbz-post-signup-onboarding-pending-v1";
 const POST_SIGNUP_ONBOARDING_DONE_PREFIX = "crumbz-post-signup-onboarding-done-v1";
+const POST_SIGNUP_ONBOARDING_STEP_PREFIX = "crumbz-post-signup-onboarding-step-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -693,6 +694,10 @@ function getPostSignupOnboardingPendingKey(email: string) {
 
 function getPostSignupOnboardingDoneKey(email: string) {
   return `${POST_SIGNUP_ONBOARDING_DONE_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getPostSignupOnboardingStepKey(email: string) {
+  return `${POST_SIGNUP_ONBOARDING_STEP_PREFIX}:${email.toLowerCase()}`;
 }
 
 async function getAuthAccessToken() {
@@ -1915,6 +1920,10 @@ export default function Page() {
     ? "no friend food posts yet. your own sunday post and your circle's drops will land here."
     : "no friend food dumps yet. your own sunday post and your friends' dumps will land here.";
   const rewardsTitle = isNonStudent ? "perks loading" : "student perks loading";
+  const postSignupReferralUrl = useMemo(() => {
+    const referralCode = liveProfile.referralCode?.trim().toUpperCase();
+    return referralCode ? getReferralLink(referralCode) : "";
+  }, [liveProfile.referralCode]);
   const copy = useMemo(() => translations[language], [language]);
   const navigationState = useMemo<AppNavigationState>(
     () => ({
@@ -1941,6 +1950,17 @@ export default function Page() {
     ],
   );
   const navigationKey = JSON.stringify(navigationState);
+
+  const setPostSignupOnboardingStepWithPersistence = (nextStep: number) => {
+    setPostSignupOnboardingStep(nextStep);
+
+    if (typeof window === "undefined") return;
+
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+
+    window.localStorage.setItem(getPostSignupOnboardingStepKey(email), String(nextStep));
+  };
 
   useEffect(() => {
     if (!bioModalOpen) return;
@@ -3692,7 +3712,8 @@ export default function Page() {
 
     if (hasPendingOnboarding && !hasCompletedOnboarding) {
       setPostSignupOnboardingOpen(true);
-      setPostSignupOnboardingStep(0);
+      const savedStep = Number(window.localStorage.getItem(getPostSignupOnboardingStepKey(email)) ?? "0");
+      setPostSignupOnboardingStep(Number.isInteger(savedStep) && savedStep >= 0 && savedStep <= 2 ? savedStep : 0);
       setPostSignupNotice("");
     }
   }, [isAdmin, needsOnboarding, user.googleProfile?.email, user.signedIn]);
@@ -4804,10 +4825,11 @@ export default function Page() {
     if (typeof window !== "undefined" && email) {
       window.localStorage.setItem(getPostSignupOnboardingDoneKey(email), "true");
       window.localStorage.removeItem(getPostSignupOnboardingPendingKey(email));
+      window.localStorage.removeItem(getPostSignupOnboardingStepKey(email));
     }
 
     setPostSignupOnboardingOpen(false);
-    setPostSignupOnboardingStep(0);
+    setPostSignupOnboardingStepWithPersistence(0);
     setPostSignupPlaceQuery("");
     setPostSignupPlaceResults([]);
     setPostSignupPlaceSearchLoading(false);
@@ -4867,7 +4889,7 @@ export default function Page() {
       );
       setPostSignupPlaceQuery("");
       setPostSignupPlaceResults([]);
-      setPostSignupOnboardingStep(2);
+      setPostSignupOnboardingStepWithPersistence(2);
     } catch (error) {
       setPostSignupNotice(error instanceof Error ? error.message : "saving those spots didn’t stick. try again.");
     } finally {
@@ -4876,13 +4898,13 @@ export default function Page() {
   };
 
   const copyPostSignupProfileLink = async () => {
-    if (!profileShareUrl) return;
+    if (!postSignupReferralUrl) return;
 
     try {
-      await navigator.clipboard.writeText(profileShareUrl);
-      setPostSignupNotice("profile link copied.");
+      await navigator.clipboard.writeText(postSignupReferralUrl);
+      setPostSignupNotice("referral link copied.");
     } catch {
-      setPostSignupNotice("copy didn’t work here, but your profile link is ready below.");
+      setPostSignupNotice("copy didn’t work here, but your referral link is ready below.");
     }
   };
 
@@ -6724,7 +6746,7 @@ export default function Page() {
                     </div>
 
                     <div className="flex flex-col gap-3 pt-2">
-                      <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={() => setPostSignupOnboardingStep(1)}>
+                      <Button radius="full" size="lg" className="bg-[#2C1A0E] text-white" onPress={() => setPostSignupOnboardingStepWithPersistence(1)}>
                         {copy.onboarding.letsGo}
                       </Button>
                       <button type="button" onClick={skipPostSignupWelcome} className="text-sm font-medium text-[#6c7289]">
@@ -6860,7 +6882,7 @@ export default function Page() {
                       >
                         {copy.onboarding.continue}
                       </Button>
-                      <button type="button" onClick={() => setPostSignupOnboardingStep(2)} className="text-sm font-medium text-[#6c7289]">
+                      <button type="button" onClick={() => setPostSignupOnboardingStepWithPersistence(2)} className="text-sm font-medium text-[#6c7289]">
                         {copy.onboarding.skipForNow}
                       </button>
                       {postSignupNotice ? <p className="text-sm text-[#B56D19]">{postSignupNotice}</p> : null}
@@ -6901,7 +6923,9 @@ export default function Page() {
 
                       <div className="mt-4 rounded-[20px] border border-[#FFD7A1] bg-[#fff9ef] p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.onboarding.shareProfile}</p>
-                        <p className="mt-2 break-all rounded-[16px] bg-white px-3 py-3 text-sm text-[#2C1A0E]">{profileShareUrl}</p>
+                        <p className="mt-2 break-all rounded-[16px] bg-white px-3 py-3 text-sm text-[#2C1A0E]">
+                          {postSignupReferralUrl || "your referral link is getting ready."}
+                        </p>
                         <Button radius="full" variant="flat" className="mt-3 bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => void copyPostSignupProfileLink()}>
                           {copy.onboarding.copyLink}
                         </Button>
