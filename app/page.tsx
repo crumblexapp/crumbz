@@ -2286,6 +2286,17 @@ export default function Page() {
     })
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     .slice(0, 3);
+  const cityPhotoFallbackPosts = [...studentDailyPosts, ...studentWeeklyDumps]
+    .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+    .filter((post) => Boolean(post.mediaUrls[0]))
+    .filter((post) => {
+      const authorCity = accountByEmail.get(post.authorEmail.toLowerCase())?.profile.city ?? "";
+      const postCity = post.taggedPlaceCity ?? authorCity;
+      return normalizeCityKey(postCity) === normalizeCityKey(liveProfile.city);
+    })
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+    .slice(0, 6);
+  const shouldShowCityPhotoFallback = liveProfile.friends.length === 0 && cityPhotoFallbackPosts.length > 0;
   const selectedOwnPost =
     selectedOwnPostSnapshot && selectedOwnPostSnapshot.id === selectedOwnPostId
       ? selectedOwnPostSnapshot
@@ -8426,6 +8437,26 @@ export default function Page() {
                         {copy.feed.remindMe}
                       </Button>
                       <Chip className="bg-[#FF3D6B]/18 text-[#ff96b0]">{copy.feed.alerts(notificationCount)}</Chip>
+                    </div>
+                  </CardBody>
+                </Card>
+              ) : null}
+
+              {shouldShowCityPhotoFallback ? (
+                <Card className="rounded-[30px] border border-[#f1e8da] bg-white shadow-[0_18px_50px_rgba(44,26,14,0.08)]">
+                  <CardBody className="gap-4 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.feed.cityFallbackLabel}</p>
+                        <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                          {copy.feed.cityFallbackTitle(liveProfile.city)}
+                        </p>
+                        <p className="mt-2 text-base text-[#6c7289]">{copy.feed.cityFallbackSubtitle}</p>
+                      </div>
+                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{copy.feed.cityFallbackCount(cityPhotoFallbackPosts.length)}</Chip>
+                    </div>
+                    <div className="space-y-4">
+                      {cityPhotoFallbackPosts.map((post) => renderFeedCard(post))}
                     </div>
                   </CardBody>
                 </Card>
