@@ -120,6 +120,7 @@ function MapViewportSync({
 export default function FavoritesMap({
   center,
   cityName,
+  searchCityName,
   language,
   places,
   favoriteIds,
@@ -138,6 +139,7 @@ export default function FavoritesMap({
   onOpenDirections: (place: FavoritePlace) => void;
   onPostFromPlace?: (place: FavoritePlace) => void;
   cityName: string;
+  searchCityName?: string;
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
 }) {
@@ -205,11 +207,13 @@ export default function FavoritesMap({
 
       try {
         const params = new URLSearchParams({
-          city: cityName,
           query,
           lat: String(effectiveCenter[0]),
           lon: String(effectiveCenter[1]),
         });
+        if (searchCityName?.trim()) {
+          params.set("city", searchCityName);
+        }
         const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
         const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
         const nextResults = (payload.places ?? []).slice(0, 12);
@@ -227,7 +231,7 @@ export default function FavoritesMap({
     }, 300);
 
     return () => window.clearTimeout(timeout);
-  }, [cityName, effectiveCenter, searchQuery]);
+  }, [effectiveCenter, searchCityName, searchQuery]);
 
   return (
     <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">

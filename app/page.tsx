@@ -960,6 +960,36 @@ function getReferralLink(referralCode: string) {
   return url.toString();
 }
 
+function getDistanceInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+  const startLat = toRadians(lat1);
+  const endLat = toRadians(lat2);
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2) * Math.cos(startLat) * Math.cos(endLat);
+
+  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getNearestSupportedCity(lat: number, lon: number) {
+  return Object.entries(cityCenters).reduce(
+    (closest, [city, [cityLat, cityLon]]) => {
+      const distance = getDistanceInKm(lat, lon, cityLat, cityLon);
+      const displayName = cityOptions.find((option) => normalizeCityKey(option) === city) ?? city;
+      if (!closest || distance < closest.distanceKm) {
+        return { city: displayName, distanceKm: distance };
+      }
+
+      return closest;
+    },
+    null as { city: string; distanceKm: number } | null,
+  );
+}
+
 function normalizeAccounts(accounts: unknown): StoredUser[] {
   if (!Array.isArray(accounts)) return [];
 
@@ -1798,8 +1828,13 @@ export default function Page() {
   const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>([]);
   const [highlightedFavoritePlaceId, setHighlightedFavoritePlaceId] = useState<string | null>(null);
   const [favoriteViewCity, setFavoriteViewCity] = useState<string | null>(null);
+  const [favoriteMapMode, setFavoriteMapMode] = useState<"home" | "nearby">("home");
+  const [favoriteNearbyCenter, setFavoriteNearbyCenter] = useState<[number, number] | null>(null);
+  const [favoriteNearbyCity, setFavoriteNearbyCity] = useState<string | null>(null);
   const [favoritePlacesLoading, setFavoritePlacesLoading] = useState(false);
   const [favoritePlacesError, setFavoritePlacesError] = useState("");
+  const [favoriteLocationNotice, setFavoriteLocationNotice] = useState("");
+  const [favoriteLocationLoading, setFavoriteLocationLoading] = useState(false);
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
   const [dareTitleDraft, setDareTitleDraft] = useState(getDefaultDare().title);
@@ -2470,8 +2505,12 @@ export default function Page() {
   });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
   const favoriteActivities = liveProfile.favoriteActivities ?? [];
-  const currentFavoriteCity = favoriteViewCity ?? liveProfile.city;
-  const favoriteCityCenter = cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
+  const homeFavoriteCity = favoriteViewCity ?? liveProfile.city;
+  const currentFavoriteCity = favoriteMapMode === "nearby" ? favoriteNearbyCity ?? homeFavoriteCity : homeFavoriteCity;
+  const favoriteCityCenter =
+    favoriteMapMode === "nearby" && favoriteNearbyCenter
+      ? favoriteNearbyCenter
+      : cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
   const dailyPostCity = liveProfile.city || currentFavoriteCity || "Warsaw";
   const dailyPostCityCenter = cityCenters[normalizeCityKey(dailyPostCity)] ?? favoriteCityCenter;
   const adminPostCityCenter = cityCenters[normalizeCityKey(adminPostCity)] ?? favoriteCityCenter;
@@ -3756,8 +3795,10 @@ export default function Page() {
     if (!user.signedIn || isAdmin) return;
 
     const cityKey = normalizeCityKey(currentFavoriteCity);
-    const center = cityCenters[cityKey];
-    if (!center) {
+    const fallbackCenter = cityCenters[cityKey];
+    const activeCenter = favoriteMapMode === "nearby" && favoriteNearbyCenter ? favoriteNearbyCenter : fallbackCenter;
+
+    if (!activeCenter) {
       setFavoritePlaces(getFallbackFavoritePlaces(cityKey));
       setFavoritePlacesError("");
       return;
@@ -3772,8 +3813,8 @@ export default function Page() {
       try {
         const params = new URLSearchParams({
           city: currentFavoriteCity,
-          lat: String(center[0]),
-          lon: String(center[1]),
+          lat: String(activeCenter[0]),
+          lon: String(activeCenter[1]),
           radius: "3500",
         });
         const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
@@ -3803,7 +3844,7 @@ export default function Page() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [currentFavoriteCity, isAdmin, user.signedIn]);
+  }, [currentFavoriteCity, favoriteMapMode, favoriteNearbyCenter, isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (!postSignupOnboardingOpen) return;
@@ -4906,6 +4947,43 @@ export default function Page() {
     } catch {
       setPostSignupNotice("copy didn’t work here, but your referral link is ready below.");
     }
+  };
+
+  const useCurrentLocationForFavorites = () => {
+    if (typeof window === "undefined" || !("geolocation" in navigator)) {
+      setFavoriteLocationNotice("this phone isn’t sharing location here yet.");
+      return;
+    }
+
+    setFavoriteLocationLoading(true);
+    setFavoriteLocationNotice("");
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextCenter: [number, number] = [position.coords.latitude, position.coords.longitude];
+        const nearestCity = getNearestSupportedCity(position.coords.latitude, position.coords.longitude);
+
+        setFavoriteNearbyCenter(nextCenter);
+        setFavoriteNearbyCity(nearestCity?.city ?? liveProfile.city);
+        setFavoriteMapMode("nearby");
+        setFavoriteLocationNotice(nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.");
+        setFavoriteLocationLoading(false);
+      },
+      () => {
+        setFavoriteLocationLoading(false);
+        setFavoriteLocationNotice("location permission didn’t come through, so the map is still on home city.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 300000,
+      },
+    );
+  };
+
+  const useHomeCityForFavorites = () => {
+    setFavoriteMapMode("home");
+    setFavoriteLocationNotice(`map switched back to home: ${homeFavoriteCity}.`);
   };
 
   const sendPostSignupFriendRequest = async () => {
@@ -8664,16 +8742,46 @@ export default function Page() {
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.favorites.label}</p>
                     <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      {copy.favorites.title(currentFavoriteCity)}
+                      {copy.favorites.title(favoriteMapMode === "nearby" ? favoriteNearbyCity ?? "near you" : currentFavoriteCity)}
                     </h2>
-                    <p className="text-sm text-[#2C1A0E]">{copy.favorites.subtitle}</p>
+                    <p className="text-sm text-[#2C1A0E]">
+                      {favoriteMapMode === "nearby"
+                        ? `showing spots around where they are right now. home stays set to ${liveProfile.city}.`
+                        : copy.favorites.subtitle}
+                    </p>
                   </div>
                   <Chip className="bg-[#FFF0D0] text-[#F5A623]">{copy.favorites.likedCount(favoritePlaceIds.length)}</Chip>
                 </div>
 
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    radius="full"
+                    variant={favoriteMapMode === "nearby" ? "solid" : "flat"}
+                    className={favoriteMapMode === "nearby" ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
+                    isLoading={favoriteLocationLoading}
+                    onPress={useCurrentLocationForFavorites}
+                  >
+                    use my location
+                  </Button>
+                  <Button
+                    radius="full"
+                    variant={favoriteMapMode === "home" ? "solid" : "flat"}
+                    className={favoriteMapMode === "home" ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
+                    onPress={useHomeCityForFavorites}
+                  >
+                    home city
+                  </Button>
+                  <Chip className="bg-white text-[#2C1A0E]">
+                    {favoriteMapMode === "nearby" ? `home: ${liveProfile.city}` : `map: ${currentFavoriteCity}`}
+                  </Chip>
+                </div>
+
+                {favoriteLocationNotice ? <p className="text-sm text-[#6c7289]">{favoriteLocationNotice}</p> : null}
+
                 <FavoritesMap
                   language={language}
-                  cityName={currentFavoriteCity}
+                  cityName={favoriteMapMode === "nearby" ? favoriteNearbyCity ?? "near you" : currentFavoriteCity}
+                  searchCityName={favoriteMapMode === "nearby" ? favoriteNearbyCity ?? "" : currentFavoriteCity}
                   center={favoriteCityCenter}
                   places={favoritePlaces}
                   favoriteIds={favoritePlaceIds}
