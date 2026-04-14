@@ -2277,14 +2277,20 @@ export default function Page() {
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const onboardingCityPosts = [...studentDailyPosts, ...studentWeeklyDumps]
+  const rawOnboardingCityPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
     .filter((post) => {
       const authorCity = accountByEmail.get(post.authorEmail.toLowerCase())?.profile.city ?? "";
       const postCity = post.taggedPlaceCity ?? authorCity;
       return normalizeCityKey(postCity) === normalizeCityKey(liveProfile.city);
     })
-    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
+    .sort((a, b) => Number(Boolean(b.mediaUrls[0])) - Number(Boolean(a.mediaUrls[0])) || getPostTimestamp(b) - getPostTimestamp(a));
+  const onboardingCityPosts = [
+    ...rawOnboardingCityPosts.filter(
+      (post, index, list) => list.findIndex((candidate) => candidate.authorEmail.toLowerCase() === post.authorEmail.toLowerCase()) === index,
+    ),
+    ...rawOnboardingCityPosts,
+  ].filter((post, index, list) => list.findIndex((candidate) => candidate.id === post.id) === index)
     .slice(0, 3);
   const cityPhotoFallbackPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
@@ -6861,7 +6867,9 @@ export default function Page() {
                             ) : null}
                             <div className="p-4">
                               <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{post.taggedPlaceName || post.type}</p>
-                              <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">{post.authorName}</p>
+                              <p className="mt-2 text-lg font-semibold text-[#2C1A0E]">
+                                @{accountByEmail.get(post.authorEmail.toLowerCase())?.profile.username || "crumbz-user"}
+                              </p>
                               <p className="mt-1 text-sm text-[#6c7289]">{(post.body || post.title || copy.onboarding.freshFoodPost).slice(0, 110)}</p>
                             </div>
                           </div>
