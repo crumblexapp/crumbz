@@ -3238,8 +3238,7 @@ export default function Page() {
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const trimmedCta = post.cta.trim();
     const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
-    const adminOwnedPost = isAdminOwnedPost(post);
-    const canUseSpecialAdminShare = adminOwnedPost && canUseAdminPostImageShare;
+    const canUseSpecialImageShare = canUseImageShareForPost(post);
     return (
       <Card
         id={`post-${post.id}`}
@@ -3248,7 +3247,7 @@ export default function Page() {
       >
         <div
           ref={(node) => {
-            if (canUseSpecialAdminShare) {
+            if (canUseSpecialImageShare) {
               adminShareCardRefs.current[post.id] = node;
             }
           }}
@@ -3406,7 +3405,7 @@ export default function Page() {
             <PostActionIcon
               label="share post"
               onPress={() => {
-                void (canUseSpecialAdminShare ? shareAdminPostCard(post) : sharePost(post.id));
+                void (canUseSpecialImageShare ? shareAdminPostCard(post) : sharePost(post.id));
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -6675,6 +6674,8 @@ export default function Page() {
 
   const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || post.authorEmail.toLowerCase() === ADMIN_EMAIL;
   const canUseAdminPostImageShare = isAdmin || ADMIN_POST_IMAGE_SHARE_USERNAMES.has(currentUsername);
+  const canUseImageShareForPost = (post: AppPost) =>
+    canUseAdminPostImageShare && (isAdminOwnedPost(post) || post.authorEmail.toLowerCase() === currentUserEmail);
 
   const buildPostSharePayload = (post: AppPost) => {
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
@@ -10842,7 +10843,10 @@ export default function Page() {
                               />
                             </svg>
                           </PostActionIcon>
-                          <PostActionIcon label="share post" onPress={() => void sharePost(selectedOwnPost.id)}>
+                          <PostActionIcon
+                            label="share post"
+                            onPress={() => void (canUseImageShareForPost(selectedOwnPost) ? shareAdminPostCard(selectedOwnPost) : sharePost(selectedOwnPost.id))}
+                          >
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M20 4 11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                               <path
