@@ -6763,45 +6763,197 @@ export default function Page() {
     return dataUrl;
   };
 
-  const buildShareSnapshotNode = async (sourceNode: HTMLDivElement) => {
-    const snapshotNode = sourceNode.cloneNode(true) as HTMLDivElement;
-    snapshotNode.querySelectorAll('[data-share-ignore="true"]').forEach((node) => node.remove());
+  const waitForImageToLoad = (image: HTMLImageElement) =>
+    new Promise<void>((resolve, reject) => {
+      if (image.complete && image.naturalWidth > 0) {
+        resolve();
+        return;
+      }
 
-    const imageNodes = Array.from(snapshotNode.querySelectorAll("img"));
-    await Promise.all(
-      imageNodes.map(async (imageNode) => {
-        const src = imageNode.currentSrc || imageNode.getAttribute("src") || "";
-        if (!src || src.startsWith("data:")) return;
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("image load failed"));
+    });
 
-        try {
-          imageNode.crossOrigin = "anonymous";
-          imageNode.src = await getShareSafeImageUrl(src);
-        } catch {
-          // Keep the original src if conversion fails so share can still try.
-        }
-      }),
-    );
+  const buildShareSnapshotNode = async (post: AppPost) => {
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "-10000px";
+    wrapper.style.top = "0";
+    wrapper.style.zIndex = "-1";
+    wrapper.style.pointerEvents = "none";
+    wrapper.style.width = "720px";
+    wrapper.style.padding = "0";
+    wrapper.style.background = "#fffaf2";
+    wrapper.style.fontFamily = "Arial, sans-serif";
 
-    snapshotNode.style.position = "fixed";
-    snapshotNode.style.left = "-10000px";
-    snapshotNode.style.top = "0";
-    snapshotNode.style.zIndex = "-1";
-    snapshotNode.style.width = `${sourceNode.offsetWidth}px`;
-    snapshotNode.style.maxWidth = `${sourceNode.offsetWidth}px`;
-    snapshotNode.style.pointerEvents = "none";
+    const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
+    const username = postAuthorAccount?.profile.username?.trim() || post.authorName || "crumbz";
+    const placeKind = (post.taggedPlaceKind || "food spot").toUpperCase();
+    const priceTagLabel = post.priceTag ? PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag : "";
 
-    document.body.appendChild(snapshotNode);
-    return snapshotNode;
+    const card = document.createElement("div");
+    card.style.width = "720px";
+    card.style.boxSizing = "border-box";
+    card.style.background = "#fffaf2";
+    card.style.padding = "0";
+    card.style.color = "#2C1A0E";
+
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+    header.style.padding = "22px 26px 18px";
+    header.style.borderBottom = "1px solid #F3E4C5";
+
+    const title = document.createElement("div");
+    title.textContent = `@${username}`;
+    title.style.fontSize = "52px";
+    title.style.fontWeight = "700";
+    title.style.lineHeight = "1";
+    title.style.letterSpacing = "-0.04em";
+
+    const closeLabel = document.createElement("div");
+    closeLabel.textContent = "close";
+    closeLabel.style.fontSize = "28px";
+    closeLabel.style.color = "#5F5245";
+
+    header.append(title, closeLabel);
+    card.appendChild(header);
+
+    if (post.mediaUrls[0]) {
+      const mediaFrame = document.createElement("div");
+      mediaFrame.style.margin = "18px 26px 0";
+      mediaFrame.style.border = "1px solid #F0E2C1";
+      mediaFrame.style.borderRadius = "26px";
+      mediaFrame.style.padding = "10px";
+      mediaFrame.style.background = "#fff";
+      mediaFrame.style.overflow = "hidden";
+
+      const image = document.createElement("img");
+      image.src = await getShareSafeImageUrl(post.mediaUrls[0]);
+      image.alt = post.title || "post photo";
+      image.style.display = "block";
+      image.style.width = "100%";
+      image.style.height = "auto";
+      image.style.borderRadius = "20px";
+      image.style.objectFit = "cover";
+
+      mediaFrame.appendChild(image);
+      card.appendChild(mediaFrame);
+      await waitForImageToLoad(image);
+    }
+
+    if (post.body.trim()) {
+      const caption = document.createElement("div");
+      caption.textContent = post.body.trim();
+      caption.style.padding = "22px 26px 0";
+      caption.style.fontSize = "24px";
+      caption.style.lineHeight = "1.45";
+      caption.style.fontWeight = "500";
+      card.appendChild(caption);
+    }
+
+    if (post.taggedPlaceName) {
+      const placeCard = document.createElement("div");
+      placeCard.style.margin = "18px 26px 0";
+      placeCard.style.border = "1px solid #F3E4C5";
+      placeCard.style.borderRadius = "24px";
+      placeCard.style.background = "#fff";
+      placeCard.style.padding = "20px 22px";
+
+      const placeTop = document.createElement("div");
+      placeTop.style.display = "flex";
+      placeTop.style.justifyContent = "space-between";
+      placeTop.style.alignItems = "center";
+      placeTop.style.gap = "12px";
+
+      const placeKindLabel = document.createElement("div");
+      placeKindLabel.textContent = placeKind;
+      placeKindLabel.style.fontSize = "18px";
+      placeKindLabel.style.fontWeight = "700";
+      placeKindLabel.style.letterSpacing = "0.18em";
+      placeKindLabel.style.color = "#D89A2D";
+
+      const mapChip = document.createElement("div");
+      mapChip.textContent = "MAP";
+      mapChip.style.padding = "8px 16px";
+      mapChip.style.borderRadius = "999px";
+      mapChip.style.background = "#FFF3CC";
+      mapChip.style.fontSize = "18px";
+      mapChip.style.fontWeight = "700";
+      mapChip.style.letterSpacing = "0.18em";
+      mapChip.style.color = "#E3A736";
+
+      placeTop.append(placeKindLabel, mapChip);
+
+      const placeName = document.createElement("div");
+      placeName.textContent = post.taggedPlaceName;
+      placeName.style.marginTop = "10px";
+      placeName.style.fontSize = "22px";
+      placeName.style.fontWeight = "700";
+      placeName.style.lineHeight = "1.3";
+
+      const placeAddress = document.createElement("div");
+      placeAddress.textContent = post.taggedPlaceAddress || "";
+      placeAddress.style.marginTop = "8px";
+      placeAddress.style.fontSize = "18px";
+      placeAddress.style.lineHeight = "1.35";
+      placeAddress.style.color = "#7B7F91";
+      placeAddress.style.whiteSpace = "nowrap";
+      placeAddress.style.overflow = "hidden";
+      placeAddress.style.textOverflow = "ellipsis";
+
+      placeCard.append(placeTop, placeName);
+      if (post.taggedPlaceAddress) {
+        placeCard.appendChild(placeAddress);
+      }
+      card.appendChild(placeCard);
+    }
+
+    if (post.tasteTag || priceTagLabel) {
+      const tags = document.createElement("div");
+      tags.style.display = "flex";
+      tags.style.flexWrap = "wrap";
+      tags.style.gap = "12px";
+      tags.style.padding = "18px 26px 28px";
+
+      if (post.tasteTag) {
+        const tasteChip = document.createElement("div");
+        tasteChip.textContent = post.tasteTag;
+        tasteChip.style.padding = "10px 18px";
+        tasteChip.style.borderRadius = "999px";
+        tasteChip.style.background = "#3A2717";
+        tasteChip.style.color = "#fff";
+        tasteChip.style.fontSize = "18px";
+        tasteChip.style.fontWeight = "600";
+        tags.appendChild(tasteChip);
+      }
+
+      if (priceTagLabel) {
+        const priceChip = document.createElement("div");
+        priceChip.textContent = priceTagLabel;
+        priceChip.style.padding = "10px 18px";
+        priceChip.style.borderRadius = "999px";
+        priceChip.style.background = "#fff";
+        priceChip.style.border = "1px solid #EAD9B5";
+        priceChip.style.color = "#6C5A47";
+        priceChip.style.fontSize = "18px";
+        priceChip.style.fontWeight = "600";
+        tags.appendChild(priceChip);
+      }
+
+      card.appendChild(tags);
+    } else {
+      card.style.paddingBottom = "28px";
+    }
+
+    wrapper.appendChild(card);
+    document.body.appendChild(wrapper);
+    return wrapper;
   };
 
   const shareAdminPostCard = async (post: AppPost) => {
     if (typeof window === "undefined") return;
-
-    const shareCardNode = adminShareCardRefs.current[post.id];
-    if (!shareCardNode) {
-      await sharePost(post.id);
-      return;
-    }
 
     const sharePayload = buildPostSharePayload(post);
     let copiedLink = false;
@@ -6818,7 +6970,7 @@ export default function Page() {
     let snapshotNode: HTMLDivElement | null = null;
 
     try {
-      snapshotNode = await buildShareSnapshotNode(shareCardNode);
+      snapshotNode = await buildShareSnapshotNode(post);
       const dataUrl = await toPng(snapshotNode, {
         cacheBust: true,
         pixelRatio: 2,
