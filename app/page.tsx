@@ -54,6 +54,9 @@ const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
 const POST_SIGNUP_ONBOARDING_PENDING_PREFIX = "crumbz-post-signup-onboarding-pending-v1";
 const POST_SIGNUP_ONBOARDING_DONE_PREFIX = "crumbz-post-signup-onboarding-done-v1";
 const POST_SIGNUP_ONBOARDING_STEP_PREFIX = "crumbz-post-signup-onboarding-step-v1";
+const FAVORITE_LOCATION_MODE_PREFIX = "crumbz-favorite-location-mode-v1";
+const FAVORITE_LOCATION_CITY_PREFIX = "crumbz-favorite-location-city-v1";
+const FAVORITE_LOCATION_CENTER_PREFIX = "crumbz-favorite-location-center-v1";
 const MEDIA_DB_NAME = "crumbz-media-v1";
 const MEDIA_STORE_NAME = "post-media";
 const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
@@ -704,6 +707,18 @@ function getPostSignupOnboardingDoneKey(email: string) {
 
 function getPostSignupOnboardingStepKey(email: string) {
   return `${POST_SIGNUP_ONBOARDING_STEP_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getFavoriteLocationModeKey(email: string) {
+  return `${FAVORITE_LOCATION_MODE_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getFavoriteLocationCityKey(email: string) {
+  return `${FAVORITE_LOCATION_CITY_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getFavoriteLocationCenterKey(email: string) {
+  return `${FAVORITE_LOCATION_CENTER_PREFIX}:${email.toLowerCase()}`;
 }
 
 async function getAuthAccessToken() {
@@ -2522,14 +2537,19 @@ export default function Page() {
   });
   const favoritePlaceIds = liveProfile.favoritePlaceIds ?? [];
   const favoriteActivities = liveProfile.favoriteActivities ?? [];
+  const activeLocationCity = favoriteMapMode === "nearby" ? favoriteNearbyCity ?? liveProfile.city : liveProfile.city;
+  const activeLocationCenter =
+    favoriteMapMode === "nearby" && favoriteNearbyCenter
+      ? favoriteNearbyCenter
+      : cityCenters[normalizeCityKey(activeLocationCity)] ?? [52.2297, 21.0122];
   const homeFavoriteCity = favoriteViewCity ?? liveProfile.city;
   const currentFavoriteCity = favoriteMapMode === "nearby" ? favoriteNearbyCity ?? homeFavoriteCity : homeFavoriteCity;
   const favoriteCityCenter =
     favoriteMapMode === "nearby" && favoriteNearbyCenter
       ? favoriteNearbyCenter
       : cityCenters[normalizeCityKey(currentFavoriteCity)] ?? [52.2297, 21.0122];
-  const dailyPostCity = liveProfile.city || currentFavoriteCity || "Warsaw";
-  const dailyPostCityCenter = cityCenters[normalizeCityKey(dailyPostCity)] ?? favoriteCityCenter;
+  const dailyPostCity = activeLocationCity || currentFavoriteCity || "Warsaw";
+  const dailyPostCityCenter = activeLocationCenter ?? favoriteCityCenter;
   const adminPostCityCenter = cityCenters[normalizeCityKey(adminPostCity)] ?? favoriteCityCenter;
   const resolveFavoritePlaces = (placeIds: string[], activities: FavoriteActivity[]) =>
     placeIds
@@ -3883,6 +3903,40 @@ export default function Page() {
   }, [isAdmin, needsOnboarding, user.googleProfile?.email, user.signedIn]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !user.signedIn || isAdmin) return;
+
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+
+    const savedMode = window.localStorage.getItem(getFavoriteLocationModeKey(email));
+    const savedCity = window.localStorage.getItem(getFavoriteLocationCityKey(email));
+    const savedCenterRaw = window.localStorage.getItem(getFavoriteLocationCenterKey(email));
+
+    if (savedMode === "nearby") {
+      if (savedCity) {
+        setFavoriteNearbyCity(savedCity);
+      }
+
+      if (savedCenterRaw) {
+        try {
+          const parsedCenter = JSON.parse(savedCenterRaw) as [number, number];
+          if (Array.isArray(parsedCenter) && parsedCenter.length === 2) {
+            setFavoriteNearbyCenter([Number(parsedCenter[0]), Number(parsedCenter[1])]);
+          }
+        } catch {
+          // ignore invalid saved center
+        }
+      }
+
+      setFavoriteMapMode("nearby");
+      refreshFavoriteLocationFromDevice({ silent: true });
+      return;
+    }
+
+    setFavoriteMapMode("home");
+  }, [isAdmin, user.googleProfile?.email, user.signedIn]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || user.signedIn) {
       setShowInstallPrompt(false);
       setInstallPromptMode(null);
@@ -5075,29 +5129,58 @@ export default function Page() {
     }
   };
 
-  const useCurrentLocationForFavorites = () => {
+  const persistFavoriteLocationPreference = (
+    nextMode: "home" | "nearby",
+    nextCity?: string | null,
+    nextCenter?: [number, number] | null,
+  ) => {
+    if (typeof window === "undefined") return;
+
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email) return;
+
+    window.localStorage.setItem(getFavoriteLocationModeKey(email), nextMode);
+    if (nextCity) {
+      window.localStorage.setItem(getFavoriteLocationCityKey(email), nextCity);
+    }
+    if (nextCenter) {
+      window.localStorage.setItem(getFavoriteLocationCenterKey(email), JSON.stringify(nextCenter));
+    }
+  };
+
+  const refreshFavoriteLocationFromDevice = (options?: { silent?: boolean }) => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setFavoriteLocationNotice("this phone isn’t sharing location here yet.");
+      if (!options?.silent) {
+        setFavoriteLocationNotice("this phone isn’t sharing location here yet.");
+      }
       return;
     }
 
     setFavoriteLocationLoading(true);
-    setFavoriteLocationNotice("");
+    if (!options?.silent) {
+      setFavoriteLocationNotice("");
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const nextCenter: [number, number] = [position.coords.latitude, position.coords.longitude];
         const nearestCity = getNearestSupportedCity(position.coords.latitude, position.coords.longitude);
+        const nextCity = nearestCity?.city ?? liveProfile.city;
 
         setFavoriteNearbyCenter(nextCenter);
-        setFavoriteNearbyCity(nearestCity?.city ?? liveProfile.city);
+        setFavoriteNearbyCity(nextCity);
         setFavoriteMapMode("nearby");
-        setFavoriteLocationNotice(nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.");
+        persistFavoriteLocationPreference("nearby", nextCity, nextCenter);
+        setFavoriteLocationNotice(
+          options?.silent ? "" : nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.",
+        );
         setFavoriteLocationLoading(false);
       },
       () => {
         setFavoriteLocationLoading(false);
-        setFavoriteLocationNotice("location permission didn’t come through, so the map is still on home city.");
+        if (!options?.silent) {
+          setFavoriteLocationNotice("location permission didn’t come through, so the map is still on home city.");
+        }
       },
       {
         enableHighAccuracy: true,
@@ -5107,8 +5190,13 @@ export default function Page() {
     );
   };
 
+  const useCurrentLocationForFavorites = () => {
+    refreshFavoriteLocationFromDevice();
+  };
+
   const useHomeCityForFavorites = () => {
     setFavoriteMapMode("home");
+    persistFavoriteLocationPreference("home", liveProfile.city, null);
     setFavoriteLocationNotice(`map switched back to home: ${homeFavoriteCity}.`);
   };
 
@@ -9332,6 +9420,31 @@ export default function Page() {
                     <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.45rem] leading-none text-[#2C1A0E] sm:text-[1.6rem]">
                       @{liveProfile.username}
                     </p>
+                    <div className="mt-2 flex items-center">
+                      <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
+                        <button
+                          type="button"
+                          onClick={() => setLanguage("en")}
+                          className={`rounded-full px-2 py-0.5 text-[0.62rem] font-semibold transition ${
+                            language === "en" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                          }`}
+                          aria-label="switch language to english"
+                        >
+                          🇬🇧 EN
+                        </button>
+                        <span className="px-1 text-[0.62rem] text-[#C5A877]">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setLanguage("pl")}
+                          className={`rounded-full px-2 py-0.5 text-[0.62rem] font-semibold transition ${
+                            language === "pl" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                          }`}
+                          aria-label="switch language to polish"
+                        >
+                          🇵🇱 PL
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
                     log out
@@ -9377,32 +9490,7 @@ export default function Page() {
 
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
-                      <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
-                        <button
-                          type="button"
-                          onClick={() => setLanguage("en")}
-                          className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition ${
-                            language === "en" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
-                          }`}
-                          aria-label="switch language to english"
-                        >
-                          🇬🇧 EN
-                        </button>
-                        <span className="px-1 text-[0.68rem] text-[#C5A877]">|</span>
-                        <button
-                          type="button"
-                          onClick={() => setLanguage("pl")}
-                          className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition ${
-                            language === "pl" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
-                          }`}
-                          aria-label="switch language to polish"
-                        >
-                          🇵🇱 PL
-                        </button>
-                      </div>
-                    </div>
+                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
                   </div>
 
                   <div className="col-span-2 space-y-1 pt-1">
