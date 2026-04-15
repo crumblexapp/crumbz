@@ -67,6 +67,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
 const ADMIN_PUBLIC_NAME = "crumbz";
 const ADMIN_PUBLIC_HANDLE = "@crumbz.pl";
+const ADMIN_POST_IMAGE_SHARE_USERNAMES = new Set(["josheats"]);
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -2403,6 +2404,7 @@ export default function Page() {
   const selectedOwnPostHasLiked = Boolean(
     selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
   );
+  const currentUsername = liveProfile.username?.trim().toLowerCase() ?? user.profile.username?.trim().toLowerCase() ?? "";
   const adminShareCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
@@ -3237,6 +3239,7 @@ export default function Page() {
     const trimmedCta = post.cta.trim();
     const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
     const adminOwnedPost = isAdminOwnedPost(post);
+    const canUseSpecialAdminShare = adminOwnedPost && canUseAdminPostImageShare;
     return (
       <Card
         id={`post-${post.id}`}
@@ -3245,7 +3248,7 @@ export default function Page() {
       >
         <div
           ref={(node) => {
-            if (adminOwnedPost) {
+            if (canUseSpecialAdminShare) {
               adminShareCardRefs.current[post.id] = node;
             }
           }}
@@ -3403,7 +3406,7 @@ export default function Page() {
             <PostActionIcon
               label="share post"
               onPress={() => {
-                void (adminOwnedPost ? shareAdminPostCard(post) : sharePost(post.id));
+                void (canUseSpecialAdminShare ? shareAdminPostCard(post) : sharePost(post.id));
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -6671,6 +6674,7 @@ export default function Page() {
   };
 
   const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || post.authorEmail.toLowerCase() === ADMIN_EMAIL;
+  const canUseAdminPostImageShare = isAdmin || ADMIN_POST_IMAGE_SHARE_USERNAMES.has(currentUsername);
 
   const buildPostSharePayload = (post: AppPost) => {
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
