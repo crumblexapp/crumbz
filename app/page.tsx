@@ -6699,6 +6699,23 @@ export default function Page() {
     };
   };
 
+  const getPostShareCardLabel = (post: AppPost) => {
+    const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
+    const username = postAuthorAccount?.profile.username?.trim() || post.authorName || "crumbz";
+    const trimmedCaption = post.body.trim();
+    return trimmedCaption || `@${username}'s post`;
+  };
+
+  const getPostShareFileName = (post: AppPost) => {
+    const label = getPostShareCardLabel(post)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+
+    return `${label || post.id}.png`;
+  };
+
   const recordPostShare = (postId: string, platform: string) => {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
@@ -6842,7 +6859,28 @@ export default function Page() {
       }, "image/png");
     });
 
+  const ensureShareCardFonts = async () => {
+    if (typeof document === "undefined" || !("fonts" in document)) return;
+
+    try {
+      await Promise.all([
+        document.fonts.load('700 58px "Young Serif"'),
+        document.fonts.load('500 22px "Manrope"'),
+        document.fonts.load('600 18px "Manrope"'),
+        document.fonts.load('700 20px "Manrope"'),
+        document.fonts.load('700 21px "Manrope"'),
+        document.fonts.load('400 18px "Manrope"'),
+        document.fonts.load('400 32px "Manrope"'),
+      ]);
+      await document.fonts.ready;
+    } catch {
+      // Fall back to system fonts if the font API isn't available.
+    }
+  };
+
   const buildShareCardBlob = async (post: AppPost) => {
+    await ensureShareCardFonts();
+
     const canvas = document.createElement("canvas");
     const width = 1080;
     const paddingX = 42;
@@ -6860,6 +6898,7 @@ export default function Page() {
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
     const username = postAuthorAccount?.profile.username?.trim() || post.authorName || "crumbz";
     const priceTagLabel = post.priceTag ? PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag : "";
+    const shareCardLabel = getPostShareCardLabel(post);
 
     let photoImage: HTMLImageElement | null = null;
     let mediaHeight = 0;
@@ -6873,8 +6912,8 @@ export default function Page() {
     const measureCanvas = document.createElement("canvas");
     const measureCtx = measureCanvas.getContext("2d");
     if (!measureCtx) throw new Error("canvas context unavailable");
-    measureCtx.font = "500 22px Arial";
-    const captionLines = post.body.trim() ? getWrappedLines(measureCtx, post.body.trim(), contentWidth) : [];
+    measureCtx.font = '500 22px "Manrope", system-ui, sans-serif';
+    const captionLines = getWrappedLines(measureCtx, shareCardLabel, contentWidth);
     const captionHeight = captionLines.length ? captionLines.length * 34 : 0;
     const captionSectionHeight = captionHeight ? captionHeight + 8 : 0;
 
@@ -6906,12 +6945,12 @@ export default function Page() {
     ctx.stroke();
 
     ctx.fillStyle = "#2C1A0E";
-    ctx.font = "700 58px Arial";
+    ctx.font = '700 58px "Young Serif", Georgia, serif';
     ctx.textBaseline = "top";
     ctx.fillText(`@${username}`, paddingX, 24);
 
     ctx.fillStyle = "#5F5245";
-    ctx.font = "400 32px Arial";
+    ctx.font = '400 32px "Manrope", system-ui, sans-serif';
     const closeLabel = "close";
     ctx.fillText(closeLabel, width - paddingX - ctx.measureText(closeLabel).width, 30);
 
@@ -6940,7 +6979,7 @@ export default function Page() {
     if (captionLines.length) {
       y += sectionGap;
       ctx.fillStyle = "#2C1A0E";
-      ctx.font = "500 22px Arial";
+      ctx.font = '500 22px "Manrope", system-ui, sans-serif';
       for (const line of captionLines) {
         ctx.fillText(line, paddingX, y);
         y += 34;
@@ -6958,11 +6997,11 @@ export default function Page() {
       ctx.stroke();
 
       ctx.fillStyle = "#D89A2D";
-      ctx.font = "700 20px Arial";
+      ctx.font = '700 20px "Manrope", system-ui, sans-serif';
       ctx.fillText((post.taggedPlaceKind || "food spot").toUpperCase(), paddingX + 26, y + 24);
 
       const mapLabel = "MAP";
-      ctx.font = "700 20px Arial";
+      ctx.font = '700 20px "Manrope", system-ui, sans-serif';
       const mapWidth = ctx.measureText(mapLabel).width + 34;
       ctx.fillStyle = "#FFF3CC";
       drawRoundedRect(ctx, width - paddingX - 26 - mapWidth, y + 16, mapWidth, 40, 20);
@@ -6971,7 +7010,7 @@ export default function Page() {
       ctx.fillText(mapLabel, width - paddingX - 26 - mapWidth + 17, y + 24);
 
       ctx.fillStyle = "#2C1A0E";
-      ctx.font = "700 21px Arial";
+      ctx.font = '700 21px "Manrope", system-ui, sans-serif';
       const placeLines = getWrappedLines(ctx, post.taggedPlaceName, contentWidth - 52);
       let placeY = y + 62;
       for (const line of placeLines.slice(0, 2)) {
@@ -6981,7 +7020,7 @@ export default function Page() {
 
       if (post.taggedPlaceAddress) {
         ctx.fillStyle = "#7B7F91";
-        ctx.font = "400 18px Arial";
+        ctx.font = '400 18px "Manrope", system-ui, sans-serif';
         const addressLines = getWrappedLines(ctx, post.taggedPlaceAddress, contentWidth - 52);
         ctx.fillText(addressLines[0] ?? "", paddingX + 26, y + placeCardHeight - 38);
       }
@@ -6994,7 +7033,7 @@ export default function Page() {
       let chipX = paddingX;
 
       if (post.tasteTag) {
-        ctx.font = "600 18px Arial";
+        ctx.font = '600 18px "Manrope", system-ui, sans-serif';
         const tasteWidth = ctx.measureText(post.tasteTag).width + 40;
         ctx.fillStyle = "#3A2717";
         drawRoundedRect(ctx, chipX, y, tasteWidth, 46, 23);
@@ -7005,7 +7044,7 @@ export default function Page() {
       }
 
       if (priceTagLabel) {
-        ctx.font = "600 18px Arial";
+        ctx.font = '600 18px "Manrope", system-ui, sans-serif';
         const priceWidth = ctx.measureText(priceTagLabel).width + 40;
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = "#EAD9B5";
@@ -7038,7 +7077,7 @@ export default function Page() {
 
     try {
       const imageBlob = await buildShareCardBlob(post);
-      const imageFile = new File([imageBlob], `${post.id}.png`, { type: "image/png" });
+      const imageFile = new File([imageBlob], getPostShareFileName(post), { type: "image/png" });
 
       if (navigator.share && navigator.canShare?.({ files: [imageFile] })) {
         await navigator.share({
@@ -7051,7 +7090,7 @@ export default function Page() {
         const downloadUrl = URL.createObjectURL(imageBlob);
         const anchor = document.createElement("a");
         anchor.href = downloadUrl;
-        anchor.download = `${post.id}.png`;
+        anchor.download = getPostShareFileName(post);
         anchor.click();
         URL.revokeObjectURL(downloadUrl);
         recordPostShare(post.id, "downloaded-image");
