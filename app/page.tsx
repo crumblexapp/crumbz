@@ -2978,29 +2978,14 @@ export default function Page() {
 
   const openCommentReplyComposer = (postId: string, commentId: string, targetUsername?: string) => {
     const replyComposerKey = `${postId}:${commentId}`;
-    const mentionPrefix = targetUsername ? `@${targetUsername} ` : "";
     const targetLabel = targetUsername ? `replying to @${targetUsername}` : "replying";
 
-    if (
-      openReplyComposerId === replyComposerKey &&
-      ((targetUsername && (commentReplyDrafts[replyComposerKey] ?? "").trim().startsWith(`@${targetUsername}`)) || !targetUsername)
-    ) {
+    if (openReplyComposerId === replyComposerKey) {
       setOpenReplyComposerId(null);
       setOpenReplyComposerLabel(null);
       return;
     }
 
-    setCommentReplyDrafts((current) => {
-      const existingDraft = current[replyComposerKey] ?? "";
-      if (mentionPrefix && existingDraft.trim().startsWith(mentionPrefix.trim())) {
-        return current;
-      }
-
-      return {
-        ...current,
-        [replyComposerKey]: mentionPrefix,
-      };
-    });
     setOpenReplyComposerId(replyComposerKey);
     setOpenReplyComposerLabel(targetLabel);
   };
@@ -3020,7 +3005,7 @@ export default function Page() {
     const reactionPickerId = `${postId}:${comment.id}`;
 
     return (
-      <div key={comment.id} className="relative rounded-[24px] bg-[#FFF0D0] p-3">
+      <div key={comment.id} className="relative rounded-[20px] bg-[#FFF0D0] px-3 py-2.5">
         {openCommentReactionPickerId === reactionPickerId ? (
           <div className="absolute -top-14 left-2 right-2 z-20 flex items-center justify-between gap-1 rounded-full bg-[#2C1A0E] px-2 py-2 shadow-[0_18px_40px_rgba(44,26,14,0.24)]">
             {COMMENT_REACTION_OPTIONS.map((emoji) => (
@@ -3038,26 +3023,26 @@ export default function Page() {
             ))}
           </div>
         ) : null}
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
           <Avatar
             src={getAccountPicture(commentAuthorAccount)}
             name={comment.authorName}
-            className="mt-0.5 h-10 w-10 shrink-0 bg-white text-[#2C1A0E]"
+            className="mt-0.5 h-8 w-8 shrink-0 bg-white text-[#2C1A0E]"
           />
           <div className="min-w-0 flex-1 text-left">
-            <p className="text-sm font-semibold text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
-            {renderCaptionWithTags(comment.text, "mt-1 text-sm text-[#2C1A0E]")}
+            <p className="text-[0.82rem] font-semibold leading-5 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+            {renderCaptionWithTags(comment.text, "mt-0.5 text-[0.92rem] leading-5 text-[#2C1A0E]")}
           </div>
         </div>
 
         {reactionSummary.length ? (
-          <div className="mt-3 flex flex-wrap gap-2 pl-[3.25rem]">
+          <div className="mt-2 flex flex-wrap gap-1.5 pl-[2.6rem]">
             {reactionSummary.map((emoji) => (
               <button
                 key={`${comment.id}-${emoji}`}
                 type="button"
                 onClick={() => setCommentReactionViewer({ postId, commentId: comment.id, emoji })}
-                className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#2C1A0E]"
+                className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] font-medium text-[#2C1A0E]"
               >
                 {emoji}
               </button>
@@ -3065,11 +3050,11 @@ export default function Page() {
           </div>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 pl-[3.25rem]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-[2.6rem]">
           <button
             type="button"
             onClick={() => setOpenCommentReactionPickerId((current) => (current === reactionPickerId ? null : reactionPickerId))}
-            className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-[#6c7289]"
+            className="text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
           >
             react
           </button>
@@ -3077,7 +3062,7 @@ export default function Page() {
             <button
               type="button"
               onClick={() => openCommentReplyComposer(postId, comment.id, commentAuthorUsername)}
-              className="text-[0.6rem] font-medium uppercase tracking-[0.1em] text-[#6c7289]"
+              className="text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
             >
               reply
             </button>
@@ -3085,25 +3070,25 @@ export default function Page() {
         </div>
 
         {(comment.replies ?? []).length ? (
-          <div className="mt-4 space-y-3 pl-[3.25rem]">
+          <div className="mt-3 space-y-2.5 pl-[2.6rem]">
             {(comment.replies ?? []).map((reply) => {
               const replyAccount = accountByEmail.get(reply.authorEmail.toLowerCase()) ?? null;
               const replyUsername = replyAccount?.profile.username;
               return (
-                <div key={reply.id} className="flex items-start gap-3">
+                <div key={reply.id} className="flex items-start gap-2">
                   <Avatar
                     src={getAccountPicture(replyAccount)}
                     name={reply.authorName}
-                    className="mt-0.5 h-8 w-8 shrink-0 bg-white text-[#2C1A0E]"
+                    className="mt-0.5 h-6 w-6 shrink-0 bg-white text-[#2C1A0E]"
                   />
-                  <div className="min-w-0 flex-1 rounded-[18px] bg-white/70 p-3">
-                    <p className="text-sm font-semibold text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
-                    {renderCaptionWithTags(reply.text, "mt-1 text-sm text-[#2C1A0E]")}
+                  <div className="min-w-0 flex-1 rounded-[16px] bg-white/70 px-2.5 py-2">
+                    <p className="text-[0.76rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                    {renderCaptionWithTags(reply.text, "mt-0.5 text-[0.86rem] leading-5 text-[#2C1A0E]")}
                     {canReply ? (
                       <button
                         type="button"
                         onClick={() => openCommentReplyComposer(postId, comment.id, replyUsername)}
-                        className="mt-2 text-[0.6rem] font-medium uppercase tracking-[0.1em] text-[#6c7289]"
+                        className="mt-1.5 text-[0.54rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
                       >
                         reply
                       </button>
@@ -3116,24 +3101,24 @@ export default function Page() {
         ) : null}
 
         {openReplyComposerId === replyComposerKey ? (
-          <form className="mt-4 overflow-hidden rounded-[22px] border border-[#E3D4BA] bg-[#1F252D] pl-[3.25rem]" onSubmit={(event) => addReplyToComment(event, postId, comment.id)}>
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-              <p className="text-sm text-white/70">{openReplyComposerLabel ?? "replying"}</p>
+          <form className="mt-2.5 overflow-hidden rounded-[18px] border border-[#E8D9BB] bg-[#FFF7E8] pl-[2.6rem]" onSubmit={(event) => addReplyToComment(event, postId, comment.id)}>
+            <div className="flex items-center justify-between border-b border-[#EEDFBF] px-3 py-2">
+              <p className="text-[0.75rem] text-[#6c7289]">{openReplyComposerLabel ?? "replying"}</p>
               <button
                 type="button"
                 onClick={closeCommentReplyComposer}
-                className="text-2xl leading-none text-white/70 transition hover:text-white"
+                className="text-xl leading-none text-[#6c7289] transition hover:text-[#2C1A0E]"
                 aria-label="close reply composer"
               >
                 ×
               </button>
             </div>
-            <div className="flex items-center gap-3 px-3 py-3">
-              <Avatar src={currentUserPicture} name={liveProfile.fullName || user.googleProfile?.name || "you"} className="h-9 w-9 shrink-0 bg-white/10 text-white" />
+            <div className="flex items-center gap-2 px-2.5 py-2.5">
+              <Avatar src={currentUserPicture} name={liveProfile.fullName || user.googleProfile?.name || "you"} className="h-7 w-7 shrink-0 bg-white text-[#2C1A0E]" />
               <Input
                 aria-label="reply to comment"
                 radius="full"
-                placeholder="reply to this comment"
+                placeholder="write a reply"
                 value={commentReplyDrafts[replyComposerKey] ?? ""}
                 onValueChange={(value) =>
                   setCommentReplyDrafts((current) => ({
@@ -3142,11 +3127,11 @@ export default function Page() {
                   }))
                 }
                 classNames={{
-                  input: "text-white placeholder:text-white/45",
-                  inputWrapper: "bg-[#12171D] border border-white/8 shadow-none",
+                  input: "text-sm text-[#2C1A0E] placeholder:text-[#9A8F7A]",
+                  inputWrapper: "min-h-10 bg-white border border-[#E8D9BB] shadow-none",
                 }}
               />
-              <Button type="submit" radius="full" className="h-12 min-w-[5.5rem] bg-[#5468FF] px-5 text-white">
+              <Button type="submit" radius="full" className="h-10 min-w-[4.5rem] bg-[#F5A623] px-4 text-sm text-white">
                 send
               </Button>
             </div>
