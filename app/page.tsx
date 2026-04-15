@@ -4040,7 +4040,7 @@ export default function Page() {
 
       try {
         const params = new URLSearchParams({
-          city: liveProfile.city || dailyPostCity,
+          city: dailyPostCity,
           query,
           lat: String(dailyPostCityCenter[0]),
           lon: String(dailyPostCityCenter[1]),
@@ -4048,14 +4048,14 @@ export default function Page() {
         const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
         const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
         const liveResults = (payload.places ?? []).slice(0, 8);
-        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(liveProfile.city || dailyPostCity)].filter(
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(dailyPostCity)].filter(
           (place, index, list) =>
             place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
         );
 
         setPostSignupPlaceResults((liveResults.length ? liveResults : fallbackResults).slice(0, 8));
       } catch {
-        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(liveProfile.city || dailyPostCity)].filter(
+        const fallbackResults = [...favoritePlaces, ...getFallbackFavoritePlaces(dailyPostCity)].filter(
           (place, index, list) =>
             place.name.toLowerCase().includes(query.toLowerCase()) && list.findIndex((item) => item.id === place.id) === index,
         );
@@ -4070,7 +4070,6 @@ export default function Page() {
     dailyPostCity,
     dailyPostCityCenter,
     favoritePlaces,
-    liveProfile.city,
     postSignupOnboardingOpen,
     postSignupPlaceQuery,
   ]);
@@ -5679,7 +5678,7 @@ export default function Page() {
     };
 
     closeOwnPost();
-    revealFavoritePlace(place, post.taggedPlaceCity || liveProfile.city || currentFavoriteCity);
+    revealFavoritePlace(place, post.taggedPlaceCity || activeLocationCity || currentFavoriteCity);
   };
 
   const openStorySequence = (postId?: string | null) => {
