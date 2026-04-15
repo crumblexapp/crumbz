@@ -6889,7 +6889,6 @@ export default function Page() {
     const mediaFramePadding = 12;
     const mediaOuterWidth = contentWidth;
     const mediaInnerWidth = mediaOuterWidth - mediaFramePadding * 2;
-    const mediaMaxHeight = 920;
     const photoGapTop = 24;
     const sectionGap = 24;
     const placeCardHeight = post.taggedPlaceName ? 154 : 0;
@@ -6905,8 +6904,8 @@ export default function Page() {
 
     if (post.mediaUrls[0]) {
       photoImage = await loadImageForCanvas(await getShareSafeImageUrl(post.mediaUrls[0]));
-      const scale = Math.min(mediaInnerWidth / photoImage.naturalWidth, mediaMaxHeight / photoImage.naturalHeight);
-      mediaHeight = Math.round(photoImage.naturalHeight * scale) + mediaFramePadding * 2;
+      const scaledHeight = mediaInnerWidth * (photoImage.naturalHeight / photoImage.naturalWidth);
+      mediaHeight = Math.round(scaledHeight) + mediaFramePadding * 2;
     }
 
     const measureCanvas = document.createElement("canvas");
