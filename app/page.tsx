@@ -10765,7 +10765,14 @@ export default function Page() {
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {selectedOwnPost ? (
                   <div className="space-y-4">
-                    <div className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
+                    <div
+                      ref={(node) => {
+                        if (canUseImageShareForPost(selectedOwnPost)) {
+                          adminShareCardRefs.current[selectedOwnPost.id] = node;
+                        }
+                      }}
+                      className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
+                    >
                       <div className="flex items-center gap-3 px-5 pb-0 pt-5">
                         <Avatar src={currentUserPicture} name={selectedOwnPost.authorName} className="bg-[#FFF0D0] text-[#F5A623]" />
                         <div className="min-w-0 flex-1">
