@@ -1921,6 +1921,7 @@ export default function Page() {
   const [selectedOwnArchiveOpen, setSelectedOwnArchiveOpen] = useState(false);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
+  const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [likesViewerPostId, setLikesViewerPostId] = useState<string | null>(null);
   const [likesViewerSearch, setLikesViewerSearch] = useState("");
@@ -4213,6 +4214,17 @@ export default function Page() {
   }, [seenNotificationIds]);
 
   useEffect(() => {
+    if (selectedOwnArchiveOpen || !pendingOwnArchivePost) return;
+
+    const timeout = window.setTimeout(() => {
+      openOwnPost(pendingOwnArchivePost);
+      setPendingOwnArchivePost(null);
+    }, 120);
+
+    return () => window.clearTimeout(timeout);
+  }, [pendingOwnArchivePost, selectedOwnArchiveOpen]);
+
+  useEffect(() => {
     if (!hasLoadedDataRef.current || posts.length > 0) return;
 
     setInteractions((current) => {
@@ -5556,8 +5568,8 @@ export default function Page() {
   };
 
   const openOwnArchivePost = (post: AppPost) => {
+    setPendingOwnArchivePost(post);
     closeOwnArchive();
-    openOwnPost(post);
   };
 
   const closeOwnPost = () => {
