@@ -2406,6 +2406,7 @@ export default function Page() {
   );
   const currentUsername = liveProfile.username?.trim().toLowerCase() ?? user.profile.username?.trim().toLowerCase() ?? "";
   const adminShareCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const shareImageDataUrlCacheRef = useRef<Record<string, string>>({});
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
@@ -6732,6 +6733,67 @@ export default function Page() {
     });
   };
 
+  const readBlobAsDataUrl = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+          return;
+        }
+
+        reject(new Error("image read failed"));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("image read failed"));
+      reader.readAsDataURL(blob);
+    });
+
+  const getShareSafeImageUrl = async (url: string) => {
+    if (shareImageDataUrlCacheRef.current[url]) {
+      return shareImageDataUrlCacheRef.current[url];
+    }
+
+    const response = await fetch(url, { mode: "cors" });
+    if (!response.ok) {
+      throw new Error(`image fetch failed: ${response.status}`);
+    }
+
+    const dataUrl = await readBlobAsDataUrl(await response.blob());
+    shareImageDataUrlCacheRef.current[url] = dataUrl;
+    return dataUrl;
+  };
+
+  const buildShareSnapshotNode = async (sourceNode: HTMLDivElement) => {
+    const snapshotNode = sourceNode.cloneNode(true) as HTMLDivElement;
+    snapshotNode.querySelectorAll('[data-share-ignore="true"]').forEach((node) => node.remove());
+
+    const imageNodes = Array.from(snapshotNode.querySelectorAll("img"));
+    await Promise.all(
+      imageNodes.map(async (imageNode) => {
+        const src = imageNode.currentSrc || imageNode.getAttribute("src") || "";
+        if (!src || src.startsWith("data:")) return;
+
+        try {
+          imageNode.crossOrigin = "anonymous";
+          imageNode.src = await getShareSafeImageUrl(src);
+        } catch {
+          // Keep the original src if conversion fails so share can still try.
+        }
+      }),
+    );
+
+    snapshotNode.style.position = "fixed";
+    snapshotNode.style.left = "-10000px";
+    snapshotNode.style.top = "0";
+    snapshotNode.style.zIndex = "-1";
+    snapshotNode.style.width = `${sourceNode.offsetWidth}px`;
+    snapshotNode.style.maxWidth = `${sourceNode.offsetWidth}px`;
+    snapshotNode.style.pointerEvents = "none";
+
+    document.body.appendChild(snapshotNode);
+    return snapshotNode;
+  };
+
   const shareAdminPostCard = async (post: AppPost) => {
     if (typeof window === "undefined") return;
 
@@ -6753,8 +6815,11 @@ export default function Page() {
       copiedLink = false;
     }
 
+    let snapshotNode: HTMLDivElement | null = null;
+
     try {
-      const dataUrl = await toPng(shareCardNode, {
+      snapshotNode = await buildShareSnapshotNode(shareCardNode);
+      const dataUrl = await toPng(snapshotNode, {
         cacheBust: true,
         pixelRatio: 2,
         backgroundColor: "#fffaf2",
@@ -6789,6 +6854,8 @@ export default function Page() {
         postId: post.id,
         message: copiedLink ? "link copied. the image part hit a snag, so try again." : `the image part hit a snag. copy this link: ${sharePayload.url}`,
       });
+    } finally {
+      snapshotNode?.remove();
     }
   };
 
@@ -10789,7 +10856,7 @@ export default function Page() {
                       </div>
 
                       {selectedOwnPost.type !== "weekly-dump" ? (
-                        <div className="px-5 pt-4">
+                        <div data-share-ignore="true" className="px-5 pt-4">
                           <Button
                             radius="full"
                             variant="flat"
@@ -10834,7 +10901,7 @@ export default function Page() {
                           </div>
                         ) : null}
 
-                        <div className="flex items-center gap-3">
+                        <div data-share-ignore="true" className="flex items-center gap-3">
                           <PostActionIcon label="like post" active={selectedOwnPostHasLiked} onPress={() => toggleLike(selectedOwnPost.id)}>
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path
@@ -10877,7 +10944,7 @@ export default function Page() {
                           </PostActionIcon>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                        <div data-share-ignore="true" className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                           <button
                             type="button"
                             onClick={() => setLikesViewerPostId(selectedOwnPost.id)}
@@ -10889,7 +10956,7 @@ export default function Page() {
                           <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.shares.length ?? 0} shares</span>
                         </div>
 
-                        <div className="space-y-3">
+                        <div data-share-ignore="true" className="space-y-3">
                           {selectedOwnPostVisibleComments.map((comment) => renderCommentThread(selectedOwnPost.id, comment))}
 
                           {openCommentPostId === selectedOwnPost.id ? (
