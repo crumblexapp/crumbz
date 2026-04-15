@@ -9104,17 +9104,18 @@ export default function Page() {
                   >
                     use my location
                   </Button>
-                  <Button
-                    radius="full"
-                    variant={favoriteMapMode === "home" ? "solid" : "flat"}
-                    className={favoriteMapMode === "home" ? "bg-[#2C1A0E] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
-                    onPress={useHomeCityForFavorites}
-                  >
-                    home city
-                  </Button>
                   <Chip className="bg-white text-[#2C1A0E]">
-                    {favoriteMapMode === "nearby" ? `home: ${liveProfile.city}` : `map: ${currentFavoriteCity}`}
+                    {favoriteMapMode === "nearby" ? `live: ${favoriteNearbyCity ?? "near you"}` : `map: ${currentFavoriteCity}`}
                   </Chip>
+                  {favoriteMapMode === "nearby" ? (
+                    <button
+                      type="button"
+                      onClick={useHomeCityForFavorites}
+                      className="text-xs font-medium text-[#6c7289] underline underline-offset-4"
+                    >
+                      see home city
+                    </button>
+                  ) : null}
                 </div>
 
                 {favoriteLocationNotice ? <p className="text-sm text-[#6c7289]">{favoriteLocationNotice}</p> : null}
