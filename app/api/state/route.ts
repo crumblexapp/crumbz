@@ -123,10 +123,8 @@ function mergeReplyReactions(currentValue: unknown, proposedValue: unknown) {
   );
 }
 
-function mergeReplyRecords(currentReply: JsonRecord | null, proposedReply: JsonRecord | null) {
+function mergeReplyRecords(currentReply: JsonRecord | null, proposedReply: JsonRecord) {
   if (!currentReply) return proposedReply;
-  if (!proposedReply) return currentReply;
-
   return {
     ...currentReply,
     ...proposedReply,
