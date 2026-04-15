@@ -540,6 +540,12 @@ type PostComment = {
     authorName: string;
     text: string;
     createdAt: string;
+    reactions?: Array<{
+      emoji: string;
+      authorEmail: string;
+      authorName: string;
+      createdAt: string;
+    }>;
   }>;
 };
 
@@ -1890,7 +1896,7 @@ export default function Page() {
   const [openReplyComposerId, setOpenReplyComposerId] = useState<string | null>(null);
   const [openReplyComposerLabel, setOpenReplyComposerLabel] = useState<string | null>(null);
   const [openCommentReactionPickerId, setOpenCommentReactionPickerId] = useState<string | null>(null);
-  const [commentReactionViewer, setCommentReactionViewer] = useState<{ postId: string; commentId: string; emoji: string } | null>(null);
+  const [commentReactionViewer, setCommentReactionViewer] = useState<{ postId: string; commentId: string; replyId?: string; emoji: string } | null>(null);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
@@ -2411,7 +2417,11 @@ export default function Page() {
     commentReactionViewerPost && commentReactionViewer
       ? getInteractionBucket(interactions, commentReactionViewerPost.id).comments.find((comment) => comment.id === commentReactionViewer.commentId) ?? null
       : null;
-  const commentReactionViewerRows = (commentReactionViewerComment?.reactions ?? [])
+  const commentReactionViewerSource =
+    commentReactionViewer?.replyId && commentReactionViewerComment
+      ? (commentReactionViewerComment.replies ?? []).find((reply) => reply.id === commentReactionViewer.replyId) ?? null
+      : commentReactionViewerComment;
+  const commentReactionViewerRows = (commentReactionViewerSource?.reactions ?? [])
     .filter((reaction) => reaction.emoji === commentReactionViewer?.emoji)
     .map((reaction) => {
       const account = accountByEmail.get(reaction.authorEmail.toLowerCase()) ?? null;
@@ -3006,7 +3016,7 @@ export default function Page() {
     const reactionPickerId = `${postId}:${comment.id}`;
 
     return (
-      <div key={comment.id} className="relative rounded-[20px] bg-[#FFF0D0] px-3 py-2.5">
+      <div key={comment.id} className="relative rounded-[18px] bg-[#FFF0D0] px-2.5 py-2">
         {openCommentReactionPickerId === reactionPickerId ? (
           <div className="absolute -top-14 left-2 right-2 z-20 flex items-center justify-between gap-1 rounded-full bg-[#2C1A0E] px-2 py-2 shadow-[0_18px_40px_rgba(44,26,14,0.24)]">
             {COMMENT_REACTION_OPTIONS.map((emoji) => (
@@ -3024,26 +3034,26 @@ export default function Page() {
             ))}
           </div>
         ) : null}
-        <div className="flex items-start gap-2.5">
+        <div className="flex items-start gap-2">
           <Avatar
             src={getAccountPicture(commentAuthorAccount)}
             name={comment.authorName}
-            className="mt-0.5 h-8 w-8 shrink-0 bg-white text-[#2C1A0E]"
+            className="mt-0.5 h-7 w-7 shrink-0 bg-white text-[#2C1A0E]"
           />
           <div className="min-w-0 flex-1 text-left">
-            <p className="text-[0.82rem] font-semibold leading-5 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
-            {renderCaptionWithTags(comment.text, "mt-0.5 text-[0.92rem] leading-5 text-[#2C1A0E]")}
+            <p className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+            {renderCaptionWithTags(comment.text, "mt-0.5 text-[0.84rem] leading-[1.2rem] text-[#2C1A0E]")}
           </div>
         </div>
 
         {reactionSummary.length ? (
-          <div className="mt-2 flex flex-wrap gap-1.5 pl-[2.6rem]">
+          <div className="mt-1.5 flex flex-wrap gap-1 pl-[2.15rem]">
             {reactionSummary.map((emoji) => (
               <button
                 key={`${comment.id}-${emoji}`}
                 type="button"
                 onClick={() => setCommentReactionViewer({ postId, commentId: comment.id, emoji })}
-                className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] font-medium text-[#2C1A0E]"
+                className="rounded-full bg-white px-1.5 py-0.5 text-[0.64rem] font-medium leading-none text-[#2C1A0E]"
               >
                 {emoji}
               </button>
@@ -3051,7 +3061,7 @@ export default function Page() {
           </div>
         ) : null}
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 pl-[2.6rem]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-[2.15rem]">
           <button
             type="button"
             onClick={() => setOpenCommentReactionPickerId((current) => (current === reactionPickerId ? null : reactionPickerId))}
@@ -3071,29 +3081,71 @@ export default function Page() {
         </div>
 
         {(comment.replies ?? []).length ? (
-          <div className="mt-3 space-y-2.5 pl-[2.6rem]">
+          <div className="mt-2.5 space-y-2 pl-[2.15rem]">
             {(comment.replies ?? []).map((reply) => {
               const replyAccount = accountByEmail.get(reply.authorEmail.toLowerCase()) ?? null;
               const replyUsername = replyAccount?.profile.username;
+              const replyReactionSummary = [...new Set((reply.reactions ?? []).map((reaction) => reaction.emoji))];
+              const replyReactionPickerId = `${postId}:${comment.id}:${reply.id}`;
               return (
-                <div key={reply.id} className="flex items-start gap-2">
+                <div key={reply.id} className="flex items-start gap-1.5">
                   <Avatar
                     src={getAccountPicture(replyAccount)}
                     name={reply.authorName}
-                    className="mt-0.5 h-6 w-6 shrink-0 bg-white text-[#2C1A0E]"
+                    className="mt-0.5 h-5 w-5 shrink-0 bg-white text-[#2C1A0E]"
                   />
-                  <div className="min-w-0 flex-1 rounded-[16px] bg-white/70 px-2.5 py-2">
-                    <p className="text-[0.76rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
-                    {renderCaptionWithTags(reply.text, "mt-0.5 text-[0.86rem] leading-5 text-[#2C1A0E]")}
+                  <div className="min-w-0 flex-1 rounded-[14px] bg-white/70 px-2 py-1.5">
+                    {openCommentReactionPickerId === replyReactionPickerId ? (
+                      <div className="mb-1.5 flex items-center gap-1 rounded-full bg-[#2C1A0E] px-1.5 py-1 shadow-[0_12px_28px_rgba(44,26,14,0.18)]">
+                        {COMMENT_REACTION_OPTIONS.map((emoji) => (
+                          <button
+                            key={`${reply.id}-${emoji}`}
+                            type="button"
+                            onClick={() => {
+                              toggleReplyReaction(postId, comment.id, reply.id, emoji);
+                              setOpenCommentReactionPickerId(null);
+                            }}
+                            className="flex h-6 w-6 items-center justify-center rounded-full text-sm text-white transition hover:bg-white hover:text-[#2C1A0E]"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <p className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                    {renderCaptionWithTags(reply.text, "mt-0.5 text-[0.8rem] leading-[1.1rem] text-[#2C1A0E]")}
+                    {replyReactionSummary.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {replyReactionSummary.map((emoji) => (
+                          <button
+                            key={`${reply.id}-${emoji}`}
+                            type="button"
+                            onClick={() => setCommentReactionViewer({ postId, commentId: comment.id, replyId: reply.id, emoji })}
+                            className="rounded-full bg-white px-1.5 py-0.5 text-[0.62rem] font-medium leading-none text-[#2C1A0E]"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setOpenCommentReactionPickerId((current) => (current === replyReactionPickerId ? null : replyReactionPickerId))}
+                        className="text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+                      >
+                        react
+                      </button>
                     {canReply ? (
                       <button
                         type="button"
                         onClick={() => openCommentReplyComposer(postId, comment.id, replyUsername)}
-                        className="mt-1.5 text-[0.54rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+                        className="mt-1 text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
                       >
                         reply
                       </button>
                     ) : null}
+                    </div>
                   </div>
                 </div>
               );
@@ -3102,20 +3154,20 @@ export default function Page() {
         ) : null}
 
         {openReplyComposerId === replyComposerKey ? (
-          <form className="mt-2.5 overflow-hidden rounded-[18px] border border-[#E8D9BB] bg-[#FFF7E8] pl-[2.6rem]" onSubmit={(event) => addReplyToComment(event, postId, comment.id)}>
-            <div className="flex items-center justify-between border-b border-[#EEDFBF] px-3 py-2">
-              <p className="text-[0.75rem] text-[#6c7289]">{openReplyComposerLabel ?? "replying"}</p>
+          <form className="mt-2 overflow-hidden rounded-[16px] border border-[#E8D9BB] bg-[#FFF7E8] pl-[2.15rem]" onSubmit={(event) => addReplyToComment(event, postId, comment.id)}>
+            <div className="flex items-center justify-between border-b border-[#EEDFBF] px-2.5 py-1.5">
+              <p className="text-[0.68rem] text-[#6c7289]">{openReplyComposerLabel ?? "replying"}</p>
               <button
                 type="button"
                 onClick={closeCommentReplyComposer}
-                className="text-xl leading-none text-[#6c7289] transition hover:text-[#2C1A0E]"
+                className="text-lg leading-none text-[#6c7289] transition hover:text-[#2C1A0E]"
                 aria-label="close reply composer"
               >
                 ×
               </button>
             </div>
-            <div className="flex items-center gap-2 px-2.5 py-2.5">
-              <Avatar src={currentUserPicture} name={liveProfile.fullName || user.googleProfile?.name || "you"} className="h-7 w-7 shrink-0 bg-white text-[#2C1A0E]" />
+            <div className="flex items-center gap-2 px-2 py-2">
+              <Avatar src={currentUserPicture} name={liveProfile.fullName || user.googleProfile?.name || "you"} className="h-6 w-6 shrink-0 bg-white text-[#2C1A0E]" />
               <Input
                 aria-label="reply to comment"
                 radius="full"
@@ -3128,11 +3180,11 @@ export default function Page() {
                   }))
                 }
                 classNames={{
-                  input: "text-sm text-[#2C1A0E] placeholder:text-[#9A8F7A]",
-                  inputWrapper: "min-h-10 bg-white border border-[#E8D9BB] shadow-none",
+                  input: "text-[0.82rem] text-[#2C1A0E] placeholder:text-[#9A8F7A]",
+                  inputWrapper: "min-h-8 bg-white border border-[#E8D9BB] shadow-none",
                 }}
               />
-              <Button type="submit" radius="full" className="h-10 min-w-[4.5rem] bg-[#F5A623] px-4 text-sm text-white">
+              <Button type="submit" radius="full" className="h-8 min-w-[3.8rem] bg-[#F5A623] px-3 text-[0.8rem] text-white">
                 send
               </Button>
             </div>
@@ -6371,6 +6423,61 @@ export default function Page() {
     });
   };
 
+  const toggleReplyReaction = (postId: string, commentId: string, replyId: string, emoji: string) => {
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
+    if (!authorEmail) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setInteractions((current) => {
+      const bucket = getInteractionBucket(current, postId);
+      const nextInteractions = {
+        ...current,
+        [postId]: {
+          ...bucket,
+          comments: bucket.comments.map((comment) => {
+            if (comment.id !== commentId) return comment;
+
+            return {
+              ...comment,
+              replies: (comment.replies ?? []).map((reply) => {
+                if (reply.id !== replyId) return reply;
+
+                const reactions = reply.reactions ?? [];
+                const alreadyReacted = reactions.some(
+                  (reaction) => reaction.authorEmail.toLowerCase() === authorEmail && reaction.emoji === emoji,
+                );
+
+                return {
+                  ...reply,
+                  reactions: alreadyReacted
+                    ? reactions.filter(
+                        (reaction) => !(reaction.authorEmail.toLowerCase() === authorEmail && reaction.emoji === emoji),
+                      )
+                    : [
+                        ...reactions.filter((reaction) => reaction.authorEmail.toLowerCase() !== authorEmail),
+                        {
+                          emoji,
+                          authorEmail,
+                          authorName: user.profile.fullName,
+                          createdAt: formatNow(),
+                        },
+                      ],
+                };
+              }),
+            };
+          }),
+        },
+      };
+
+      syncSharedState({
+        nextPosts: posts,
+        nextInteractions,
+      });
+
+      return nextInteractions;
+    });
+  };
+
   const addReplyToComment = (event: FormEvent<HTMLFormElement>, postId: string, commentId: string) => {
     event.preventDefault();
     const draftKey = `${postId}:${commentId}`;
@@ -9225,36 +9332,10 @@ export default function Page() {
                     <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.45rem] leading-none text-[#2C1A0E] sm:text-[1.6rem]">
                       @{liveProfile.username}
                     </p>
-                    <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
-                      <button
-                        type="button"
-                        onClick={() => setLanguage("en")}
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                          language === "en" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
-                        }`}
-                        aria-label="switch language to english"
-                      >
-                        🇬🇧 EN
-                      </button>
-                      <span className="px-1 text-xs text-[#C5A877]">|</span>
-                      <button
-                        type="button"
-                        onClick={() => setLanguage("pl")}
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                          language === "pl" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
-                        }`}
-                        aria-label="switch language to polish"
-                      >
-                        🇵🇱 PL
-                      </button>
-                    </div>
-                    <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
-                      log out
-                    </Button>
-                  </div>
+                  <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
+                    log out
+                  </Button>
                 </div>
 
                 <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
@@ -9296,7 +9377,32 @@ export default function Page() {
 
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
-                    <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
+                      <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
+                        <button
+                          type="button"
+                          onClick={() => setLanguage("en")}
+                          className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition ${
+                            language === "en" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                          }`}
+                          aria-label="switch language to english"
+                        >
+                          🇬🇧 EN
+                        </button>
+                        <span className="px-1 text-[0.68rem] text-[#C5A877]">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setLanguage("pl")}
+                          className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold transition ${
+                            language === "pl" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                          }`}
+                          aria-label="switch language to polish"
+                        >
+                          🇵🇱 PL
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="col-span-2 space-y-1 pt-1">

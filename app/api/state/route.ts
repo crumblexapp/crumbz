@@ -108,14 +108,50 @@ function mergeCommentReactions(currentValue: unknown, proposedValue: unknown) {
   );
 }
 
+function mergeReplyReactions(currentValue: unknown, proposedValue: unknown) {
+  const currentReactions = normalizeObjectArray(currentValue);
+  const proposedReactions = normalizeObjectArray(proposedValue);
+
+  return dedupeByKey(
+    [...currentReactions, ...proposedReactions],
+    (reaction) =>
+      [
+        normalizeText(reaction.emoji),
+        normalizeEmail(reaction.authorEmail),
+        normalizeText(reaction.createdAt),
+      ].join(":"),
+  );
+}
+
+function mergeReplyRecords(currentReply: JsonRecord | null, proposedReply: JsonRecord | null) {
+  if (!currentReply) return proposedReply;
+  if (!proposedReply) return currentReply;
+
+  return {
+    ...currentReply,
+    ...proposedReply,
+    reactions: mergeReplyReactions(currentReply.reactions, proposedReply.reactions),
+  };
+}
+
 function mergeCommentReplies(currentValue: unknown, proposedValue: unknown) {
   const currentReplies = normalizeObjectArray(currentValue);
   const proposedReplies = normalizeObjectArray(proposedValue);
+  const replyMap = new Map<string, JsonRecord>();
 
-  return dedupeByKey(
-    [...currentReplies, ...proposedReplies],
-    (reply) => normalizeText(reply.id) || [normalizeEmail(reply.authorEmail), normalizeText(reply.createdAt)].join(":"),
-  );
+  for (const reply of currentReplies) {
+    const key = normalizeText(reply.id) || [normalizeEmail(reply.authorEmail), normalizeText(reply.createdAt)].join(":");
+    if (!key) continue;
+    replyMap.set(key, reply);
+  }
+
+  for (const reply of proposedReplies) {
+    const key = normalizeText(reply.id) || [normalizeEmail(reply.authorEmail), normalizeText(reply.createdAt)].join(":");
+    if (!key) continue;
+    replyMap.set(key, mergeReplyRecords(replyMap.get(key) ?? null, reply));
+  }
+
+  return [...replyMap.values()];
 }
 
 function mergeCommentRecords(currentComment: JsonRecord | null, proposedComment: JsonRecord | null) {
