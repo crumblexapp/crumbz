@@ -8616,8 +8616,28 @@ export default function Page() {
                                   <div>
                                     <p className="text-sm font-semibold text-[#2C1A0E]">{comment.authorName}</p>
                                     <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
+                                    {(comment.reactions ?? []).length ? (
+                                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#6c7289]">
+                                        reactions: {[...new Set((comment.reactions ?? []).map((reaction) => reaction.emoji))].join(" ")}
+                                      </p>
+                                    ) : null}
                                     {comment.hidden ? (
                                       <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">hidden from students</p>
+                                    ) : null}
+                                    {(comment.replies ?? []).length ? (
+                                      <div className="mt-3 space-y-2 border-l-2 border-[#F5D49A] pl-3">
+                                        {(comment.replies ?? []).map((reply) => (
+                                          <div key={reply.id} className="rounded-[14px] bg-white/75 px-3 py-2">
+                                            <p className="text-xs font-semibold text-[#2C1A0E]">{reply.authorName}</p>
+                                            <p className="mt-1 text-sm text-[#2C1A0E]">{reply.text}</p>
+                                            {(reply.reactions ?? []).length ? (
+                                              <p className="mt-1 text-[0.68rem] uppercase tracking-[0.14em] text-[#6c7289]">
+                                                reactions: {[...new Set((reply.reactions ?? []).map((reaction) => reaction.emoji))].join(" ")}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
                                     ) : null}
                                   </div>
                                   <div className="flex gap-2">
