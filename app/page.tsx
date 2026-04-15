@@ -6674,8 +6674,19 @@ export default function Page() {
 
   const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || post.authorEmail.toLowerCase() === ADMIN_EMAIL;
   const canUseAdminPostImageShare = isAdmin || ADMIN_POST_IMAGE_SHARE_USERNAMES.has(currentUsername);
-  const canUseImageShareForPost = (post: AppPost) =>
-    canUseAdminPostImageShare && (isAdminOwnedPost(post) || post.authorEmail.toLowerCase() === currentUserEmail);
+  const canUseImageShareForPost = (post: AppPost) => {
+    const postAuthorUsername =
+      accounts
+        .find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase())
+        ?.profile.username?.trim()
+        .toLowerCase() ?? "";
+
+    return (
+      isAdminOwnedPost(post) ||
+      ADMIN_POST_IMAGE_SHARE_USERNAMES.has(postAuthorUsername) ||
+      canUseAdminPostImageShare
+    );
+  };
 
   const buildPostSharePayload = (post: AppPost) => {
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
