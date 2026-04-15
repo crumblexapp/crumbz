@@ -22,6 +22,7 @@ import {
   Tabs,
   Textarea,
 } from "@heroui/react";
+import { toPng } from "html-to-image";
 import { motion } from "framer-motion";
 import QRCode from "qrcode";
 import { LANGUAGE_STORAGE_KEY, detectPreferredLanguage, translations, type Language } from "@/lib/i18n";
@@ -1921,6 +1922,7 @@ export default function Page() {
   const [selectedOwnArchiveOpen, setSelectedOwnArchiveOpen] = useState(false);
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
+  const [postShareNotice, setPostShareNotice] = useState<{ postId: string; message: string } | null>(null);
   const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [likesViewerPostId, setLikesViewerPostId] = useState<string | null>(null);
@@ -2401,6 +2403,7 @@ export default function Page() {
   const selectedOwnPostHasLiked = Boolean(
     selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
   );
+  const adminShareCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
@@ -3233,15 +3236,34 @@ export default function Page() {
     const isFriendFeedCard = isStudentPost && !isSundayDump;
     const trimmedCta = post.cta.trim();
     const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
+    const adminOwnedPost = isAdminOwnedPost(post);
     return (
       <Card
         id={`post-${post.id}`}
         key={post.id}
         className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
-        <CardHeader className="flex flex-wrap items-start gap-x-3 gap-y-2 px-5 pb-0 pt-5">
-          {canOpenProfile ? (
-            <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
+        <div
+          ref={(node) => {
+            if (adminOwnedPost) {
+              adminShareCardRefs.current[post.id] = node;
+            }
+          }}
+        >
+          <CardHeader className="flex flex-wrap items-start gap-x-3 gap-y-2 px-5 pb-0 pt-5">
+            {canOpenProfile ? (
+              <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
+                <Avatar
+                  src={
+                    isStudentPost
+                      ? getAccountPicture(accounts.find((account) => account.googleProfile?.email === post.authorEmail))
+                      : adminProfilePicture
+                  }
+                  name={isStudentPost ? post.authorName : "C"}
+                  className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
+                />
+              </button>
+            ) : (
               <Avatar
                 src={
                   isStudentPost
@@ -3251,114 +3273,106 @@ export default function Page() {
                 name={isStudentPost ? post.authorName : "C"}
                 className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
               />
-            </button>
-          ) : (
-            <Avatar
-              src={
-                isStudentPost
-                  ? getAccountPicture(accounts.find((account) => account.googleProfile?.email === post.authorEmail))
-                  : adminProfilePicture
-              }
-              name={isStudentPost ? post.authorName : "C"}
-              className={isStudentPost ? "bg-[#FFF0D0] text-[#F5A623]" : "bg-[#F5A623] text-white"}
-            />
-          )}
-          <div className="min-w-0 flex-1 basis-[11rem]">
-            {isStudentPost && canOpenProfile ? (
-              <button type="button" onClick={() => openProfileByEmail(post.authorEmail)} className="break-words text-left font-semibold text-[#2C1A0E]">
-                {authorUsername}
-              </button>
-            ) : (
-              <p className="break-words font-semibold text-[#2C1A0E]">
-                {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
-              </p>
             )}
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              {!isSundayDump ? (
-                <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                  {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
-                </p>
+            <div className="min-w-0 flex-1 basis-[11rem]">
+              {isStudentPost && canOpenProfile ? (
+                <button type="button" onClick={() => openProfileByEmail(post.authorEmail)} className="break-words text-left font-semibold text-[#2C1A0E]">
+                  {authorUsername}
+                </button>
               ) : (
-                <span />
+                <p className="break-words font-semibold text-[#2C1A0E]">
+                  {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
+                </p>
               )}
-              {isStudentPost && ctaLabel ? (
-                <button
-                  type="button"
-                  onClick={() => openProfileByEmail(post.authorEmail)}
-                  className="ml-auto flex shrink-0 justify-end"
-                >
-                  <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-                </button>
-              ) : ctaLabel ? (
-                <Chip className="ml-auto shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-              ) : null}
-            </div>
-          </div>
-        </CardHeader>
-        <CardBody className="gap-4 p-5">
-          {isSundayDump ? (
-            showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null
-          ) : isFriendFeedCard ? null : (
-            <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
-              {trimmedPostTitle ? (
-                <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
-              ) : null}
-              {post.taggedPlaceName ? (
-                <button
-                  type="button"
-                  onClick={() => openPostPlace(post)}
-                  className={`${trimmedPostTitle ? "mt-3" : ""} flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
-                    <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
-                    {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
-                  </div>
-                  <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
-                </button>
-              ) : null}
-              {showPostBody ? renderCaptionWithTags(post.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
-              {post.tasteTag || post.priceTag ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
-                  {post.priceTag ? <Chip className="bg-white text-[#2C1A0E]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {post.mediaUrls.length ? (
-            <PostMediaPreview post={post} detail={detail} />
-          ) : post.mediaKind !== "none" ? (
-            <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
-              this post’s media needs one re-upload from the admin side.
-            </div>
-          ) : null}
-
-          {isFriendFeedCard && showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null}
-
-          {isFriendFeedCard && post.taggedPlaceName ? (
-            <button
-              type="button"
-              onClick={() => openPostPlace(post)}
-              className="flex w-full items-start justify-between gap-3 rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 text-left ring-1 ring-[#FFF0D0]"
-            >
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
-                <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
-                {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                {!isSundayDump ? (
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                    {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
+                  </p>
+                ) : (
+                  <span />
+                )}
+                {isStudentPost && ctaLabel ? (
+                  <button
+                    type="button"
+                    onClick={() => openProfileByEmail(post.authorEmail)}
+                    className="ml-auto flex shrink-0 justify-end"
+                  >
+                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+                  </button>
+                ) : ctaLabel ? (
+                  <Chip className="ml-auto shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+                ) : null}
               </div>
-              <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
-            </button>
-          ) : null}
-
-          {isFriendFeedCard && (post.tasteTag || post.priceTag) ? (
-            <div className="flex flex-wrap gap-2">
-              {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
-              {post.priceTag ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
             </div>
-          ) : null}
+          </CardHeader>
+          <CardBody className="gap-4 p-5">
+            {isSundayDump ? (
+              showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null
+            ) : isFriendFeedCard ? null : (
+              <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
+                {trimmedPostTitle ? (
+                  <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+                ) : null}
+                {post.taggedPlaceName ? (
+                  <button
+                    type="button"
+                    onClick={() => openPostPlace(post)}
+                    className={`${trimmedPostTitle ? "mt-3" : ""} flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                      <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                      {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                    </div>
+                    <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                  </button>
+                ) : null}
+                {showPostBody ? renderCaptionWithTags(post.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
+                {post.tasteTag || post.priceTag ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
+                    {post.priceTag ? <Chip className="bg-white text-[#2C1A0E]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
 
+            {post.mediaUrls.length ? (
+              <PostMediaPreview post={post} detail={detail} />
+            ) : post.mediaKind !== "none" ? (
+              <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
+                this post’s media needs one re-upload from the admin side.
+              </div>
+            ) : null}
+
+            {isFriendFeedCard && showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null}
+
+            {isFriendFeedCard && post.taggedPlaceName ? (
+              <button
+                type="button"
+                onClick={() => openPostPlace(post)}
+                className="flex w-full items-start justify-between gap-3 rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 text-left ring-1 ring-[#FFF0D0]"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                  <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                  {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                </div>
+                <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+              </button>
+            ) : null}
+
+            {isFriendFeedCard && (post.tasteTag || post.priceTag) ? (
+              <div className="flex flex-wrap gap-2">
+                {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
+                {post.priceTag ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
+              </div>
+            ) : null}
+          </CardBody>
+        </div>
+
+        <CardBody className="gap-4 px-5 pb-5 pt-0">
           <div className="flex items-center gap-3">
             <PostActionIcon label="like post" active={hasLiked} onPress={() => toggleLike(post.id)}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -3389,7 +3403,7 @@ export default function Page() {
             <PostActionIcon
               label="share post"
               onPress={() => {
-                void sharePost(post.id);
+                void (adminOwnedPost ? shareAdminPostCard(post) : sharePost(post.id));
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -3403,6 +3417,8 @@ export default function Page() {
               </svg>
             </PostActionIcon>
           </div>
+
+          {postShareNotice?.postId === post.id ? <p className="text-sm text-[#6c7289]">{postShareNotice.message}</p> : null}
 
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
             <button
@@ -6634,20 +6650,7 @@ export default function Page() {
     const post = posts.find((item) => item.id === postId) ?? fallbackFeedPosts.find((item) => item.id === postId);
     if (!post || typeof window === "undefined") return;
 
-    const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
-    const profileUsername = postAuthorAccount?.profile.username?.trim().toLowerCase() ?? "";
-    const shareUrl =
-      post.type === "weekly-dump" && profileUsername
-        ? `${window.location.origin}/?profile=${encodeURIComponent(profileUsername)}`
-        : `${window.location.origin}/?post=${encodeURIComponent(postId)}`;
-    const sharePayload = {
-      title: post.type === "weekly-dump" && profileUsername ? `${profileUsername}'s crumbz profile` : post.title,
-      text:
-        post.type === "weekly-dump" && profileUsername
-          ? `open ${profileUsername}'s crumbz profile and see their sunday dump`
-          : `${post.title} • ${post.body}`,
-      url: shareUrl,
-    };
+    const sharePayload = buildPostSharePayload(post);
 
     let platform = "copied-link";
 
@@ -6656,13 +6659,40 @@ export default function Page() {
         await navigator.share(sharePayload);
         platform = "native-share";
       } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
+        await navigator.clipboard.writeText(sharePayload.url);
       } else {
-        window.prompt("copy this link", shareUrl);
+        window.prompt("copy this link", sharePayload.url);
       }
     } catch {
       return;
     }
+
+    recordPostShare(postId, platform);
+  };
+
+  const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || post.authorEmail.toLowerCase() === ADMIN_EMAIL;
+
+  const buildPostSharePayload = (post: AppPost) => {
+    const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
+    const profileUsername = postAuthorAccount?.profile.username?.trim().toLowerCase() ?? "";
+    const shareUrl =
+      post.type === "weekly-dump" && profileUsername
+        ? `${window.location.origin}/?profile=${encodeURIComponent(profileUsername)}`
+        : `${window.location.origin}/?post=${encodeURIComponent(post.id)}`;
+
+    return {
+      title: post.type === "weekly-dump" && profileUsername ? `${profileUsername}'s crumbz profile` : post.title,
+      text:
+        post.type === "weekly-dump" && profileUsername
+          ? `open ${profileUsername}'s crumbz profile and see their sunday dump`
+          : `${post.title} • ${post.body}`,
+      url: shareUrl,
+    };
+  };
+
+  const recordPostShare = (postId: string, platform: string) => {
+    const authorEmail = user.googleProfile?.email;
+    if (!authorEmail) return;
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
@@ -6684,6 +6714,66 @@ export default function Page() {
         },
       };
     });
+  };
+
+  const shareAdminPostCard = async (post: AppPost) => {
+    if (typeof window === "undefined") return;
+
+    const shareCardNode = adminShareCardRefs.current[post.id];
+    if (!shareCardNode) {
+      await sharePost(post.id);
+      return;
+    }
+
+    const sharePayload = buildPostSharePayload(post);
+    let copiedLink = false;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sharePayload.url);
+        copiedLink = true;
+      }
+    } catch {
+      copiedLink = false;
+    }
+
+    try {
+      const dataUrl = await toPng(shareCardNode, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "#fffaf2",
+      });
+      const imageResponse = await fetch(dataUrl);
+      const imageBlob = await imageResponse.blob();
+      const imageFile = new File([imageBlob], `${post.id}.png`, { type: "image/png" });
+
+      if (navigator.share && navigator.canShare?.({ files: [imageFile] })) {
+        await navigator.share({
+          files: [imageFile],
+          title: sharePayload.title,
+          text: copiedLink ? "post image ready. link copied too." : sharePayload.url,
+        });
+        recordPostShare(post.id, "native-image-share");
+      } else {
+        const downloadUrl = URL.createObjectURL(imageBlob);
+        const anchor = document.createElement("a");
+        anchor.href = downloadUrl;
+        anchor.download = `${post.id}.png`;
+        anchor.click();
+        URL.revokeObjectURL(downloadUrl);
+        recordPostShare(post.id, "downloaded-image");
+      }
+
+      setPostShareNotice({
+        postId: post.id,
+        message: copiedLink ? "image is ready and the link is copied." : `image is ready. copy this link: ${sharePayload.url}`,
+      });
+    } catch {
+      setPostShareNotice({
+        postId: post.id,
+        message: copiedLink ? "link copied. the image part hit a snag, so try again." : `the image part hit a snag. copy this link: ${sharePayload.url}`,
+      });
+    }
   };
 
   const toggleLike = (postId: string) => {
