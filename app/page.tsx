@@ -1866,6 +1866,7 @@ export default function Page() {
   const [dailyPostMentionRange, setDailyPostMentionRange] = useState<{ start: number; end: number } | null>(null);
   const [dailyPostMediaUrls, setDailyPostMediaUrls] = useState<string[]>([]);
   const [dailyPostTaggedPlace, setDailyPostTaggedPlace] = useState<FavoritePlace | null>(null);
+  const [editingDailyPostId, setEditingDailyPostId] = useState<string | null>(null);
   const [dailyPostPlaceQuery, setDailyPostPlaceQuery] = useState("");
   const [dailyPostPlaceResults, setDailyPostPlaceResults] = useState<FavoritePlace[]>([]);
   const [dailyPostPlaceSearchLoading, setDailyPostPlaceSearchLoading] = useState(false);
@@ -6169,6 +6170,54 @@ export default function Page() {
     setDailyPostInputKey((current) => current + 1);
   };
 
+  const cancelEditingDailyPost = () => {
+    setEditingDailyPostId(null);
+    setDailyPostCaption("");
+    setDailyPostMentionQuery("");
+    setDailyPostMentionRange(null);
+    setDailyPostMediaUrls([]);
+    setDailyPostTaggedPlace(null);
+    setDailyPostPlaceQuery("");
+    setDailyPostPlaceResults([]);
+    setDailyPostTasteTag("");
+    setDailyPostPriceTag("");
+    setDailyPostNotice("");
+    setDailyPostInputKey((current) => current + 1);
+  };
+
+  const startEditingDailyPost = (post: AppPost) => {
+    const taggedCity = post.taggedPlaceCity || dailyPostCity;
+    const taggedCityCenter = cityCenters[normalizeCityKey(taggedCity)] ?? favoriteCityCenter;
+
+    setEditingDailyPostId(post.id);
+    setDailyPostCaption(post.body);
+    setDailyPostMentionQuery("");
+    setDailyPostMentionRange(null);
+    setDailyPostMediaUrls(post.mediaUrls);
+    setDailyPostTaggedPlace(
+      post.taggedPlaceId && post.taggedPlaceName
+        ? {
+            id: post.taggedPlaceId,
+            name: post.taggedPlaceName,
+            kind: post.taggedPlaceKind || "food spot",
+            lat: post.taggedPlaceLat ?? taggedCityCenter[0],
+            lon: post.taggedPlaceLon ?? taggedCityCenter[1],
+            address: post.taggedPlaceAddress,
+          }
+        : null,
+    );
+    setDailyPostPlaceQuery("");
+    setDailyPostPlaceResults([]);
+    setDailyPostTasteTag(post.tasteTag);
+    setDailyPostPriceTag(post.priceTag);
+    setDailyPostNotice("editing this post. save when it looks right.");
+    setStudentTab("profile");
+    closeOwnPost();
+    window.setTimeout(() => {
+      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  };
+
   const submitDailyPost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -6187,14 +6236,15 @@ export default function Page() {
 
     const createdAtIso = new Date().toISOString();
     const caption = dailyPostCaption.trim();
+    const existingPost = editingDailyPostId ? posts.find((post) => post.id === editingDailyPostId) ?? null : null;
     const nextPost: AppPost = {
-      id: `daily-post-${Date.now()}`,
+      id: existingPost?.id ?? `daily-post-${Date.now()}`,
       title: dailyPostTaggedPlace?.name || `${user.profile.fullName.split(" ")[0] || user.profile.username || "friend"}'s post`,
       body: caption,
       type: "chapter",
       cta: dailyPostTaggedPlace ? "friend review" : "live now",
-      createdAt: formatNow(),
-      createdAtIso,
+      createdAt: existingPost?.createdAt ?? formatNow(),
+      createdAtIso: existingPost?.createdAtIso ?? createdAtIso,
       mediaKind: "photo",
       mediaUrls: [dailyPostMediaUrls[0]],
       videoRatio: "4:5",
@@ -6215,11 +6265,15 @@ export default function Page() {
     };
 
     lastSharedStateMutationAtRef.current = Date.now();
-    setPosts((current) => [nextPost, ...current]);
+    const nextPosts = existingPost
+      ? posts.map((post) => (post.id === existingPost.id ? nextPost : post))
+      : [nextPost, ...posts];
+    setPosts(nextPosts);
     syncSharedState({
-      nextPosts: [nextPost, ...posts],
+      nextPosts,
       nextInteractions: interactions,
     });
+    setEditingDailyPostId(null);
     setDailyPostCaption("");
     setDailyPostMentionQuery("");
     setDailyPostMentionRange(null);
@@ -6229,7 +6283,7 @@ export default function Page() {
     setDailyPostPlaceResults([]);
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
-    setDailyPostNotice("your post is live.");
+    setDailyPostNotice(existingPost ? "your post is updated." : "your post is live.");
     setDailyPostInputKey((current) => current + 1);
   };
 
@@ -9127,34 +9181,6 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
-            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
-              <CardBody className="gap-4 p-5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.profile.languageLabel}</p>
-                  <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {copy.profile.languageTitle}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[#6c7289]">{copy.profile.languageBody}</p>
-                </div>
-                <Select
-                  radius="full"
-                  aria-label={copy.profile.languageTitle}
-                  selectedKeys={[language]}
-                  onSelectionChange={(keys) => {
-                    const nextLanguage = Array.from(keys)[0];
-                    if (nextLanguage === "en" || nextLanguage === "pl") {
-                      setLanguage(nextLanguage);
-                    }
-                  }}
-                  placeholder={copy.profile.languageSelectPlaceholder}
-                  classNames={{ trigger: "bg-[#FFF7E8] border border-[#FFF0D0]" }}
-                >
-                  <SelectItem key="en">{copy.profile.english}</SelectItem>
-                  <SelectItem key="pl">{copy.profile.polish}</SelectItem>
-                </Select>
-              </CardBody>
-            </Card>
-
             {!pushEnabled ? (
               <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                 <CardBody className="gap-3 p-5">
@@ -9201,9 +9227,34 @@ export default function Page() {
                     </p>
                     <p className="mt-2 text-sm text-[#6c7289]">your crumbz profile</p>
                   </div>
-                  <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
-                    log out
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
+                      <button
+                        type="button"
+                        onClick={() => setLanguage("en")}
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                          language === "en" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                        }`}
+                        aria-label="switch language to english"
+                      >
+                        🇬🇧 EN
+                      </button>
+                      <span className="px-1 text-xs text-[#C5A877]">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setLanguage("pl")}
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                          language === "pl" ? "bg-white text-[#2C1A0E] shadow-sm" : "text-[#6c7289]"
+                        }`}
+                        aria-label="switch language to polish"
+                      >
+                        🇵🇱 PL
+                      </button>
+                    </div>
+                    <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
+                      log out
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
@@ -9352,6 +9403,14 @@ export default function Page() {
                 </div>
 
                 <form className="space-y-4" onSubmit={submitDailyPost}>
+                  {editingDailyPostId ? (
+                    <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
+                      <span className="text-[#2C1A0E]">editing your post</span>
+                      <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingDailyPost}>
+                        cancel
+                      </Button>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     aria-label={copy.profile.addPostPhoto}
@@ -9548,7 +9607,7 @@ export default function Page() {
                       isDisabled={isUploadingDailyPost}
                       className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
                     >
-                      →
+                      {editingDailyPostId ? "save" : "→"}
                     </Button>
                   </div>
                 </form>
@@ -10389,6 +10448,19 @@ export default function Page() {
                           {selectedOwnPost.cta === "live now" ? "post" : selectedOwnPost.cta}
                         </Chip>
                       </div>
+
+                      {selectedOwnPost.type !== "weekly-dump" ? (
+                        <div className="px-5 pt-4">
+                          <Button
+                            radius="full"
+                            variant="flat"
+                            className="bg-[#FFF0D0] text-[#2C1A0E]"
+                            onPress={() => startEditingDailyPost(selectedOwnPost)}
+                          >
+                            edit post
+                          </Button>
+                        </div>
+                      ) : null}
 
                       <div className="mt-4">
                         <PostMediaPreview post={selectedOwnPost} detail />
