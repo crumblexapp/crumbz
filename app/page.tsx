@@ -2975,10 +2975,28 @@ export default function Page() {
     return <p className={className}>{parts.length ? parts : text}</p>;
   };
 
-  const renderCommentThread = (postId: string, postAuthorEmail: string, comment: PostComment) => {
+  const openCommentReplyComposer = (postId: string, commentId: string, targetUsername?: string) => {
+    const replyComposerKey = `${postId}:${commentId}`;
+    const mentionPrefix = targetUsername ? `@${targetUsername} ` : "";
+
+    setCommentReplyDrafts((current) => {
+      const existingDraft = current[replyComposerKey] ?? "";
+      if (mentionPrefix && existingDraft.trim().startsWith(mentionPrefix.trim())) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [replyComposerKey]: mentionPrefix,
+      };
+    });
+    setOpenReplyComposerId(replyComposerKey);
+  };
+
+  const renderCommentThread = (postId: string, comment: PostComment) => {
     const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
-    const canReply = currentUserEmail === postAuthorEmail.toLowerCase() || currentUserEmail === comment.authorEmail.toLowerCase();
+    const canReply = Boolean(currentUserEmail);
     const reactionSummary = [...new Set((comment.reactions ?? []).map((reaction) => reaction.emoji))];
     const replyComposerKey = `${postId}:${comment.id}`;
     const reactionPickerId = `${postId}:${comment.id}`;
@@ -3002,14 +3020,10 @@ export default function Page() {
             ))}
           </div>
         ) : null}
-        <button
-          type="button"
-          onClick={() => setOpenCommentReactionPickerId((current) => (current === reactionPickerId ? null : reactionPickerId))}
-          className="w-full select-none text-left"
-        >
+        <div className="w-full text-left">
           <p className="text-sm font-semibold text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
-          <p className="mt-1 text-sm text-[#2C1A0E]">{comment.text}</p>
-        </button>
+          {renderCaptionWithTags(comment.text, "mt-1 text-sm text-[#2C1A0E]")}
+        </div>
 
         {reactionSummary.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -3027,11 +3041,17 @@ export default function Page() {
         ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <p className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-[#6c7289]">tap comment to react</p>
+          <button
+            type="button"
+            onClick={() => setOpenCommentReactionPickerId((current) => (current === reactionPickerId ? null : reactionPickerId))}
+            className="text-[0.68rem] font-medium uppercase tracking-[0.12em] text-[#6c7289]"
+          >
+            react
+          </button>
           {canReply ? (
             <button
               type="button"
-              onClick={() => setOpenReplyComposerId((current) => (current === replyComposerKey ? null : replyComposerKey))}
+              onClick={() => openCommentReplyComposer(postId, comment.id, commentAuthorUsername)}
               className="text-[0.6rem] font-medium uppercase tracking-[0.1em] text-[#6c7289]"
             >
               reply
@@ -3046,7 +3066,16 @@ export default function Page() {
               return (
                 <div key={reply.id} className="rounded-[16px] bg-white/70 p-3">
                   <p className="text-sm font-semibold text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
-                  <p className="mt-1 text-sm text-[#2C1A0E]">{reply.text}</p>
+                  {renderCaptionWithTags(reply.text, "mt-1 text-sm text-[#2C1A0E]")}
+                  {canReply ? (
+                    <button
+                      type="button"
+                      onClick={() => openCommentReplyComposer(postId, comment.id, replyUsername)}
+                      className="mt-2 text-[0.6rem] font-medium uppercase tracking-[0.1em] text-[#6c7289]"
+                    >
+                      reply
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
@@ -3279,26 +3308,29 @@ export default function Page() {
           </div>
 
           <div className="space-y-3">
-            {visibleComments.map((comment) => renderCommentThread(post.id, post.authorEmail, comment))}
+            {visibleComments.map((comment) => renderCommentThread(post.id, comment))}
 
             {openCommentPostId === post.id ? (
-              <form className="flex gap-2" onSubmit={(event) => addComment(event, post.id)}>
-                <Input
-                  aria-label={`comment on ${post.title}`}
-                  radius="full"
-                  placeholder="comment on this post"
-                  value={commentDrafts[post.id] ?? ""}
-                  onValueChange={(value) =>
-                    setCommentDrafts((current) => ({
-                      ...current,
-                      [post.id]: value,
-                    }))
-                  }
-                  classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
-                />
-                <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
-                  send
-                </Button>
+              <form className="space-y-2" onSubmit={(event) => addComment(event, post.id)}>
+                <div className="flex gap-2">
+                  <Input
+                    aria-label={`comment on ${post.title}`}
+                    radius="full"
+                    placeholder="comment on this post"
+                    value={commentDrafts[post.id] ?? ""}
+                    onValueChange={(value) =>
+                      setCommentDrafts((current) => ({
+                        ...current,
+                        [post.id]: value,
+                      }))
+                    }
+                    classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
+                  />
+                  <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+                    send
+                  </Button>
+                </div>
+                <p className="text-xs text-[#6c7289]">type @username if you want to mention someone.</p>
               </form>
             ) : null}
           </div>
@@ -10408,26 +10440,29 @@ export default function Page() {
                         </div>
 
                         <div className="space-y-3">
-                          {selectedOwnPostVisibleComments.map((comment) => renderCommentThread(selectedOwnPost.id, selectedOwnPost.authorEmail, comment))}
+                          {selectedOwnPostVisibleComments.map((comment) => renderCommentThread(selectedOwnPost.id, comment))}
 
                           {openCommentPostId === selectedOwnPost.id ? (
-                            <form className="flex gap-2" onSubmit={(event) => addComment(event, selectedOwnPost.id)}>
-                              <Input
-                                aria-label={`comment on ${selectedOwnPost.title}`}
-                                radius="full"
-                                placeholder="comment on this post"
-                                value={commentDrafts[selectedOwnPost.id] ?? ""}
-                                onValueChange={(value) =>
-                                  setCommentDrafts((current) => ({
-                                    ...current,
-                                    [selectedOwnPost.id]: value,
-                                  }))
-                                }
-                                classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
-                              />
-                              <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
-                                send
-                              </Button>
+                            <form className="space-y-2" onSubmit={(event) => addComment(event, selectedOwnPost.id)}>
+                              <div className="flex gap-2">
+                                <Input
+                                  aria-label={`comment on ${selectedOwnPost.title}`}
+                                  radius="full"
+                                  placeholder="comment on this post"
+                                  value={commentDrafts[selectedOwnPost.id] ?? ""}
+                                  onValueChange={(value) =>
+                                    setCommentDrafts((current) => ({
+                                      ...current,
+                                      [selectedOwnPost.id]: value,
+                                    }))
+                                  }
+                                  classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
+                                />
+                                <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+                                  send
+                                </Button>
+                              </div>
+                              <p className="text-xs text-[#6c7289]">type @username if you want to mention someone.</p>
                             </form>
                           ) : null}
                         </div>
