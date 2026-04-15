@@ -22,7 +22,6 @@ import {
   Tabs,
   Textarea,
 } from "@heroui/react";
-import { toPng } from "html-to-image";
 import { motion } from "framer-motion";
 import QRCode from "qrcode";
 import { LANGUAGE_STORAGE_KEY, detectPreferredLanguage, translations, type Language } from "@/lib/i18n";
@@ -2405,7 +2404,6 @@ export default function Page() {
     selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
   );
   const currentUsername = liveProfile.username?.trim().toLowerCase() ?? user.profile.username?.trim().toLowerCase() ?? "";
-  const adminShareCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const shareImageDataUrlCacheRef = useRef<Record<string, string>>({});
   const selectedStoryPostIndex = selectedStoryPostId
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
@@ -3246,13 +3244,7 @@ export default function Page() {
         key={post.id}
         className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
       >
-        <div
-          ref={(node) => {
-            if (canUseSpecialImageShare) {
-              adminShareCardRefs.current[post.id] = node;
-            }
-          }}
-        >
+        <div>
           <CardHeader className="flex flex-wrap items-start gap-x-3 gap-y-2 px-5 pb-0 pt-5">
             {canOpenProfile ? (
               <button type="button" onClick={() => setSelectedProfileEmail(post.authorEmail)} className="shrink-0 rounded-full">
@@ -6763,193 +6755,270 @@ export default function Page() {
     return dataUrl;
   };
 
-  const waitForImageToLoad = (image: HTMLImageElement) =>
-    new Promise<void>((resolve, reject) => {
-      if (image.complete && image.naturalWidth > 0) {
-        resolve();
-        return;
-      }
-
-      image.onload = () => resolve();
+  const loadImageForCanvas = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+      image.onload = () => resolve(image);
       image.onerror = () => reject(new Error("image load failed"));
+      image.src = src;
     });
 
-  const buildShareSnapshotNode = async (post: AppPost) => {
-    const wrapper = document.createElement("div");
-    wrapper.style.position = "fixed";
-    wrapper.style.left = "-10000px";
-    wrapper.style.top = "0";
-    wrapper.style.zIndex = "-1";
-    wrapper.style.pointerEvents = "none";
-    wrapper.style.width = "720px";
-    wrapper.style.padding = "0";
-    wrapper.style.background = "#fffaf2";
-    wrapper.style.fontFamily = "Arial, sans-serif";
+  const getWrappedLines = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) => {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+
+    const lines: string[] = [];
+    let currentLine = words[0];
+
+    for (const word of words.slice(1)) {
+      const nextLine = `${currentLine} ${word}`;
+      if (ctx.measureText(nextLine).width <= maxWidth) {
+        currentLine = nextLine;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+
+    lines.push(currentLine);
+    return lines;
+  };
+
+  const drawRoundedRect = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ) => {
+    const safeRadius = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + safeRadius, y);
+    ctx.lineTo(x + width - safeRadius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    ctx.lineTo(x + width, y + height - safeRadius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    ctx.lineTo(x + safeRadius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    ctx.lineTo(x, y + safeRadius);
+    ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+    ctx.closePath();
+  };
+
+  const drawContainedImage = (
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ) => {
+    const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    const drawX = x + (width - drawWidth) / 2;
+    const drawY = y + (height - drawHeight) / 2;
+
+    ctx.save();
+    drawRoundedRect(ctx, x, y, width, height, radius);
+    ctx.clip();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x, y, width, height);
+    ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    ctx.restore();
+  };
+
+  const canvasToBlob = (canvas: HTMLCanvasElement) =>
+    new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+
+        reject(new Error("canvas export failed"));
+      }, "image/png");
+    });
+
+  const buildShareCardBlob = async (post: AppPost) => {
+    const canvas = document.createElement("canvas");
+    const width = 1080;
+    const paddingX = 42;
+    const contentWidth = width - paddingX * 2;
+    const headerHeight = 112;
+    const mediaFramePadding = 12;
+    const mediaOuterWidth = contentWidth;
+    const mediaInnerWidth = mediaOuterWidth - mediaFramePadding * 2;
+    const mediaMaxHeight = 920;
+    const photoGapTop = 24;
+    const sectionGap = 24;
+    const placeCardHeight = post.taggedPlaceName ? 154 : 0;
+    const tagsHeight = post.tasteTag || post.priceTag ? 72 : 0;
 
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
     const username = postAuthorAccount?.profile.username?.trim() || post.authorName || "crumbz";
-    const placeKind = (post.taggedPlaceKind || "food spot").toUpperCase();
     const priceTagLabel = post.priceTag ? PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag : "";
 
-    const card = document.createElement("div");
-    card.style.width = "720px";
-    card.style.boxSizing = "border-box";
-    card.style.background = "#fffaf2";
-    card.style.padding = "0";
-    card.style.color = "#2C1A0E";
-
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.padding = "22px 26px 18px";
-    header.style.borderBottom = "1px solid #F3E4C5";
-
-    const title = document.createElement("div");
-    title.textContent = `@${username}`;
-    title.style.fontSize = "52px";
-    title.style.fontWeight = "700";
-    title.style.lineHeight = "1";
-    title.style.letterSpacing = "-0.04em";
-
-    const closeLabel = document.createElement("div");
-    closeLabel.textContent = "close";
-    closeLabel.style.fontSize = "28px";
-    closeLabel.style.color = "#5F5245";
-
-    header.append(title, closeLabel);
-    card.appendChild(header);
+    let photoImage: HTMLImageElement | null = null;
+    let mediaHeight = 0;
 
     if (post.mediaUrls[0]) {
-      const mediaFrame = document.createElement("div");
-      mediaFrame.style.margin = "18px 26px 0";
-      mediaFrame.style.border = "1px solid #F0E2C1";
-      mediaFrame.style.borderRadius = "26px";
-      mediaFrame.style.padding = "10px";
-      mediaFrame.style.background = "#fff";
-      mediaFrame.style.overflow = "hidden";
-
-      const image = document.createElement("img");
-      image.src = await getShareSafeImageUrl(post.mediaUrls[0]);
-      image.alt = post.title || "post photo";
-      image.style.display = "block";
-      image.style.width = "100%";
-      image.style.height = "auto";
-      image.style.borderRadius = "20px";
-      image.style.objectFit = "cover";
-
-      mediaFrame.appendChild(image);
-      card.appendChild(mediaFrame);
-      await waitForImageToLoad(image);
+      photoImage = await loadImageForCanvas(await getShareSafeImageUrl(post.mediaUrls[0]));
+      const scale = Math.min(mediaInnerWidth / photoImage.naturalWidth, mediaMaxHeight / photoImage.naturalHeight);
+      mediaHeight = Math.round(photoImage.naturalHeight * scale) + mediaFramePadding * 2;
     }
 
-    if (post.body.trim()) {
-      const caption = document.createElement("div");
-      caption.textContent = post.body.trim();
-      caption.style.padding = "22px 26px 0";
-      caption.style.fontSize = "24px";
-      caption.style.lineHeight = "1.45";
-      caption.style.fontWeight = "500";
-      card.appendChild(caption);
+    const measureCanvas = document.createElement("canvas");
+    const measureCtx = measureCanvas.getContext("2d");
+    if (!measureCtx) throw new Error("canvas context unavailable");
+    measureCtx.font = "500 22px Arial";
+    const captionLines = post.body.trim() ? getWrappedLines(measureCtx, post.body.trim(), contentWidth) : [];
+    const captionHeight = captionLines.length ? captionLines.length * 34 : 0;
+    const captionSectionHeight = captionHeight ? captionHeight + 8 : 0;
+
+    const totalHeight =
+      headerHeight +
+      (mediaHeight ? photoGapTop + mediaHeight : 0) +
+      (captionSectionHeight ? sectionGap + captionSectionHeight : 0) +
+      (placeCardHeight ? sectionGap + placeCardHeight : 0) +
+      (tagsHeight ? sectionGap + tagsHeight : 0) +
+      40;
+
+    canvas.width = width;
+    canvas.height = totalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas context unavailable");
+
+    ctx.fillStyle = "#fffaf2";
+    ctx.fillRect(0, 0, width, totalHeight);
+
+    let y = 0;
+
+    ctx.fillStyle = "#fffaf2";
+    ctx.fillRect(0, 0, width, headerHeight);
+    ctx.strokeStyle = "#F3E4C5";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, headerHeight - 1);
+    ctx.lineTo(width, headerHeight - 1);
+    ctx.stroke();
+
+    ctx.fillStyle = "#2C1A0E";
+    ctx.font = "700 58px Arial";
+    ctx.textBaseline = "top";
+    ctx.fillText(`@${username}`, paddingX, 24);
+
+    ctx.fillStyle = "#5F5245";
+    ctx.font = "400 32px Arial";
+    const closeLabel = "close";
+    ctx.fillText(closeLabel, width - paddingX - ctx.measureText(closeLabel).width, 30);
+
+    y = headerHeight + photoGapTop;
+
+    if (photoImage && mediaHeight) {
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#F0E2C1";
+      ctx.lineWidth = 2;
+      drawRoundedRect(ctx, paddingX, y, mediaOuterWidth, mediaHeight, 28);
+      ctx.fill();
+      ctx.stroke();
+
+      drawContainedImage(
+        ctx,
+        photoImage,
+        paddingX + mediaFramePadding,
+        y + mediaFramePadding,
+        mediaInnerWidth,
+        mediaHeight - mediaFramePadding * 2,
+        22,
+      );
+      y += mediaHeight;
+    }
+
+    if (captionLines.length) {
+      y += sectionGap;
+      ctx.fillStyle = "#2C1A0E";
+      ctx.font = "500 22px Arial";
+      for (const line of captionLines) {
+        ctx.fillText(line, paddingX, y);
+        y += 34;
+      }
+      y += 8;
     }
 
     if (post.taggedPlaceName) {
-      const placeCard = document.createElement("div");
-      placeCard.style.margin = "18px 26px 0";
-      placeCard.style.border = "1px solid #F3E4C5";
-      placeCard.style.borderRadius = "24px";
-      placeCard.style.background = "#fff";
-      placeCard.style.padding = "20px 22px";
+      y += sectionGap;
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#F3E4C5";
+      ctx.lineWidth = 2;
+      drawRoundedRect(ctx, paddingX, y, contentWidth, placeCardHeight, 28);
+      ctx.fill();
+      ctx.stroke();
 
-      const placeTop = document.createElement("div");
-      placeTop.style.display = "flex";
-      placeTop.style.justifyContent = "space-between";
-      placeTop.style.alignItems = "center";
-      placeTop.style.gap = "12px";
+      ctx.fillStyle = "#D89A2D";
+      ctx.font = "700 20px Arial";
+      ctx.fillText((post.taggedPlaceKind || "food spot").toUpperCase(), paddingX + 26, y + 24);
 
-      const placeKindLabel = document.createElement("div");
-      placeKindLabel.textContent = placeKind;
-      placeKindLabel.style.fontSize = "18px";
-      placeKindLabel.style.fontWeight = "700";
-      placeKindLabel.style.letterSpacing = "0.18em";
-      placeKindLabel.style.color = "#D89A2D";
+      const mapLabel = "MAP";
+      ctx.font = "700 20px Arial";
+      const mapWidth = ctx.measureText(mapLabel).width + 34;
+      ctx.fillStyle = "#FFF3CC";
+      drawRoundedRect(ctx, width - paddingX - 26 - mapWidth, y + 16, mapWidth, 40, 20);
+      ctx.fill();
+      ctx.fillStyle = "#E3A736";
+      ctx.fillText(mapLabel, width - paddingX - 26 - mapWidth + 17, y + 24);
 
-      const mapChip = document.createElement("div");
-      mapChip.textContent = "MAP";
-      mapChip.style.padding = "8px 16px";
-      mapChip.style.borderRadius = "999px";
-      mapChip.style.background = "#FFF3CC";
-      mapChip.style.fontSize = "18px";
-      mapChip.style.fontWeight = "700";
-      mapChip.style.letterSpacing = "0.18em";
-      mapChip.style.color = "#E3A736";
-
-      placeTop.append(placeKindLabel, mapChip);
-
-      const placeName = document.createElement("div");
-      placeName.textContent = post.taggedPlaceName;
-      placeName.style.marginTop = "10px";
-      placeName.style.fontSize = "22px";
-      placeName.style.fontWeight = "700";
-      placeName.style.lineHeight = "1.3";
-
-      const placeAddress = document.createElement("div");
-      placeAddress.textContent = post.taggedPlaceAddress || "";
-      placeAddress.style.marginTop = "8px";
-      placeAddress.style.fontSize = "18px";
-      placeAddress.style.lineHeight = "1.35";
-      placeAddress.style.color = "#7B7F91";
-      placeAddress.style.whiteSpace = "nowrap";
-      placeAddress.style.overflow = "hidden";
-      placeAddress.style.textOverflow = "ellipsis";
-
-      placeCard.append(placeTop, placeName);
-      if (post.taggedPlaceAddress) {
-        placeCard.appendChild(placeAddress);
+      ctx.fillStyle = "#2C1A0E";
+      ctx.font = "700 21px Arial";
+      const placeLines = getWrappedLines(ctx, post.taggedPlaceName, contentWidth - 52);
+      let placeY = y + 62;
+      for (const line of placeLines.slice(0, 2)) {
+        ctx.fillText(line, paddingX + 26, placeY);
+        placeY += 28;
       }
-      card.appendChild(placeCard);
+
+      if (post.taggedPlaceAddress) {
+        ctx.fillStyle = "#7B7F91";
+        ctx.font = "400 18px Arial";
+        const addressLines = getWrappedLines(ctx, post.taggedPlaceAddress, contentWidth - 52);
+        ctx.fillText(addressLines[0] ?? "", paddingX + 26, y + placeCardHeight - 38);
+      }
+
+      y += placeCardHeight;
     }
 
     if (post.tasteTag || priceTagLabel) {
-      const tags = document.createElement("div");
-      tags.style.display = "flex";
-      tags.style.flexWrap = "wrap";
-      tags.style.gap = "12px";
-      tags.style.padding = "18px 26px 28px";
+      y += sectionGap;
+      let chipX = paddingX;
 
       if (post.tasteTag) {
-        const tasteChip = document.createElement("div");
-        tasteChip.textContent = post.tasteTag;
-        tasteChip.style.padding = "10px 18px";
-        tasteChip.style.borderRadius = "999px";
-        tasteChip.style.background = "#3A2717";
-        tasteChip.style.color = "#fff";
-        tasteChip.style.fontSize = "18px";
-        tasteChip.style.fontWeight = "600";
-        tags.appendChild(tasteChip);
+        ctx.font = "600 18px Arial";
+        const tasteWidth = ctx.measureText(post.tasteTag).width + 40;
+        ctx.fillStyle = "#3A2717";
+        drawRoundedRect(ctx, chipX, y, tasteWidth, 46, 23);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(post.tasteTag, chipX + 20, y + 13);
+        chipX += tasteWidth + 14;
       }
 
       if (priceTagLabel) {
-        const priceChip = document.createElement("div");
-        priceChip.textContent = priceTagLabel;
-        priceChip.style.padding = "10px 18px";
-        priceChip.style.borderRadius = "999px";
-        priceChip.style.background = "#fff";
-        priceChip.style.border = "1px solid #EAD9B5";
-        priceChip.style.color = "#6C5A47";
-        priceChip.style.fontSize = "18px";
-        priceChip.style.fontWeight = "600";
-        tags.appendChild(priceChip);
+        ctx.font = "600 18px Arial";
+        const priceWidth = ctx.measureText(priceTagLabel).width + 40;
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#EAD9B5";
+        ctx.lineWidth = 2;
+        drawRoundedRect(ctx, chipX, y, priceWidth, 46, 23);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#6C5A47";
+        ctx.fillText(priceTagLabel, chipX + 20, y + 13);
       }
-
-      card.appendChild(tags);
-    } else {
-      card.style.paddingBottom = "28px";
     }
 
-    wrapper.appendChild(card);
-    document.body.appendChild(wrapper);
-    return wrapper;
+    return canvasToBlob(canvas);
   };
 
   const shareAdminPostCard = async (post: AppPost) => {
@@ -6967,17 +7036,8 @@ export default function Page() {
       copiedLink = false;
     }
 
-    let snapshotNode: HTMLDivElement | null = null;
-
     try {
-      snapshotNode = await buildShareSnapshotNode(post);
-      const dataUrl = await toPng(snapshotNode, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: "#fffaf2",
-      });
-      const imageResponse = await fetch(dataUrl);
-      const imageBlob = await imageResponse.blob();
+      const imageBlob = await buildShareCardBlob(post);
       const imageFile = new File([imageBlob], `${post.id}.png`, { type: "image/png" });
 
       if (navigator.share && navigator.canShare?.({ files: [imageFile] })) {
@@ -7006,8 +7066,6 @@ export default function Page() {
         postId: post.id,
         message: copiedLink ? "link copied. the image part hit a snag, so try again." : `the image part hit a snag. copy this link: ${sharePayload.url}`,
       });
-    } finally {
-      snapshotNode?.remove();
     }
   };
 
@@ -10984,14 +11042,7 @@ export default function Page() {
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {selectedOwnPost ? (
                   <div className="space-y-4">
-                    <div
-                      ref={(node) => {
-                        if (canUseImageShareForPost(selectedOwnPost)) {
-                          adminShareCardRefs.current[selectedOwnPost.id] = node;
-                        }
-                      }}
-                      className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]"
-                    >
+                    <div className="rounded-[32px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
                       <div className="flex items-center gap-3 px-5 pb-0 pt-5">
                         <Avatar src={currentUserPicture} name={selectedOwnPost.authorName} className="bg-[#FFF0D0] text-[#F5A623]" />
                         <div className="min-w-0 flex-1">
@@ -11008,7 +11059,7 @@ export default function Page() {
                       </div>
 
                       {selectedOwnPost.type !== "weekly-dump" ? (
-                        <div data-share-ignore="true" className="px-5 pt-4">
+                        <div className="px-5 pt-4">
                           <Button
                             radius="full"
                             variant="flat"
@@ -11053,7 +11104,7 @@ export default function Page() {
                           </div>
                         ) : null}
 
-                        <div data-share-ignore="true" className="flex items-center gap-3">
+                        <div className="flex items-center gap-3">
                           <PostActionIcon label="like post" active={selectedOwnPostHasLiked} onPress={() => toggleLike(selectedOwnPost.id)}>
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path
@@ -11096,7 +11147,7 @@ export default function Page() {
                           </PostActionIcon>
                         </div>
 
-                        <div data-share-ignore="true" className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
                           <button
                             type="button"
                             onClick={() => setLikesViewerPostId(selectedOwnPost.id)}
@@ -11108,7 +11159,7 @@ export default function Page() {
                           <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{selectedOwnPostBucket?.shares.length ?? 0} shares</span>
                         </div>
 
-                        <div data-share-ignore="true" className="space-y-3">
+                        <div className="space-y-3">
                           {selectedOwnPostVisibleComments.map((comment) => renderCommentThread(selectedOwnPost.id, comment))}
 
                           {openCommentPostId === selectedOwnPost.id ? (
