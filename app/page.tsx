@@ -6716,6 +6716,22 @@ export default function Page() {
     return `${label || post.id}.png`;
   };
 
+  const getPostShareTimestampLabel = (post: AppPost) => {
+    const parsed = Date.parse(post.createdAtIso);
+    if (Number.isNaN(parsed)) return post.createdAt.toUpperCase();
+
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .format(new Date(parsed))
+      .replace(",", " AT")
+      .toUpperCase();
+  };
+
   const recordPostShare = (postId: string, platform: string) => {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
@@ -6889,7 +6905,7 @@ export default function Page() {
     const cardWidth = width - outerPaddingX * 2;
     const paddingX = 42;
     const contentWidth = cardWidth - paddingX * 2;
-    const headerHeight = 102;
+    const headerHeight = 170;
     const mediaFramePadding = 12;
     const mediaOuterWidth = contentWidth;
     const mediaInnerWidth = mediaOuterWidth - mediaFramePadding * 2;
@@ -6900,16 +6916,28 @@ export default function Page() {
 
     const postAuthorAccount = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()) ?? null;
     const username = postAuthorAccount?.profile.username?.trim() || post.authorName || "crumbz";
+    const authorPicture = post.authorRole === "student" ? getAccountPicture(postAuthorAccount) : adminProfilePicture;
     const priceTagLabel = post.priceTag ? PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag : "";
     const shareCardLabel = getPostShareCardLabel(post);
+    const timestampLabel = getPostShareTimestampLabel(post);
+    const chipLabel = (post.cta === "live now" ? "post" : post.cta || post.type || "post").trim();
 
     let photoImage: HTMLImageElement | null = null;
+    let avatarImage: HTMLImageElement | null = null;
     let mediaHeight = 0;
 
     if (post.mediaUrls[0]) {
       photoImage = await loadImageForCanvas(await getShareSafeImageUrl(post.mediaUrls[0]));
       const scaledHeight = mediaInnerWidth * (photoImage.naturalHeight / photoImage.naturalWidth);
       mediaHeight = Math.round(scaledHeight) + mediaFramePadding * 2;
+    }
+
+    if (authorPicture) {
+      try {
+        avatarImage = await loadImageForCanvas(await getShareSafeImageUrl(authorPicture));
+      } catch {
+        avatarImage = null;
+      }
     }
 
     const measureCanvas = document.createElement("canvas");
@@ -6972,15 +7000,48 @@ export default function Page() {
     ctx.lineTo(cardX + cardWidth, cardY + headerHeight - 1);
     ctx.stroke();
 
+    const avatarSize = 58;
+    const avatarX = cardX + paddingX;
+    const avatarY = cardY + 34;
+
+    if (avatarImage) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(avatarImage, avatarX, avatarY, avatarSize, avatarSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#E9D7BF";
+      ctx.beginPath();
+      ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#8B6A4B";
+      ctx.font = '700 26px "Manrope", system-ui, sans-serif';
+      ctx.fillText(username.slice(0, 1).toUpperCase(), avatarX + 19, avatarY + 12);
+    }
+
+    const textX = avatarX + avatarSize + 18;
     ctx.fillStyle = "#2C1A0E";
-    ctx.font = '700 52px "Young Serif", Georgia, serif';
+    ctx.font = '700 34px "Manrope", system-ui, sans-serif';
     ctx.textBaseline = "top";
-    ctx.fillText(`@${username}`, cardX + paddingX, cardY + 26);
+    ctx.fillText(`@${username}`, textX, cardY + 36);
 
     ctx.fillStyle = "#5F5245";
-    ctx.font = '500 28px "Manrope", system-ui, sans-serif';
-    const closeLabel = "close";
-    ctx.fillText(closeLabel, cardX + cardWidth - paddingX - ctx.measureText(closeLabel).width, cardY + 30);
+    ctx.font = '600 22px "Manrope", system-ui, sans-serif';
+    ctx.fillText(timestampLabel, textX, cardY + 84);
+
+    ctx.font = '600 28px "Manrope", system-ui, sans-serif';
+    const chipWidth = ctx.measureText(chipLabel).width + 42;
+    const chipHeight = 52;
+    const chipX = cardX + cardWidth - paddingX - chipWidth;
+    const chipY = cardY + 38;
+    ctx.fillStyle = "#FFF3CC";
+    drawRoundedRect(ctx, chipX, chipY, chipWidth, chipHeight, 26);
+    ctx.fill();
+    ctx.fillStyle = "#E3A736";
+    ctx.fillText(chipLabel, chipX + 21, chipY + 11);
 
     y = headerHeight + photoGapTop;
 
