@@ -7022,9 +7022,9 @@ export default function Page() {
     ctx.lineTo(cardX + cardWidth, cardY + headerHeight - 1);
     ctx.stroke();
 
-    const avatarSize = 64;
+    const avatarSize = 76;
     const avatarX = cardX + paddingX;
-    const avatarY = cardY + 32;
+    const avatarY = cardY + 28;
 
     if (avatarImage) {
       drawCoverCircleImage(ctx, avatarImage, avatarX, avatarY, avatarSize);
@@ -7034,19 +7034,19 @@ export default function Page() {
       ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#8B6A4B";
-      ctx.font = '700 26px "Manrope", system-ui, sans-serif';
-      ctx.fillText(username.slice(0, 1).toUpperCase(), avatarX + 22, avatarY + 15);
+      ctx.font = '700 30px "Manrope", system-ui, sans-serif';
+      ctx.fillText(username.slice(0, 1).toUpperCase(), avatarX + 26, avatarY + 20);
     }
 
     const textX = avatarX + avatarSize + 18;
     ctx.fillStyle = "#2C1A0E";
-    ctx.font = '700 34px "Manrope", system-ui, sans-serif';
+    ctx.font = '700 42px "Manrope", system-ui, sans-serif';
     ctx.textBaseline = "top";
-    ctx.fillText(`@${username}`, textX, cardY + 36);
+    ctx.fillText(`@${username}`, textX, cardY + 32);
 
     ctx.fillStyle = "#5F5245";
     ctx.font = '600 22px "Manrope", system-ui, sans-serif';
-    ctx.fillText(timestampLabel, textX, cardY + 84);
+    ctx.fillText(timestampLabel, textX, cardY + 88);
 
     ctx.font = '600 28px "Manrope", system-ui, sans-serif';
     const chipWidth = ctx.measureText(chipLabel).width + 42;
