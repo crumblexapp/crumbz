@@ -6883,9 +6883,13 @@ export default function Page() {
 
     const canvas = document.createElement("canvas");
     const width = 1080;
+    const outerPaddingX = 28;
+    const outerPaddingTop = 110;
+    const outerPaddingBottom = 44;
+    const cardWidth = width - outerPaddingX * 2;
     const paddingX = 42;
-    const contentWidth = width - paddingX * 2;
-    const headerHeight = 112;
+    const contentWidth = cardWidth - paddingX * 2;
+    const headerHeight = 102;
     const mediaFramePadding = 12;
     const mediaOuterWidth = contentWidth;
     const mediaInnerWidth = mediaOuterWidth - mediaFramePadding * 2;
@@ -6917,12 +6921,13 @@ export default function Page() {
     const captionSectionHeight = captionHeight ? captionHeight + 8 : 0;
 
     const totalHeight =
+      outerPaddingTop +
       headerHeight +
       (mediaHeight ? photoGapTop + mediaHeight : 0) +
       (captionSectionHeight ? sectionGap + captionSectionHeight : 0) +
       (placeCardHeight ? sectionGap + placeCardHeight : 0) +
       (tagsHeight ? sectionGap + tagsHeight : 0) +
-      40;
+      outerPaddingBottom;
 
     canvas.width = width;
     canvas.height = totalHeight;
@@ -6932,26 +6937,50 @@ export default function Page() {
     ctx.fillStyle = "#fffaf2";
     ctx.fillRect(0, 0, width, totalHeight);
 
-    let y = 0;
+    const cardX = outerPaddingX;
+    const cardY = outerPaddingTop;
+    const cardHeight = totalHeight - outerPaddingTop - outerPaddingBottom;
+
+    ctx.save();
+    ctx.shadowColor = "rgba(44,26,14,0.08)";
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = "#fffaf2";
+    drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 36);
+    ctx.fill();
+    ctx.restore();
 
     ctx.fillStyle = "#fffaf2";
-    ctx.fillRect(0, 0, width, headerHeight);
+    ctx.strokeStyle = "#F0E2C1";
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 36);
+    ctx.fill();
+    ctx.stroke();
+
+    let y = cardY;
+
+    ctx.fillStyle = "#fffaf2";
+    ctx.save();
+    drawRoundedRect(ctx, cardX, cardY, cardWidth, headerHeight, 36);
+    ctx.clip();
+    ctx.fillRect(cardX, cardY, cardWidth, headerHeight);
+    ctx.restore();
     ctx.strokeStyle = "#F3E4C5";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, headerHeight - 1);
-    ctx.lineTo(width, headerHeight - 1);
+    ctx.moveTo(cardX, cardY + headerHeight - 1);
+    ctx.lineTo(cardX + cardWidth, cardY + headerHeight - 1);
     ctx.stroke();
 
     ctx.fillStyle = "#2C1A0E";
-    ctx.font = '700 58px "Young Serif", Georgia, serif';
+    ctx.font = '700 52px "Young Serif", Georgia, serif';
     ctx.textBaseline = "top";
-    ctx.fillText(`@${username}`, paddingX, 24);
+    ctx.fillText(`@${username}`, cardX + paddingX, cardY + 26);
 
     ctx.fillStyle = "#5F5245";
-    ctx.font = '400 32px "Manrope", system-ui, sans-serif';
+    ctx.font = '500 28px "Manrope", system-ui, sans-serif';
     const closeLabel = "close";
-    ctx.fillText(closeLabel, width - paddingX - ctx.measureText(closeLabel).width, 30);
+    ctx.fillText(closeLabel, cardX + cardWidth - paddingX - ctx.measureText(closeLabel).width, cardY + 30);
 
     y = headerHeight + photoGapTop;
 
@@ -6959,14 +6988,14 @@ export default function Page() {
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#F0E2C1";
       ctx.lineWidth = 2;
-      drawRoundedRect(ctx, paddingX, y, mediaOuterWidth, mediaHeight, 28);
+      drawRoundedRect(ctx, cardX + paddingX, y, mediaOuterWidth, mediaHeight, 28);
       ctx.fill();
       ctx.stroke();
 
       drawContainedImage(
         ctx,
         photoImage,
-        paddingX + mediaFramePadding,
+        cardX + paddingX + mediaFramePadding,
         y + mediaFramePadding,
         mediaInnerWidth,
         mediaHeight - mediaFramePadding * 2,
@@ -6980,7 +7009,7 @@ export default function Page() {
       ctx.fillStyle = "#2C1A0E";
       ctx.font = '500 22px "Manrope", system-ui, sans-serif';
       for (const line of captionLines) {
-        ctx.fillText(line, paddingX, y);
+        ctx.fillText(line, cardX + paddingX, y);
         y += 34;
       }
       y += 8;
@@ -6991,29 +7020,29 @@ export default function Page() {
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#F3E4C5";
       ctx.lineWidth = 2;
-      drawRoundedRect(ctx, paddingX, y, contentWidth, placeCardHeight, 28);
+      drawRoundedRect(ctx, cardX + paddingX, y, contentWidth, placeCardHeight, 28);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = "#D89A2D";
       ctx.font = '700 20px "Manrope", system-ui, sans-serif';
-      ctx.fillText((post.taggedPlaceKind || "food spot").toUpperCase(), paddingX + 26, y + 24);
+      ctx.fillText((post.taggedPlaceKind || "food spot").toUpperCase(), cardX + paddingX + 26, y + 24);
 
       const mapLabel = "MAP";
       ctx.font = '700 20px "Manrope", system-ui, sans-serif';
       const mapWidth = ctx.measureText(mapLabel).width + 34;
       ctx.fillStyle = "#FFF3CC";
-      drawRoundedRect(ctx, width - paddingX - 26 - mapWidth, y + 16, mapWidth, 40, 20);
+      drawRoundedRect(ctx, cardX + cardWidth - paddingX - 26 - mapWidth, y + 16, mapWidth, 40, 20);
       ctx.fill();
       ctx.fillStyle = "#E3A736";
-      ctx.fillText(mapLabel, width - paddingX - 26 - mapWidth + 17, y + 24);
+      ctx.fillText(mapLabel, cardX + cardWidth - paddingX - 26 - mapWidth + 17, y + 24);
 
       ctx.fillStyle = "#2C1A0E";
       ctx.font = '700 21px "Manrope", system-ui, sans-serif';
       const placeLines = getWrappedLines(ctx, post.taggedPlaceName, contentWidth - 52);
       let placeY = y + 62;
       for (const line of placeLines.slice(0, 2)) {
-        ctx.fillText(line, paddingX + 26, placeY);
+        ctx.fillText(line, cardX + paddingX + 26, placeY);
         placeY += 28;
       }
 
@@ -7021,7 +7050,7 @@ export default function Page() {
         ctx.fillStyle = "#7B7F91";
         ctx.font = '400 18px "Manrope", system-ui, sans-serif';
         const addressLines = getWrappedLines(ctx, post.taggedPlaceAddress, contentWidth - 52);
-        ctx.fillText(addressLines[0] ?? "", paddingX + 26, y + placeCardHeight - 38);
+        ctx.fillText(addressLines[0] ?? "", cardX + paddingX + 26, y + placeCardHeight - 38);
       }
 
       y += placeCardHeight;
@@ -7029,7 +7058,7 @@ export default function Page() {
 
     if (post.tasteTag || priceTagLabel) {
       y += sectionGap;
-      let chipX = paddingX;
+      let chipX = cardX + paddingX;
 
       if (post.tasteTag) {
         ctx.font = '600 18px "Manrope", system-ui, sans-serif';
