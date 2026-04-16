@@ -6863,6 +6863,28 @@ export default function Page() {
     ctx.restore();
   };
 
+  const drawCoverCircleImage = (
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    x: number,
+    y: number,
+    size: number,
+  ) => {
+    const scale = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+    const drawWidth = image.naturalWidth * scale;
+    const drawHeight = image.naturalHeight * scale;
+    const drawX = x + (size - drawWidth) / 2;
+    const drawY = y + (size - drawHeight) / 2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+    ctx.restore();
+  };
+
   const canvasToBlob = (canvas: HTMLCanvasElement) =>
     new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((blob) => {
@@ -7000,18 +7022,12 @@ export default function Page() {
     ctx.lineTo(cardX + cardWidth, cardY + headerHeight - 1);
     ctx.stroke();
 
-    const avatarSize = 58;
+    const avatarSize = 64;
     const avatarX = cardX + paddingX;
-    const avatarY = cardY + 34;
+    const avatarY = cardY + 32;
 
     if (avatarImage) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(avatarImage, avatarX, avatarY, avatarSize, avatarSize);
-      ctx.restore();
+      drawCoverCircleImage(ctx, avatarImage, avatarX, avatarY, avatarSize);
     } else {
       ctx.fillStyle = "#E9D7BF";
       ctx.beginPath();
@@ -7019,7 +7035,7 @@ export default function Page() {
       ctx.fill();
       ctx.fillStyle = "#8B6A4B";
       ctx.font = '700 26px "Manrope", system-ui, sans-serif';
-      ctx.fillText(username.slice(0, 1).toUpperCase(), avatarX + 19, avatarY + 12);
+      ctx.fillText(username.slice(0, 1).toUpperCase(), avatarX + 22, avatarY + 15);
     }
 
     const textX = avatarX + avatarSize + 18;
@@ -7043,7 +7059,7 @@ export default function Page() {
     ctx.fillStyle = "#E3A736";
     ctx.fillText(chipLabel, chipX + 21, chipY + 11);
 
-    y = headerHeight + photoGapTop;
+    y = cardY + headerHeight + photoGapTop;
 
     if (photoImage && mediaHeight) {
       ctx.fillStyle = "#ffffff";
