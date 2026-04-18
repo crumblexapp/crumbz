@@ -1043,7 +1043,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         fullName: typeof candidate.profile?.fullName === "string" ? candidate.profile.fullName : "",
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
-        preferredLanguage: candidate.profile?.preferredLanguage === "pl" ? "pl" : "en",
+        preferredLanguage: (candidate.profile?.preferredLanguage === "pl" ? "pl" : "en") as Language,
         bio: typeof candidate.profile?.bio === "string" ? candidate.profile.bio : "",
         picture: typeof candidate.profile?.picture === "string" ? candidate.profile.picture : "",
         schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
@@ -1091,7 +1091,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
       normalized.profile.isStudent = normalized.profile.schoolName ? true : null;
     }
 
-    return normalized;
+    return normalized satisfies StoredUser;
   });
 }
 

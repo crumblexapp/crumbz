@@ -58,7 +58,7 @@ function normalizeAccount(account: StoredUser) {
     ...account,
     profile: {
       ...account.profile,
-      preferredLanguage: account.profile.preferredLanguage === "pl" ? "pl" : "en",
+      preferredLanguage: (account.profile.preferredLanguage === "pl" ? "pl" : "en") as "en" | "pl",
       bio: account.profile.bio ?? "",
       friends: account.profile.friends ?? [],
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],
@@ -70,7 +70,7 @@ function normalizeAccount(account: StoredUser) {
       referredByEmail: account.profile.referredByEmail?.trim().toLowerCase() ?? "",
       referralCompletedAt: account.profile.referralCompletedAt ?? null,
     },
-  };
+  } satisfies StoredUser;
 }
 
 function getEmail(account: StoredUser) {
