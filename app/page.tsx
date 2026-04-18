@@ -337,6 +337,7 @@ type StoredUser = {
     fullName: string;
     username: string;
     city: string;
+    preferredLanguage?: Language;
     bio?: string;
     picture?: string;
     isStudent: boolean | null;
@@ -644,6 +645,7 @@ const defaultUser: StoredUser = {
     fullName: "",
     username: "",
     city: "",
+    preferredLanguage: "en",
     bio: "",
     picture: "",
     isStudent: null,
@@ -1041,6 +1043,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         fullName: typeof candidate.profile?.fullName === "string" ? candidate.profile.fullName : "",
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
+        preferredLanguage: candidate.profile?.preferredLanguage === "pl" ? "pl" : "en",
         bio: typeof candidate.profile?.bio === "string" ? candidate.profile.bio : "",
         picture: typeof candidate.profile?.picture === "string" ? candidate.profile.picture : "",
         schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
@@ -2047,6 +2050,35 @@ export default function Page() {
   }, [language]);
 
   useEffect(() => {
+    if (!user.signedIn || !liveAccount?.googleProfile?.email) return;
+    if ((liveProfile.preferredLanguage ?? "en") === language) return;
+
+    const nextAccount: StoredUser = {
+      ...liveAccount,
+      profile: {
+        ...liveAccount.profile,
+        preferredLanguage: language,
+      },
+    };
+
+    persistUser({
+      ...(liveAccount.googleProfile?.email?.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "") ? nextAccount : user),
+    });
+    setAccounts((current) =>
+      current.map((account) =>
+        account.googleProfile?.email?.toLowerCase() === liveAccount.googleProfile?.email?.toLowerCase() ? nextAccount : account,
+      ),
+    );
+
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextAccount,
+    }).then((result) => {
+      setAccounts(result.accounts);
+    }).catch(() => undefined);
+  }, [language, liveAccount, liveProfile.preferredLanguage, user, user.signedIn]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const nextHistoryState: CrumbzHistoryState = {
@@ -2672,7 +2704,7 @@ export default function Page() {
           id: "crumbz-placeholder",
           postId: null,
           label: ADMIN_PUBLIC_HANDLE,
-          detail: "coming soon",
+          detail: copy.feed.storyComingSoon,
           picture: adminProfilePicture,
           ring: "#F5A623",
           badge: "live",
@@ -2706,6 +2738,7 @@ export default function Page() {
           username: account.profile.username ? `@${account.profile.username}` : "@yourfriend",
           placeName: activity.placeName,
           seed: activity.id,
+          language,
         });
 
         return {
@@ -2745,7 +2778,10 @@ export default function Page() {
           return {
             id: `like-group-${post.id}-${latestLike.authorEmail.toLowerCase()}-${latestLike.createdAt}`,
             kind: "post_like" as const,
-            title: `${formatNotificationActorList(group.map((like) => like.authorName))} liked your ${likeTargetLabel}`,
+            title:
+              language === "pl"
+                ? `${formatNotificationActorList(group.map((like) => like.authorName))} polubił${group.length > 1 ? "o" : ""} twój ${likeTargetLabel === "friend review" ? "friend review" : "post"}`
+                : `${formatNotificationActorList(group.map((like) => like.authorName))} liked your ${likeTargetLabel}`,
             detail: "",
             postId: post.id,
             picture: getAccountPicture(accountByEmail.get(latestLike.authorEmail.toLowerCase()) ?? null),
@@ -2763,7 +2799,7 @@ export default function Page() {
           .map((comment, index) => ({
             id: `comment-${comment.id}`,
             kind: "post_comment" as const,
-            title: `${comment.authorName} commented on your post`,
+            title: language === "pl" ? `${comment.authorName} skomentował_a twój post` : `${comment.authorName} commented on your post`,
             detail: comment.text,
             postId: post.id,
             picture: getAccountPicture(accountByEmail.get(comment.authorEmail.toLowerCase()) ?? null),
@@ -2776,8 +2812,8 @@ export default function Page() {
           .map((share, index) => ({
             id: `share-${share.id}`,
             kind: "post_share" as const,
-            title: `${share.authorName} shared your post`,
-            detail: `${share.platform} share`,
+            title: language === "pl" ? `${share.authorName} udostępnił_a twój post` : `${share.authorName} shared your post`,
+            detail: language === "pl" ? `udostępnienie: ${share.platform}` : `${share.platform} share`,
             postId: post.id,
             picture: getAccountPicture(accountByEmail.get(share.authorEmail.toLowerCase()) ?? null),
             sortTime: getDisplayTimestamp(share.createdAt, index),
@@ -2800,7 +2836,10 @@ export default function Page() {
             return {
               id: `comment-reaction-${post.id}-${comment.id}-${latestReaction.authorEmail.toLowerCase()}-${latestReaction.createdAt}`,
               kind: "comment_reaction" as const,
-              title: `${formatNotificationActorList(group.map((reaction) => reaction.authorName))} reacted to your comment`,
+              title:
+                language === "pl"
+                  ? `${formatNotificationActorList(group.map((reaction) => reaction.authorName))} zareagował${group.length > 1 ? "o" : ""} na twój komentarz`
+                  : `${formatNotificationActorList(group.map((reaction) => reaction.authorName))} reacted to your comment`,
               detail: comment.text,
               postId: post.id,
               picture: getAccountPicture(accountByEmail.get(latestReaction.authorEmail.toLowerCase()) ?? null),
@@ -2819,7 +2858,10 @@ export default function Page() {
             return {
               id: `comment-reply-${post.id}-${comment.id}-${latestReply.authorEmail.toLowerCase()}-${latestReply.createdAt}`,
               kind: "comment_reply" as const,
-              title: `${formatNotificationActorList(group.map((reply) => reply.authorName))} replied to your comment`,
+              title:
+                language === "pl"
+                  ? `${formatNotificationActorList(group.map((reply) => reply.authorName))} odpisał${group.length > 1 ? "o" : ""} na twój komentarz`
+                  : `${formatNotificationActorList(group.map((reply) => reply.authorName))} replied to your comment`,
               detail: comment.text,
               postId: post.id,
               picture: getAccountPicture(accountByEmail.get(latestReply.authorEmail.toLowerCase()) ?? null),
@@ -2839,6 +2881,7 @@ export default function Page() {
         title: announcement.title,
         body: announcement.body,
         seed: announcement.id,
+        language,
       });
 
       return {
@@ -2858,6 +2901,7 @@ export default function Page() {
           requester.profile.fullName || requester.googleProfile?.name || "someone",
           requester.profile.username ? `@${requester.profile.username}` : "@someone",
           `friend-${requestEmail}`,
+          language,
         );
 
         return {
@@ -2881,6 +2925,7 @@ export default function Page() {
           body: post.body,
           cta: post.cta,
           seed: post.id,
+          language,
         });
 
         return {
@@ -2903,6 +2948,7 @@ export default function Page() {
           placeName: post.taggedPlaceName,
           isWeeklyDump: post.type === "weekly-dump",
           seed: post.id,
+          language,
         });
 
         return {
@@ -9306,37 +9352,37 @@ export default function Page() {
             {studentTab === "feed" ? (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  what’s good, {user.profile.fullName.split(" ")[0].toLowerCase()}
+                  {copy.feed.greeting(user.profile.fullName.split(" ")[0].toLowerCase())}
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">the feed is hungry. so are you.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">{copy.feed.greetingBody}</p>
               </>
             ) : studentTab === "favorites" ? (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  favorites
+                  {copy.feed.favoritesTitle}
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">your saved spots and map overlap.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">{copy.feed.favoritesBody}</p>
               </>
             ) : studentTab === "rewards" ? (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  rewards
+                  {copy.feed.rewardsTitle}
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">perks, drops, and what unlocks next.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">{copy.feed.rewardsBody}</p>
               </>
             ) : studentTab === "social" ? (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  social
+                  {copy.feed.socialTitle}
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">find your people and grow your circle.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">{copy.feed.socialBody}</p>
               </>
             ) : (
               <>
                 <p className="font-[family-name:var(--font-young-serif)] text-[1.7rem] leading-none text-[#57657f] sm:text-[1.9rem]">
-                  profile
+                  {copy.feed.profileTitle}
                 </p>
-                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">your taste, identity, and saved stats.</p>
+                <p className="mt-2 text-sm tracking-[0.04em] text-[#8a93a8]">{copy.feed.profileBody}</p>
               </>
             )}
           </div>

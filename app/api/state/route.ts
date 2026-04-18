@@ -22,6 +22,28 @@ function normalizeObjectArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is JsonRecord => Boolean(item && typeof item === "object")) : [];
 }
 
+function normalizeLanguage(value: unknown) {
+  return value === "pl" ? "pl" : "en";
+}
+
+function getAccountPreferredLanguage(account: JsonRecord | null | undefined) {
+  const profile = account?.profile && typeof account.profile === "object" ? (account.profile as JsonRecord) : null;
+  return normalizeLanguage(profile?.preferredLanguage);
+}
+
+function groupEmailsByLanguage(emails: string[], accountByEmail: Map<string, JsonRecord>) {
+  return emails.reduce(
+    (groups, email) => {
+      const normalizedEmail = normalizeEmail(email);
+      if (!normalizedEmail) return groups;
+      const language = getAccountPreferredLanguage(accountByEmail.get(normalizedEmail));
+      groups[language].push(normalizedEmail);
+      return groups;
+    },
+    { en: [] as string[], pl: [] as string[] },
+  );
+}
+
 function splitInteractionsAndAnnouncements(rawInteractions: unknown) {
   const interactions =
     rawInteractions && typeof rawInteractions === "object" && !Array.isArray(rawInteractions)
@@ -336,21 +358,34 @@ async function sendAnnouncementPush(announcement: { id: string; title: string; b
 
   const { data, error } = await supabaseServer.from("push_subscriptions").select("author_email");
   if (error) return;
+  const accountsRow = await supabaseServer.from("app_state").select("accounts").eq("id", ACCOUNTS_ROW_ID).maybeSingle();
+  const accountByEmail = new Map(
+    normalizeObjectArray(accountsRow.data?.accounts)
+      .map((account) => {
+        const googleProfile = account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord) : null;
+        return [normalizeEmail(googleProfile?.email), account] as const;
+      })
+      .filter(([email]) => Boolean(email)),
+  );
+  const groupedEmails = groupEmailsByLanguage((data ?? []).map((row) => String(row.author_email ?? "")), accountByEmail);
 
-  const copy = buildAnnouncementNotification({
-    title: announcement.title,
-    body: announcement.body,
-    seed: announcement.id,
-  });
+  await Promise.all(
+    (["en", "pl"] as const).map((language) => {
+      if (!groupedEmails[language].length) return Promise.resolve();
+      const copy = buildAnnouncementNotification({
+        title: announcement.title,
+        body: announcement.body,
+        seed: announcement.id,
+        language,
+      });
 
-  await sendPushToEmails(
-    (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean),
-    {
-      title: copy.title,
-      body: copy.body,
-      url: "/",
-      tag: announcement.id,
-    },
+      return sendPushToEmails(groupedEmails[language], {
+        title: copy.title,
+        body: copy.body,
+        url: "/",
+        tag: announcement.id,
+      });
+    }),
   );
 }
 
@@ -400,20 +435,28 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
           : "";
       const isWeeklyDump = post.type === "weekly-dump";
       const postId = String(post.id ?? "");
-      const copy = buildFriendPostNotification({
-        authorName: normalizeText(post.authorName) || "your friend",
-        username: authorUsername ? `@${authorUsername}` : "@yourfriend",
-        placeName: normalizeText(post.taggedPlaceName),
-        isWeeklyDump,
-        seed: postId,
-      });
+      const groupedFriendEmails = groupEmailsByLanguage(friendEmails, accountByEmail);
 
-      await sendPushToEmails(friendEmails, {
-        title: copy.title,
-        body: copy.body,
-        url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
-        tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
-      });
+      await Promise.all(
+        (["en", "pl"] as const).map((language) => {
+          if (!groupedFriendEmails[language].length) return Promise.resolve();
+          const copy = buildFriendPostNotification({
+            authorName: normalizeText(post.authorName) || "your friend",
+            username: authorUsername ? `@${authorUsername}` : "@yourfriend",
+            placeName: normalizeText(post.taggedPlaceName),
+            isWeeklyDump,
+            seed: postId,
+            language,
+          });
+
+          return sendPushToEmails(groupedFriendEmails[language], {
+            title: copy.title,
+            body: copy.body,
+            url: isWeeklyDump && authorUsername ? `/?profile=${encodeURIComponent(authorUsername)}` : `/?post=${encodeURIComponent(postId)}`,
+            tag: isWeeklyDump ? `weekly-dump-${postId}` : `post-${postId}`,
+          });
+        }),
+      );
 
       const taggedEmails = extractTaggedUsernames(post.body)
         .map((username) => accountByUsername.get(username) ?? "")
@@ -421,19 +464,27 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
 
       if (!taggedEmails.length) return;
 
-      const taggedCopy = buildTaggedPostNotification({
-        authorName: normalizeText(post.authorName) || "someone",
-        username: authorUsername ? `@${authorUsername}` : "@someone",
-        placeName: normalizeText(post.taggedPlaceName),
-        seed: `tagged-${postId}`,
-      });
+      const groupedTaggedEmails = groupEmailsByLanguage([...new Set(taggedEmails)], accountByEmail);
 
-      await sendPushToEmails([...new Set(taggedEmails)], {
-        title: taggedCopy.title,
-        body: taggedCopy.body,
-        url: `/?post=${encodeURIComponent(postId)}`,
-        tag: `tagged-post-${postId}`,
-      });
+      await Promise.all(
+        (["en", "pl"] as const).map((language) => {
+          if (!groupedTaggedEmails[language].length) return Promise.resolve();
+          const taggedCopy = buildTaggedPostNotification({
+            authorName: normalizeText(post.authorName) || "someone",
+            username: authorUsername ? `@${authorUsername}` : "@someone",
+            placeName: normalizeText(post.taggedPlaceName),
+            seed: `tagged-${postId}`,
+            language,
+          });
+
+          return sendPushToEmails(groupedTaggedEmails[language], {
+            title: taggedCopy.title,
+            body: taggedCopy.body,
+            url: `/?post=${encodeURIComponent(postId)}`,
+            tag: `tagged-post-${postId}`,
+          });
+        }),
+      );
     }),
   );
 }
@@ -536,23 +587,39 @@ async function sendAdminPostPush(rawPosts: unknown, previousPosts: unknown) {
   const { data, error } = await supabaseServer.from("push_subscriptions").select("author_email");
   if (error) return;
   const emails = (data ?? []).map((row) => String(row.author_email ?? "")).filter(Boolean);
+  const accountsRow = await supabaseServer.from("app_state").select("accounts").eq("id", ACCOUNTS_ROW_ID).maybeSingle();
+  const accountByEmail = new Map(
+    normalizeObjectArray(accountsRow.data?.accounts)
+      .map((account) => {
+        const googleProfile = account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord) : null;
+        return [normalizeEmail(googleProfile?.email), account] as const;
+      })
+      .filter(([email]) => Boolean(email)),
+  );
+  const groupedEmails = groupEmailsByLanguage(emails, accountByEmail);
 
   await Promise.all(
     newAdminPosts.map((post) => {
-      const copy = buildAdminPostNotification({
-        postType: normalizeText(post.type) || "drop",
-        title: normalizeText(post.title) || "something new",
-        body: normalizeText(post.body),
-        cta: normalizeText(post.cta) || "live now",
-        seed: String(post.id ?? ""),
-      });
+      return Promise.all(
+        (["en", "pl"] as const).map((language) => {
+          if (!groupedEmails[language].length) return Promise.resolve();
+          const copy = buildAdminPostNotification({
+            postType: normalizeText(post.type) || "drop",
+            title: normalizeText(post.title) || "something new",
+            body: normalizeText(post.body),
+            cta: normalizeText(post.cta) || "live now",
+            seed: String(post.id ?? ""),
+            language,
+          });
 
-      return sendPushToEmails(emails, {
-        title: copy.title,
-        body: copy.body,
-        url: "/",
-        tag: `admin-post-${String(post.id)}`,
-      });
+          return sendPushToEmails(groupedEmails[language], {
+            title: copy.title,
+            body: copy.body,
+            url: "/",
+            tag: `admin-post-${String(post.id)}`,
+          });
+        }),
+      );
     }),
   );
 }

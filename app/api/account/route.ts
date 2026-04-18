@@ -23,6 +23,7 @@ type StoredUser = {
     fullName: string;
     username: string;
     city: string;
+    preferredLanguage?: "en" | "pl";
     bio?: string;
     isStudent: boolean | null;
     schoolName: string;
@@ -57,6 +58,7 @@ function normalizeAccount(account: StoredUser) {
     ...account,
     profile: {
       ...account.profile,
+      preferredLanguage: account.profile.preferredLanguage === "pl" ? "pl" : "en",
       bio: account.profile.bio ?? "",
       friends: account.profile.friends ?? [],
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],
@@ -358,10 +360,12 @@ export async function POST(request: Request) {
     });
 
     const sender = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const targetAccount = accounts.find((account) => getEmail(account) === targetEmail) ?? null;
     const copy = buildFriendRequestNotification(
       getPublicName(sender),
       sender?.profile.username ? `@${sender.profile.username}` : "@someone",
       `${currentEmail}-${targetEmail}`,
+      targetAccount?.profile.preferredLanguage === "pl" ? "pl" : "en",
     );
     pendingPush = {
       emails: [targetEmail],
