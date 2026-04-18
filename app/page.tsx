@@ -391,6 +391,8 @@ type LocalizedPostContent = {
   cta: string;
 };
 
+type DetectedPostLanguage = Language | "unknown";
+
 type PostTranslationCacheEntry = LocalizedPostContent & {
   sourceLanguage: string;
   translatedAt: string;
@@ -771,6 +773,24 @@ function getLocalizedPostContent(
     body: post.body,
     cta: post.cta,
   };
+}
+
+function getPostTranslationCacheKey(postId: string, targetLanguage: Language) {
+  return `${postId}:${targetLanguage}`;
+}
+
+function detectPostLanguage(content: Pick<LocalizedPostContent, "title" | "body" | "cta">): DetectedPostLanguage {
+  const sample = `${content.title} ${content.body} ${content.cta}`.trim().toLowerCase();
+  if (!sample) return "unknown";
+
+  const polishCharHits = (sample.match(/[ąćęłńóśźż]/g) ?? []).length;
+  const polishWordHits = (sample.match(/\b(i|się|że|nie|jest|dla|tylko|już|bardzo|to|na|po|od|czy)\b/g) ?? []).length;
+  if (polishCharHits > 0 || polishWordHits >= 2) return "pl";
+
+  const englishWordHits = (sample.match(/\b(and|the|is|are|this|that|with|for|just|live|new|you|your|from|again)\b/g) ?? []).length;
+  if (englishWordHits >= 2) return "en";
+
+  return "unknown";
 }
 
 function getPostSignupOnboardingPendingKey(email: string) {
@@ -2007,7 +2027,7 @@ export default function Page() {
   const [postTranslations, setPostTranslations] = useState<Record<string, PostTranslationCacheEntry>>({});
   const [translatedPostVisibility, setTranslatedPostVisibility] = useState<Record<string, boolean>>({});
   const [translatingPostIds, setTranslatingPostIds] = useState<Record<string, boolean>>({});
-  const [translationNotice, setTranslationNotice] = useState<{ postId: string; message: string } | null>(null);
+  const [translationNotice, setTranslationNotice] = useState<{ key: string; message: string } | null>(null);
   const [likesViewerPostId, setLikesViewerPostId] = useState<string | null>(null);
   const [likesViewerSearch, setLikesViewerSearch] = useState("");
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
@@ -3360,21 +3380,23 @@ export default function Page() {
     );
   };
 
-  const togglePostTranslation = async (post: AppPost) => {
-    if (translatedPostVisibility[post.id]) {
-      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: false }));
+  const togglePostTranslation = async (post: AppPost, targetLanguage: Language) => {
+    const cacheKey = getPostTranslationCacheKey(post.id, targetLanguage);
+
+    if (translatedPostVisibility[cacheKey]) {
+      setTranslatedPostVisibility((current) => ({ ...current, [cacheKey]: false }));
       setTranslationNotice(null);
       return;
     }
 
-    const cachedTranslation = postTranslations[post.id];
+    const cachedTranslation = postTranslations[cacheKey];
     if (cachedTranslation) {
-      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: true }));
+      setTranslatedPostVisibility((current) => ({ ...current, [cacheKey]: true }));
       setTranslationNotice(null);
       return;
     }
 
-    setTranslatingPostIds((current) => ({ ...current, [post.id]: true }));
+    setTranslatingPostIds((current) => ({ ...current, [cacheKey]: true }));
     setTranslationNotice(null);
 
     try {
@@ -3387,7 +3409,7 @@ export default function Page() {
           title: post.title,
           body: post.body,
           cta: post.cta,
-          targetLanguage: "pl",
+          targetLanguage,
         }),
       });
 
@@ -3409,16 +3431,16 @@ export default function Page() {
         translatedAt: new Date().toISOString(),
       };
 
-      setPostTranslations((current) => ({ ...current, [post.id]: nextTranslation }));
-      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: true }));
+      setPostTranslations((current) => ({ ...current, [cacheKey]: nextTranslation }));
+      setTranslatedPostVisibility((current) => ({ ...current, [cacheKey]: true }));
     } catch (error) {
       const message = error instanceof Error && error.message.trim() ? error.message : "translation hit a snag. try once more.";
       setTranslationNotice({
-        postId: post.id,
+        key: cacheKey,
         message,
       });
     } finally {
-      setTranslatingPostIds((current) => ({ ...current, [post.id]: false }));
+      setTranslatingPostIds((current) => ({ ...current, [cacheKey]: false }));
     }
   };
 
@@ -3433,7 +3455,11 @@ export default function Page() {
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
-    const translatedContent = translatedPostVisibility[post.id] ? postTranslations[post.id] ?? null : null;
+    const postSourceLanguage = detectPostLanguage({ title: post.title, body: post.body, cta: post.cta });
+    const targetTranslationLanguage: Language | null = language === "pl" ? "pl" : language === "en" ? "en" : null;
+    const translationCacheKey = targetTranslationLanguage ? getPostTranslationCacheKey(post.id, targetTranslationLanguage) : "";
+    const translatedContent =
+      translationCacheKey && translatedPostVisibility[translationCacheKey] ? postTranslations[translationCacheKey] ?? null : null;
     const localizedPost = getLocalizedPostContent(post, language, translatedContent);
     const trimmedPostTitle = localizedPost.title.trim();
     const trimmedPostBody = localizedPost.body.trim();
@@ -3443,9 +3469,17 @@ export default function Page() {
     const trimmedCta = localizedPost.cta.trim();
     const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
     const canUseSpecialImageShare = canUseImageShareForPost(post);
-    const canTranslatePost = language === "pl" && isStudentPost && Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
-    const isTranslatingPost = Boolean(translatingPostIds[post.id]);
-    const translationButtonLabel = translatedPostVisibility[post.id] ? "show original" : "see translation (polish)";
+    const canTranslatePost =
+      Boolean(targetTranslationLanguage) &&
+      isStudentPost &&
+      postSourceLanguage !== "unknown" &&
+      postSourceLanguage !== language &&
+      Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
+    const isTranslatingPost = translationCacheKey ? Boolean(translatingPostIds[translationCacheKey]) : false;
+    const translationButtonLabel =
+      translationCacheKey && translatedPostVisibility[translationCacheKey]
+        ? "show original"
+        : `see translation (${language === "pl" ? "polish" : "english"})`;
     return (
       <Card
         id={`post-${post.id}`}
@@ -3511,7 +3545,7 @@ export default function Page() {
           </CardHeader>
           <CardBody className="gap-4 p-5">
             {isSundayDump ? (
-              showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null
+              showPostBody ? renderCaptionWithTags(localizedPost.body, "text-base leading-7 text-[#2C1A0E]") : null
             ) : isFriendFeedCard ? null : (
               <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
                 {trimmedPostTitle ? (
@@ -3559,13 +3593,16 @@ export default function Page() {
                   className="bg-[#FFF0D0] text-[#2C1A0E]"
                   isLoading={isTranslatingPost}
                   onPress={() => {
-                    void togglePostTranslation(post);
+                    if (!targetTranslationLanguage) return;
+                    void togglePostTranslation(post, targetTranslationLanguage);
                   }}
                 >
                   {isTranslatingPost ? "translating..." : translationButtonLabel}
                 </Button>
-                {translatedPostVisibility[post.id] ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">polish</Chip> : null}
-                {translationNotice?.postId === post.id ? <p className="text-sm text-[#B3261E]">{translationNotice.message}</p> : null}
+                {translationCacheKey && translatedPostVisibility[translationCacheKey] ? (
+                  <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">{language === "pl" ? "polish" : "english"}</Chip>
+                ) : null}
+                {translationNotice?.key === translationCacheKey ? <p className="text-sm text-[#B3261E]">{translationNotice.message}</p> : null}
               </div>
             ) : null}
 

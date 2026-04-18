@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   const title = typeof body?.title === "string" ? body.title : "";
   const caption = typeof body?.body === "string" ? body.body : "";
   const cta = typeof body?.cta === "string" ? body.cta : "";
-  const targetLanguage = body?.targetLanguage === "pl" ? "Polish" : "Polish";
+  const targetLanguage = body?.targetLanguage === "en" ? "English" : "Polish";
 
   if (!(title.trim() || caption.trim() || cta.trim())) {
     return NextResponse.json({ ok: false, message: "nothing to translate" }, { status: 400 });
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         {
           role: "system",
           content:
-            "You translate short social app copy into natural Polish. Preserve @mentions, URLs, emoji, line breaks, slang energy, and brand names. Do not add commentary. Return strict JSON with keys sourceLanguage, title, body, cta.",
+            `You translate short social app copy into natural ${targetLanguage}. Preserve @mentions, URLs, emoji, line breaks, slang energy, and brand names. Do not add commentary. Return strict JSON with keys sourceLanguage, title, body, cta.`,
         },
         {
           role: "user",
