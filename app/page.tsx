@@ -45,6 +45,7 @@ type BeforeInstallPromptEvent = Event & {
 const STORAGE_KEY = "crumbz-active-user-v1";
 const ACCOUNTS_KEY = "crumbz-accounts-v1";
 const POSTS_KEY = "crumbz-posts-v1";
+const POST_TRANSLATIONS_KEY = "crumbz-post-translations-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
@@ -218,9 +219,12 @@ const defaultPosts: AppPost[] = [
   {
     id: "chapter-one-soon",
     title: "chapter one coming soon",
+    titlePl: "",
     body: "this is where the first real crumbz story lands once the team posts.",
+    bodyPl: "",
     type: "chapter",
     cta: "first drop loading",
+    ctaPl: "",
     createdAt: "today",
     createdAtIso: new Date().toISOString(),
     mediaKind: "none",
@@ -244,9 +248,12 @@ const defaultPosts: AppPost[] = [
   {
     id: "student-discount-soon",
     title: "student discounts are warming up",
+    titlePl: "",
     body: "flash deals, restaurant collabs, and campus-only offers will show up here first.",
+    bodyPl: "",
     type: "discount",
     cta: "rewards coming soon",
+    ctaPl: "",
     createdAt: "today",
     createdAtIso: new Date().toISOString(),
     mediaKind: "none",
@@ -273,9 +280,12 @@ const fallbackFeedPosts: AppPost[] = [
   {
     id: "chapter-one-coming-soon",
     title: "chapter one coming soon",
+    titlePl: "",
     body: "crumbz is getting ready to drop the first real story. stay close, it lands here first.",
+    bodyPl: "",
     type: "chapter",
     cta: "live soon",
+    ctaPl: "",
     createdAt: "soon",
     createdAtIso: new Date().toISOString(),
     mediaKind: "none",
@@ -375,6 +385,17 @@ type FavoriteActivity = {
   createdAt: string;
 };
 
+type LocalizedPostContent = {
+  title: string;
+  body: string;
+  cta: string;
+};
+
+type PostTranslationCacheEntry = LocalizedPostContent & {
+  sourceLanguage: string;
+  translatedAt: string;
+};
+
 const TASTE_TAG_OPTIONS = [
   { key: "fire", label: "fire" },
   { key: "solid", label: "solid" },
@@ -390,9 +411,12 @@ const PRICE_TAG_OPTIONS = [
 type AppPost = {
   id: string;
   title: string;
+  titlePl: string;
   body: string;
+  bodyPl: string;
   type: PostType;
   cta: string;
+  ctaPl: string;
   createdAt: string;
   createdAtIso: string;
   mediaKind: MediaKind;
@@ -415,6 +439,9 @@ type AppPost = {
 };
 
 const defaultPostFields = {
+  titlePl: "",
+  bodyPl: "",
+  ctaPl: "",
   mediaKind: "none" as MediaKind,
   mediaUrls: [] as string[],
   videoRatio: "9:16" as VideoRatio,
@@ -700,6 +727,52 @@ function readUser(): StoredUser {
   return normalized;
 }
 
+function normalizePostTranslationCache(rawCache: unknown) {
+  const candidate = rawCache && typeof rawCache === "object" ? (rawCache as Record<string, unknown>) : {};
+
+  return Object.fromEntries(
+    Object.entries(candidate)
+      .map(([postId, value]) => {
+        if (!value || typeof value !== "object") return null;
+        const entry = value as Record<string, unknown>;
+
+        return [
+          postId,
+          {
+            title: typeof entry.title === "string" ? entry.title : "",
+            body: typeof entry.body === "string" ? entry.body : "",
+            cta: typeof entry.cta === "string" ? entry.cta : "",
+            sourceLanguage: typeof entry.sourceLanguage === "string" ? entry.sourceLanguage : "",
+            translatedAt: typeof entry.translatedAt === "string" ? entry.translatedAt : "",
+          } satisfies PostTranslationCacheEntry,
+        ] as const;
+      })
+      .filter((entry): entry is readonly [string, PostTranslationCacheEntry] => Boolean(entry)),
+  );
+}
+
+function getLocalizedPostContent(
+  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl">,
+  language: Language,
+  translationOverride?: LocalizedPostContent | null,
+): LocalizedPostContent {
+  if (translationOverride) return translationOverride;
+
+  if (language === "pl") {
+    return {
+      title: post.titlePl.trim() || post.title,
+      body: post.bodyPl.trim() || post.body,
+      cta: post.ctaPl.trim() || post.cta,
+    };
+  }
+
+  return {
+    title: post.title,
+    body: post.body,
+    cta: post.cta,
+  };
+}
+
 function getPostSignupOnboardingPendingKey(email: string) {
   return `${POST_SIGNUP_ONBOARDING_PENDING_PREFIX}:${email.toLowerCase()}`;
 }
@@ -770,9 +843,12 @@ function normalizePosts(posts: Partial<AppPost>[]) {
     ...post,
     id: typeof post.id === "string" ? post.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title: typeof post.title === "string" ? post.title : "untitled post",
+    titlePl: typeof post.titlePl === "string" ? post.titlePl : "",
     body: typeof post.body === "string" ? post.body : "",
+    bodyPl: typeof post.bodyPl === "string" ? post.bodyPl : "",
     type: typeof post.type === "string" ? post.type : "chapter",
     cta: typeof post.cta === "string" ? post.cta : "live now",
+    ctaPl: typeof post.ctaPl === "string" ? post.ctaPl : "",
     createdAt: typeof post.createdAt === "string" ? post.createdAt : formatNow(),
     createdAtIso:
       typeof post.createdAtIso === "string" && !Number.isNaN(Date.parse(post.createdAtIso))
@@ -1928,13 +2004,20 @@ export default function Page() {
   const [postShareNotice, setPostShareNotice] = useState<{ postId: string; message: string } | null>(null);
   const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
+  const [postTranslations, setPostTranslations] = useState<Record<string, PostTranslationCacheEntry>>({});
+  const [translatedPostVisibility, setTranslatedPostVisibility] = useState<Record<string, boolean>>({});
+  const [translatingPostIds, setTranslatingPostIds] = useState<Record<string, boolean>>({});
+  const [translationNotice, setTranslationNotice] = useState<{ postId: string; message: string } | null>(null);
   const [likesViewerPostId, setLikesViewerPostId] = useState<string | null>(null);
   const [likesViewerSearch, setLikesViewerSearch] = useState("");
   const [composerMediaInputKey, setComposerMediaInputKey] = useState(0);
   const [composer, setComposer] = useState({
     title: "",
+    titlePl: "",
     body: "",
+    bodyPl: "",
     cta: "",
+    ctaPl: "",
     type: "chapter" as PostType,
     mediaKind: "none" as MediaKind,
     mediaUrls: [] as string[],
@@ -2048,6 +2131,16 @@ export default function Page() {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setPostTranslations(normalizePostTranslationCache(readJson<Record<string, unknown>>(POST_TRANSLATIONS_KEY, {})));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(POST_TRANSLATIONS_KEY, JSON.stringify(postTranslations));
+  }, [postTranslations]);
 
   useEffect(() => {
     if (!user.signedIn || !liveAccount?.googleProfile?.email) return;
@@ -2441,6 +2534,7 @@ export default function Page() {
     ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
   const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
+  const selectedStoryPostContent = selectedStoryPost ? getLocalizedPostContent(selectedStoryPost, language) : null;
   const likesViewerPost =
     (likesViewerPostId ? posts.find((post) => post.id === likesViewerPostId) : null) ??
     (selectedOwnPost?.id === likesViewerPostId ? selectedOwnPost : null);
@@ -2919,11 +3013,12 @@ export default function Page() {
       .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
       .slice(0, 6)
       .map((post) => {
+        const localizedPost = getLocalizedPostContent(post, language);
         const copy = buildAdminPostNotification({
           postType: post.type,
-          title: post.title,
-          body: post.body,
-          cta: post.cta,
+          title: localizedPost.title,
+          body: localizedPost.body,
+          cta: localizedPost.cta,
           seed: post.id,
           language,
         });
@@ -3265,6 +3360,67 @@ export default function Page() {
     );
   };
 
+  const togglePostTranslation = async (post: AppPost) => {
+    if (translatedPostVisibility[post.id]) {
+      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: false }));
+      setTranslationNotice(null);
+      return;
+    }
+
+    const cachedTranslation = postTranslations[post.id];
+    if (cachedTranslation) {
+      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: true }));
+      setTranslationNotice(null);
+      return;
+    }
+
+    setTranslatingPostIds((current) => ({ ...current, [post.id]: true }));
+    setTranslationNotice(null);
+
+    try {
+      const response = await fetch("/api/translate-post", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: post.title,
+          body: post.body,
+          cta: post.cta,
+          targetLanguage: "pl",
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            translation?: LocalizedPostContent;
+            sourceLanguage?: string;
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.translation) {
+        throw new Error(payload?.message || "translation_failed");
+      }
+
+      const nextTranslation: PostTranslationCacheEntry = {
+        ...payload.translation,
+        sourceLanguage: payload.sourceLanguage ?? "",
+        translatedAt: new Date().toISOString(),
+      };
+
+      setPostTranslations((current) => ({ ...current, [post.id]: nextTranslation }));
+      setTranslatedPostVisibility((current) => ({ ...current, [post.id]: true }));
+    } catch {
+      setTranslationNotice({
+        postId: post.id,
+        message: language === "pl" ? "translation hit a snag. try once more." : "translation hit a snag. try once more.",
+      });
+    } finally {
+      setTranslatingPostIds((current) => ({ ...current, [post.id]: false }));
+    }
+  };
+
   const renderFeedCard = (post: AppPost, detail = false) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
@@ -3276,14 +3432,19 @@ export default function Page() {
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
-    const trimmedPostTitle = post.title.trim();
-    const trimmedPostBody = post.body.trim();
+    const translatedContent = translatedPostVisibility[post.id] ? postTranslations[post.id] ?? null : null;
+    const localizedPost = getLocalizedPostContent(post, language, translatedContent);
+    const trimmedPostTitle = localizedPost.title.trim();
+    const trimmedPostBody = localizedPost.body.trim();
     const showPostBody = Boolean(trimmedPostBody) && (!isStudentPost || (trimmedPostBody !== profileMeta && trimmedPostBody !== schoolName));
     const canOpenProfile = isStudentPost && post.authorEmail.toLowerCase() !== currentUserEmail;
     const isFriendFeedCard = isStudentPost && !isSundayDump;
-    const trimmedCta = post.cta.trim();
+    const trimmedCta = localizedPost.cta.trim();
     const ctaLabel = trimmedCta ? (trimmedCta === "live now" ? "post" : trimmedCta) : "";
     const canUseSpecialImageShare = canUseImageShareForPost(post);
+    const canTranslatePost = language === "pl" && isStudentPost && Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
+    const isTranslatingPost = Boolean(translatingPostIds[post.id]);
+    const translationButtonLabel = translatedPostVisibility[post.id] ? "show original" : "see translation (polish)";
     return (
       <Card
         id={`post-${post.id}`}
@@ -3353,7 +3514,7 @@ export default function Page() {
             ) : isFriendFeedCard ? null : (
               <div className="rounded-[24px] bg-[linear-gradient(180deg,_#FFF0D0_0%,_#ffffff_100%)] p-5 ring-1 ring-[#FFF0D0]">
                 {trimmedPostTitle ? (
-                  <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{post.title}</h3>
+                  <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{localizedPost.title}</h3>
                 ) : null}
                 {post.taggedPlaceName ? (
                   <button
@@ -3369,7 +3530,7 @@ export default function Page() {
                     <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
                   </button>
                 ) : null}
-                {showPostBody ? renderCaptionWithTags(post.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
+                {showPostBody ? renderCaptionWithTags(localizedPost.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
                 {post.tasteTag || post.priceTag ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {post.tasteTag ? <Chip className="bg-[#2C1A0E] text-white">{post.tasteTag}</Chip> : null}
@@ -3387,7 +3548,25 @@ export default function Page() {
               </div>
             ) : null}
 
-            {isFriendFeedCard && showPostBody ? renderCaptionWithTags(post.body, "text-base leading-7 text-[#2C1A0E]") : null}
+            {isFriendFeedCard && showPostBody ? renderCaptionWithTags(localizedPost.body, "text-base leading-7 text-[#2C1A0E]") : null}
+
+            {canTranslatePost ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  radius="full"
+                  variant="flat"
+                  className="bg-[#FFF0D0] text-[#2C1A0E]"
+                  isLoading={isTranslatingPost}
+                  onPress={() => {
+                    void togglePostTranslation(post);
+                  }}
+                >
+                  {isTranslatingPost ? "translating..." : translationButtonLabel}
+                </Button>
+                {translatedPostVisibility[post.id] ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">polish</Chip> : null}
+                {translationNotice?.postId === post.id ? <p className="text-sm text-[#B3261E]">{translationNotice.message}</p> : null}
+              </div>
+            ) : null}
 
             {isFriendFeedCard && post.taggedPlaceName ? (
               <button
@@ -5778,8 +5957,11 @@ export default function Page() {
     setAdminPostPlaceSearchLoading(false);
     setComposer({
       title: "",
+      titlePl: "",
       body: "",
+      bodyPl: "",
       cta: "",
+      ctaPl: "",
       type: "chapter",
       mediaKind: "none",
       mediaUrls: [],
@@ -5790,8 +5972,11 @@ export default function Page() {
 
   const publishComposerPost = () => {
     const trimmedTitle = composer.title.trim();
+    const trimmedTitlePl = composer.titlePl.trim();
     const trimmedBody = composer.body.trim();
+    const trimmedBodyPl = composer.bodyPl.trim();
     const trimmedCta = composer.cta.trim();
+    const trimmedCtaPl = composer.ctaPl.trim();
     const hasTaggedPlace = Boolean(adminPostTaggedPlace);
     const hasMedia = composer.mediaKind !== "none";
     const hasAttachedMedia = composer.mediaUrls.length > 0;
@@ -5824,8 +6009,11 @@ export default function Page() {
     const nextPost: AppPost = {
       id: editingPostId ?? `${Date.now()}`,
       title: trimmedTitle,
+      titlePl: trimmedTitlePl,
       body: trimmedBody,
+      bodyPl: trimmedBodyPl,
       cta: trimmedCta,
+      ctaPl: trimmedCtaPl,
       type: composer.type,
       createdAt: editingPostId
         ? posts.find((post) => post.id === editingPostId)?.createdAt ?? formatNow()
@@ -5897,8 +6085,11 @@ export default function Page() {
     const nextPost: AppPost = {
       id: currentUserWeeklyDump?.id ?? `weekly-dump-${authorEmail}-${currentSundayKey}`,
       title: `${firstName}'s weekly food dump`,
+      titlePl: "",
       body: caption,
+      bodyPl: "",
       cta: "sunday dump",
+      ctaPl: "",
       type: "weekly-dump",
       createdAt: currentUserWeeklyDump?.createdAt ?? formatNow(),
       createdAtIso: currentUserWeeklyDump?.createdAtIso ?? new Date().toISOString(),
@@ -5956,8 +6147,11 @@ export default function Page() {
     setAdminPostPlaceSearchLoading(false);
     setComposer({
       title: post.title,
+      titlePl: post.titlePl,
       body: post.body,
+      bodyPl: post.bodyPl,
       cta: post.cta,
+      ctaPl: post.ctaPl,
       type: post.type,
       mediaKind: post.mediaKind,
       mediaUrls: post.mediaUrls,
@@ -6448,9 +6642,12 @@ export default function Page() {
     const nextPost: AppPost = {
       id: existingPost?.id ?? `daily-post-${Date.now()}`,
       title: dailyPostTaggedPlace?.name || `${user.profile.fullName.split(" ")[0] || user.profile.username || "friend"}'s post`,
+      titlePl: "",
       body: caption,
+      bodyPl: "",
       type: "chapter",
       cta: dailyPostTaggedPlace ? "friend review" : "live now",
+      ctaPl: "",
       createdAt: existingPost?.createdAt ?? formatNow(),
       createdAtIso: existingPost?.createdAtIso ?? createdAtIso,
       mediaKind: "photo",
@@ -8573,6 +8770,14 @@ export default function Page() {
                                 onValueChange={(value) => setComposer((current) => ({ ...current, title: value }))}
                                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                               />
+                              <Input
+                                label="title (polish)"
+                                labelPlacement="outside"
+                                placeholder="nowy rozdział właśnie wleciał"
+                                value={composer.titlePl}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, titlePl: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF7E8] shadow-none border border-[#FFE1B3]" }}
+                              />
                               <Textarea
                                 label="body"
                                 labelPlacement="outside"
@@ -8581,6 +8786,14 @@ export default function Page() {
                                 onValueChange={(value) => setComposer((current) => ({ ...current, body: value }))}
                                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
                               />
+                              <Textarea
+                                label="body (polish)"
+                                labelPlacement="outside"
+                                placeholder="napisz po polsku, co się dzieje"
+                                value={composer.bodyPl}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, bodyPl: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF7E8] shadow-none border border-[#FFE1B3]" }}
+                              />
                               <Input
                                 label="cta label"
                                 labelPlacement="outside"
@@ -8588,6 +8801,14 @@ export default function Page() {
                                 value={composer.cta}
                                 onValueChange={(value) => setComposer((current) => ({ ...current, cta: value }))}
                                 classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                              />
+                              <Input
+                                label="cta label (polish)"
+                                labelPlacement="outside"
+                                placeholder="oferta już live"
+                                value={composer.ctaPl}
+                                onValueChange={(value) => setComposer((current) => ({ ...current, ctaPl: value }))}
+                                classNames={{ inputWrapper: "bg-[#FFF7E8] shadow-none border border-[#FFE1B3]" }}
                               />
                               <div className="space-y-3 rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] p-4">
                                 <div>
@@ -8710,9 +8931,12 @@ export default function Page() {
                                         post={{
                                           id: "preview",
                                           title: composer.title || "preview",
+                                          titlePl: composer.titlePl,
                                           body: composer.body,
+                                          bodyPl: composer.bodyPl,
                                           type: composer.type,
                                           cta: composer.cta,
+                                          ctaPl: composer.ctaPl,
                                           createdAt: "preview",
                                           createdAtIso: new Date().toISOString(),
                                           mediaKind: composer.mediaKind,
@@ -10996,7 +11220,11 @@ export default function Page() {
                     />
                   ) : selectedStoryPost.mediaUrls[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selectedStoryPost.mediaUrls[0]} alt={selectedStoryPost.title} className="absolute inset-0 h-full w-full object-cover" />
+                    <img
+                      src={selectedStoryPost.mediaUrls[0]}
+                      alt={selectedStoryPostContent?.title || selectedStoryPost.title}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
                   ) : null}
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,13,8,0.62)_0%,rgba(20,13,8,0.18)_36%,rgba(20,13,8,0.55)_100%)]" />
                   <div className="relative z-10 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
@@ -11027,9 +11255,13 @@ export default function Page() {
                     </div>
                   </div>
                   <div className="relative z-10 mt-auto space-y-3 px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-10 text-white">
-                    <p className="font-[family-name:var(--font-young-serif)] text-[2.6rem] leading-none">{selectedStoryPost.title}</p>
-                    {selectedStoryPost.body ? <p className="max-w-[18rem] text-base leading-7 text-white/88">{selectedStoryPost.body}</p> : null}
-                    <Chip className="w-fit bg-white/14 text-white">{selectedStoryPost.cta}</Chip>
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2.6rem] leading-none">
+                      {selectedStoryPostContent?.title || selectedStoryPost.title}
+                    </p>
+                    {selectedStoryPostContent?.body ? (
+                      <p className="max-w-[18rem] text-base leading-7 text-white/88">{selectedStoryPostContent.body}</p>
+                    ) : null}
+                    <Chip className="w-fit bg-white/14 text-white">{selectedStoryPostContent?.cta || selectedStoryPost.cta}</Chip>
                   </div>
                 </div>
               ) : null}
