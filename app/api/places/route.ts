@@ -7,6 +7,18 @@ type GooglePlace = {
   location?: { latitude?: number; longitude?: number };
   primaryType?: string;
   types?: string[];
+  priceLevel?: string;
+  regularOpeningHours?: {
+    weekdayDescriptions?: string[];
+  };
+  currentOpeningHours?: {
+    openNow?: boolean;
+  };
+  reviews?: Array<{
+    rating?: number;
+    text?: { text?: string };
+    authorAttribution?: { displayName?: string };
+  }>;
 };
 
 const GOOGLE_MAPS_SERVER_API_KEY = process.env.GOOGLE_MAPS_SERVER_API_KEY ?? "";
@@ -45,6 +57,17 @@ function normalizePlace(place: GooglePlace) {
     lat,
     lon,
     address: place.formattedAddress ?? "city spot",
+    priceLevel: place.priceLevel ?? "",
+    openingHours: place.regularOpeningHours?.weekdayDescriptions ?? [],
+    openNow: typeof place.currentOpeningHours?.openNow === "boolean" ? place.currentOpeningHours.openNow : null,
+    reviews: (place.reviews ?? [])
+      .map((review) => ({
+        authorName: review.authorAttribution?.displayName ?? "Google user",
+        rating: typeof review.rating === "number" ? review.rating : null,
+        text: review.text?.text ?? "",
+      }))
+      .filter((review) => review.text.trim())
+      .slice(0, 5),
   };
 }
 
@@ -54,7 +77,8 @@ async function searchNearby(lat: number, lon: number, radius: number) {
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": GOOGLE_MAPS_SERVER_API_KEY,
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types",
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.regularOpeningHours.weekdayDescriptions,places.currentOpeningHours.openNow,places.reviews.rating,places.reviews.text.text,places.reviews.authorAttribution.displayName",
     },
     body: JSON.stringify({
       includedTypes: FOOD_TYPES,
@@ -103,7 +127,8 @@ async function searchText(rawQuery: string, city?: string, lat?: number, lon?: n
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": GOOGLE_MAPS_SERVER_API_KEY,
-      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types",
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.priceLevel,places.regularOpeningHours.weekdayDescriptions,places.currentOpeningHours.openNow,places.reviews.rating,places.reviews.text.text,places.reviews.authorAttribution.displayName",
     },
     body: JSON.stringify({
       textQuery,

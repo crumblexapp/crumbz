@@ -13,6 +13,14 @@ type FavoritePlace = {
   lat: number;
   lon: number;
   address: string;
+  priceLevel?: string;
+  openingHours?: string[];
+  openNow?: boolean | null;
+  reviews?: Array<{
+    authorName: string;
+    rating: number | null;
+    text: string;
+  }>;
 };
 
 type FriendProfile = {
@@ -71,6 +79,37 @@ function getPlaceAccent(kind: string) {
     return { bg: "#f2a900", fg: "#fff8e7", icon: "🥡", chip: "#ffe7a7" };
   }
   return { bg: "#fe8a01", fg: "#fff7ea", icon: "🍽", chip: "#ffe5bf" };
+}
+
+function getTodayHours(place: FavoritePlace) {
+  const weekdayDescriptions = place.openingHours ?? [];
+  if (!weekdayDescriptions.length) return "";
+  const todayIndex = (new Date().getDay() + 6) % 7;
+  return weekdayDescriptions[todayIndex] ?? weekdayDescriptions[0] ?? "";
+}
+
+function formatPriceLevel(priceLevel: string | undefined, language: Language) {
+  switch (priceLevel) {
+    case "PRICE_LEVEL_FREE":
+      return language === "pl" ? "za darmo" : "free";
+    case "PRICE_LEVEL_INEXPENSIVE":
+      return "$";
+    case "PRICE_LEVEL_MODERATE":
+      return "$$";
+    case "PRICE_LEVEL_EXPENSIVE":
+      return "$$$";
+    case "PRICE_LEVEL_VERY_EXPENSIVE":
+      return "$$$$";
+    default:
+      return "";
+  }
+}
+
+function pickDiscoveryReview(place: FavoritePlace) {
+  const reviews = place.reviews?.filter((review) => review.text.trim()) ?? [];
+  if (!reviews.length) return null;
+  const hash = Array.from(place.id).reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
+  return reviews[Math.abs(hash) % reviews.length] ?? null;
 }
 
 function buildMarkerIcon(place: FavoritePlace, selected: boolean, favorited: boolean, fans: FriendProfile[]) {
@@ -135,6 +174,7 @@ export default function FavoritesMap({
   onPostFromPlace,
   friends,
   highlightedPlaceId,
+  isNewUser = false,
 }: {
   center: [number, number];
   language: Language;
@@ -148,6 +188,7 @@ export default function FavoritesMap({
   searchCityName?: string;
   friends: FriendProfile[];
   highlightedPlaceId?: string | null;
+  isNewUser?: boolean;
 }) {
   const copy = translations[language];
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
@@ -183,6 +224,7 @@ export default function FavoritesMap({
   const showSelectedPlaceCard = Boolean(focusedPlace) && !showSearchResults;
   const selectedPreviewPlace = showSelectedPlaceCard ? focusedPlace : null;
   const selectedPreviewAccent = selectedPreviewPlace ? getPlaceAccent(selectedPreviewPlace.kind) : null;
+  const selectedReview = selectedPreviewPlace ? pickDiscoveryReview(selectedPreviewPlace) : null;
 
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
@@ -362,19 +404,19 @@ export default function FavoritesMap({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2b1530]"
+                  className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#2b1530]"
                   style={{ background: selectedPreviewAccent.chip }}
                 >
                   {selectedPreviewPlace.kind}
                 </span>
-                <span className="text-xs font-medium text-[#7c6d60]">
+                <span className="text-[11px] font-medium text-[#7c6d60]">
                   {selectedMutualFans.length ? copy.map.friendSaves(selectedMutualFans.length) : copy.map.newFoodSpot}
                 </span>
               </div>
-              <p className="mt-3 break-words pr-1 text-[2rem] font-semibold leading-[1.02] text-[#2b1530]">
+              <p className="mt-3 break-words pr-1 text-[1.55rem] font-semibold leading-[1.04] text-[#2b1530]">
                 {selectedPreviewPlace.name}
               </p>
-              <p className="mt-2 max-w-[15rem] text-sm text-[#785c42]">{selectedPreviewPlace.address}</p>
+              <p className="mt-1.5 max-w-[15rem] text-[13px] leading-5 text-[#785c42]">{selectedPreviewPlace.address}</p>
             </div>
             <button
               type="button"
@@ -387,6 +429,37 @@ export default function FavoritesMap({
               <span className="text-2xl">♥</span>
             </button>
           </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-[18px] bg-white/90 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.openingHours}</p>
+              <p className="mt-1 text-[13px] font-medium leading-5 text-[#2b1530]">
+                {getTodayHours(selectedPreviewPlace) || copy.map.hoursUnavailable}
+              </p>
+              {selectedPreviewPlace.openNow !== null && selectedPreviewPlace.openNow !== undefined ? (
+                <p className="mt-1 text-[11px] text-[#7c6d60]">
+                  {selectedPreviewPlace.openNow ? copy.map.openNow : copy.map.closedNow}
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-[18px] bg-white/90 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.priceRange}</p>
+              <p className="mt-1 text-[13px] font-medium leading-5 text-[#2b1530]">
+                {formatPriceLevel(selectedPreviewPlace.priceLevel, language) || copy.map.priceUnavailable}
+              </p>
+            </div>
+          </div>
+
+          {isNewUser && selectedReview ? (
+            <div className="mt-3 rounded-[20px] bg-[#fff3e1] px-3 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.reviewLabel}</p>
+                {selectedReview.rating ? <span className="text-[11px] font-semibold text-[#7c6d60]">{selectedReview.rating.toFixed(1)}★</span> : null}
+              </div>
+              <p className="mt-1 text-[13px] leading-5 text-[#2b1530]">{selectedReview.text}</p>
+              <p className="mt-2 text-[11px] text-[#7c6d60]">{selectedReview.authorName}</p>
+            </div>
+          ) : null}
 
           {selectedMutualFans.length ? (
             <div className="mt-4 inline-flex items-center gap-3 rounded-full bg-[#edf5ff] px-3 py-2">

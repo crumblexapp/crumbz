@@ -371,6 +371,14 @@ type FavoritePlace = {
   lat: number;
   lon: number;
   address: string;
+  priceLevel?: string;
+  openingHours?: string[];
+  openNow?: boolean | null;
+  reviews?: Array<{
+    authorName: string;
+    rating: number | null;
+    text: string;
+  }>;
 };
 
 type FavoriteActivity = {
@@ -10074,6 +10082,7 @@ export default function Page() {
                   center={favoriteCityCenter}
                   places={favoritePlaces}
                   favoriteIds={favoritePlaceIds}
+                  isNewUser={favoritePlaceIds.length === 0 && liveProfile.friends.length === 0}
                   mutualFansByPlace={mutualFansByPlace}
                   highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
