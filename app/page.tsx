@@ -779,6 +779,33 @@ function getPostTranslationCacheKey(postId: string, targetLanguage: Language) {
   return `${postId}:${targetLanguage}`;
 }
 
+function backfillExistingAdminPolishCopy(post: Pick<AppPost, "authorRole" | "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl">) {
+  if (post.authorRole !== "admin") {
+    return {
+      titlePl: post.titlePl,
+      bodyPl: post.bodyPl,
+      ctaPl: post.ctaPl,
+    };
+  }
+
+  const normalizedTitle = post.title.trim().toLowerCase();
+  const normalizedBody = post.body.trim().toLowerCase();
+
+  if (normalizedTitle === "share and win" && normalizedBody === "share your referral link and win some crazy prizes") {
+    return {
+      titlePl: post.titlePl.trim() || "udostępnij i wygraj",
+      bodyPl: post.bodyPl.trim() || "udostępnij swój link polecający i zgarnij kozackie nagrody",
+      ctaPl: post.ctaPl.trim() || "działamy",
+    };
+  }
+
+  return {
+    titlePl: post.titlePl,
+    bodyPl: post.bodyPl,
+    ctaPl: post.ctaPl,
+  };
+}
+
 function detectPostLanguage(content: Pick<LocalizedPostContent, "title" | "body" | "cta">): DetectedPostLanguage {
   const sample = `${content.title} ${content.body} ${content.cta}`.trim().toLowerCase();
   if (!sample) return "unknown";
@@ -858,43 +885,50 @@ function serializePostsForStorage(posts: AppPost[]) {
 }
 
 function normalizePosts(posts: Partial<AppPost>[]) {
-  return posts.map((post) => ({
-    ...defaultPostFields,
-    ...post,
-    id: typeof post.id === "string" ? post.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    title: typeof post.title === "string" ? post.title : "untitled post",
-    titlePl: typeof post.titlePl === "string" ? post.titlePl : "",
-    body: typeof post.body === "string" ? post.body : "",
-    bodyPl: typeof post.bodyPl === "string" ? post.bodyPl : "",
-    type: typeof post.type === "string" ? post.type : "chapter",
-    cta: typeof post.cta === "string" ? post.cta : "live now",
-    ctaPl: typeof post.ctaPl === "string" ? post.ctaPl : "",
-    createdAt: typeof post.createdAt === "string" ? post.createdAt : formatNow(),
-    createdAtIso:
-      typeof post.createdAtIso === "string" && !Number.isNaN(Date.parse(post.createdAtIso))
-        ? post.createdAtIso
-        : new Date().toISOString(),
-    mediaUrls: Array.isArray(post.mediaUrls) ? post.mediaUrls : [],
-    videoRatio: post.videoRatio ?? "9:16",
-    mediaKind: post.mediaKind ?? "none",
-    authorRole: post.authorRole === "student" ? "student" : "admin",
-    authorName: typeof post.authorName === "string" ? post.authorName : "crumbz",
-    authorEmail: typeof post.authorEmail === "string" ? post.authorEmail : ADMIN_EMAIL,
-    schoolName: typeof post.schoolName === "string" ? post.schoolName : "",
-    weekKey: typeof post.weekKey === "string" ? post.weekKey : "",
-    taggedPlaceId: typeof post.taggedPlaceId === "string" ? post.taggedPlaceId : "",
-    taggedPlaceName: typeof post.taggedPlaceName === "string" ? post.taggedPlaceName : "",
-    taggedPlaceKind: typeof post.taggedPlaceKind === "string" ? post.taggedPlaceKind : "",
-    taggedPlaceAddress: typeof post.taggedPlaceAddress === "string" ? post.taggedPlaceAddress : "",
-    taggedPlaceLat: typeof post.taggedPlaceLat === "number" ? post.taggedPlaceLat : null,
-    taggedPlaceLon: typeof post.taggedPlaceLon === "number" ? post.taggedPlaceLon : null,
-    taggedPlaceCity: typeof post.taggedPlaceCity === "string" ? post.taggedPlaceCity : "",
-    tasteTag: post.tasteTag === "fire" || post.tasteTag === "solid" || post.tasteTag === "skip" ? post.tasteTag : "",
-    priceTag:
-      post.priceTag === "student-friendly" || post.priceTag === "kinda-pricey" || post.priceTag === "special-occasion"
-        ? post.priceTag
-        : "",
-  })) as AppPost[];
+  return posts.map((post) => {
+    const normalizedPost = {
+      ...defaultPostFields,
+      ...post,
+      id: typeof post.id === "string" ? post.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: typeof post.title === "string" ? post.title : "untitled post",
+      titlePl: typeof post.titlePl === "string" ? post.titlePl : "",
+      body: typeof post.body === "string" ? post.body : "",
+      bodyPl: typeof post.bodyPl === "string" ? post.bodyPl : "",
+      type: typeof post.type === "string" ? post.type : "chapter",
+      cta: typeof post.cta === "string" ? post.cta : "live now",
+      ctaPl: typeof post.ctaPl === "string" ? post.ctaPl : "",
+      createdAt: typeof post.createdAt === "string" ? post.createdAt : formatNow(),
+      createdAtIso:
+        typeof post.createdAtIso === "string" && !Number.isNaN(Date.parse(post.createdAtIso))
+          ? post.createdAtIso
+          : new Date().toISOString(),
+      mediaUrls: Array.isArray(post.mediaUrls) ? post.mediaUrls : [],
+      videoRatio: post.videoRatio ?? "9:16",
+      mediaKind: post.mediaKind ?? "none",
+      authorRole: (post.authorRole === "student" ? "student" : "admin") as AppPost["authorRole"],
+      authorName: typeof post.authorName === "string" ? post.authorName : "crumbz",
+      authorEmail: typeof post.authorEmail === "string" ? post.authorEmail : ADMIN_EMAIL,
+      schoolName: typeof post.schoolName === "string" ? post.schoolName : "",
+      weekKey: typeof post.weekKey === "string" ? post.weekKey : "",
+      taggedPlaceId: typeof post.taggedPlaceId === "string" ? post.taggedPlaceId : "",
+      taggedPlaceName: typeof post.taggedPlaceName === "string" ? post.taggedPlaceName : "",
+      taggedPlaceKind: typeof post.taggedPlaceKind === "string" ? post.taggedPlaceKind : "",
+      taggedPlaceAddress: typeof post.taggedPlaceAddress === "string" ? post.taggedPlaceAddress : "",
+      taggedPlaceLat: typeof post.taggedPlaceLat === "number" ? post.taggedPlaceLat : null,
+      taggedPlaceLon: typeof post.taggedPlaceLon === "number" ? post.taggedPlaceLon : null,
+      taggedPlaceCity: typeof post.taggedPlaceCity === "string" ? post.taggedPlaceCity : "",
+      tasteTag: post.tasteTag === "fire" || post.tasteTag === "solid" || post.tasteTag === "skip" ? post.tasteTag : "",
+      priceTag:
+        post.priceTag === "student-friendly" || post.priceTag === "kinda-pricey" || post.priceTag === "special-occasion"
+          ? post.priceTag
+          : "",
+    };
+
+    return {
+      ...normalizedPost,
+      ...backfillExistingAdminPolishCopy(normalizedPost),
+    };
+  }) as AppPost[];
 }
 
 function mergePostsPreferLocal(localPosts: AppPost[], serverPosts: AppPost[]) {
