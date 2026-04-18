@@ -3400,7 +3400,7 @@ export default function Page() {
         | null;
 
       if (!response.ok || !payload?.translation) {
-        throw new Error(payload?.message || "translation_failed");
+        throw new Error(payload?.message || "translation failed");
       }
 
       const nextTranslation: PostTranslationCacheEntry = {
@@ -3411,10 +3411,11 @@ export default function Page() {
 
       setPostTranslations((current) => ({ ...current, [post.id]: nextTranslation }));
       setTranslatedPostVisibility((current) => ({ ...current, [post.id]: true }));
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim() ? error.message : "translation hit a snag. try once more.";
       setTranslationNotice({
         postId: post.id,
-        message: language === "pl" ? "translation hit a snag. try once more." : "translation hit a snag. try once more.",
+        message,
       });
     } finally {
       setTranslatingPostIds((current) => ({ ...current, [post.id]: false }));
