@@ -602,6 +602,8 @@ type AppAnnouncement = {
   title: string;
   body: string;
   createdAt: string;
+  titlePl?: string;
+  bodyPl?: string;
 };
 
 type DareSubmission = {
@@ -1094,6 +1096,39 @@ function readSeenNotifications() {
 
 function getPushPromptAskedKey(email: string) {
   return `${PUSH_PROMPT_ASKED_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getPushPromptSnoozeUntil(rawValue: string | null) {
+  if (!rawValue) return 0;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getLocalizedAnnouncementContent(announcement: AppAnnouncement | null, language: Language) {
+  if (!announcement) return null;
+
+  const normalizedTitle = announcement.title.trim().toLowerCase();
+  const normalizedBody = announcement.body.trim().toLowerCase();
+  const fallbackPolishTitle =
+    normalizedTitle === "share and win" && normalizedBody === "share your referral link and win some crazy prizes"
+      ? "udostępnij i wygraj"
+      : announcement.title;
+  const fallbackPolishBody =
+    normalizedTitle === "share and win" && normalizedBody === "share your referral link and win some crazy prizes"
+      ? "udostępnij swój link polecający i zgarnij kozackie nagrody"
+      : announcement.body;
+
+  if (language === "pl") {
+    return {
+      title: announcement.titlePl?.trim() || fallbackPolishTitle,
+      body: announcement.bodyPl?.trim() || fallbackPolishBody,
+    };
+  }
+
+  return {
+    title: announcement.title,
+    body: announcement.body,
+  };
 }
 
 function isIosDevice() {
@@ -1978,6 +2013,7 @@ export default function Page() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const [pushNotice, setPushNotice] = useState("");
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
+  const [pushPromptSnoozedUntil, setPushPromptSnoozedUntil] = useState(0);
   const [isUpdatingPush, setIsUpdatingPush] = useState(false);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
@@ -2409,9 +2445,11 @@ export default function Page() {
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 6);
   const latestAnnouncement = announcements[0] ?? null;
+  const latestAnnouncementContent = getLocalizedAnnouncementContent(latestAnnouncement, language);
   const selectedAnnouncement =
     announcements.find((announcement) => announcement.id === selectedAnnouncementId) ??
     latestAnnouncement;
+  const homeAnnouncement = latestAnnouncement;
   const now = new Date();
   const dareReleaseDate = new Date(dare.releaseAt);
   const dareCloseDate = new Date(dare.closesAt);
@@ -3799,11 +3837,13 @@ export default function Page() {
     }
   };
 
-  const markPushPromptAsked = () => {
+  const markPushPromptAsked = (snoozeDays = 0) => {
     if (typeof window === "undefined") return;
     const email = user.googleProfile?.email?.toLowerCase();
     if (!email) return;
-    window.localStorage.setItem(getPushPromptAskedKey(email), "true");
+    const snoozeUntil = snoozeDays > 0 ? Date.now() + snoozeDays * 24 * 60 * 60 * 1000 : Number.MAX_SAFE_INTEGER;
+    window.localStorage.setItem(getPushPromptAskedKey(email), String(snoozeUntil));
+    setPushPromptSnoozedUntil(snoozeUntil);
   };
 
   const registerCrumbzServiceWorker = async () => {
@@ -3862,6 +3902,11 @@ export default function Page() {
     } finally {
       setIsUpdatingPush(false);
     }
+  };
+
+  const snoozePushPrompt = () => {
+    markPushPromptAsked(3);
+    setPushPromptOpen(false);
   };
 
   const disablePushNotifications = async () => {
@@ -4162,8 +4207,9 @@ export default function Page() {
     if (!email) return;
     if (!pushSupported || pushPermission === "unsupported" || pushPermission === "denied") return;
 
-    const hasSeenPrompt = window.localStorage.getItem(getPushPromptAskedKey(email)) === "true";
-    if (!hasSeenPrompt) {
+    const snoozeUntil = getPushPromptSnoozeUntil(window.localStorage.getItem(getPushPromptAskedKey(email)));
+    setPushPromptSnoozedUntil(snoozeUntil);
+    if (snoozeUntil <= Date.now()) {
       setPushPromptOpen(true);
     }
   }, [isAdmin, pushEnabled, pushPermission, pushSupported, user.googleProfile?.email, user.signedIn]);
@@ -9855,7 +9901,7 @@ export default function Page() {
 
               {shouldShowFeedAnnouncementCard ? (
                 <Card
-                  id={selectedAnnouncement ? `announcement-${selectedAnnouncement.id}` : "announcement-panel"}
+                  id={homeAnnouncement ? `announcement-${homeAnnouncement.id}` : "announcement-panel"}
                   className="overflow-hidden rounded-[30px] border-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.08),_transparent_22%),linear-gradient(135deg,_#141b33_0%,_#0e1630_100%)] text-white shadow-[0_24px_60px_rgba(15,22,48,0.24)]"
                 >
                   <CardBody className="gap-4 p-5">
@@ -9863,10 +9909,10 @@ export default function Page() {
                       <div>
                         <p className="text-xs uppercase tracking-[0.24em] text-[#ff7d37]">{copy.feed.announcementLabel}</p>
                         <h3 className="mt-2 text-[1.85rem] font-bold leading-[1.02] text-white">
-                          {selectedAnnouncement?.title || copy.feed.announcementFallbackTitle}
+                          {latestAnnouncementContent?.title || copy.feed.announcementFallbackTitle}
                         </h3>
                         <p className="mt-2 max-w-[15rem] text-base leading-7 text-white/76">
-                          {selectedAnnouncement?.body || copy.feed.announcementFallbackBody}
+                          {latestAnnouncementContent?.body || copy.feed.announcementFallbackBody}
                         </p>
                       </div>
                       <div className="rounded-[22px] bg-white/6 p-4 text-4xl">📣</div>
@@ -10277,7 +10323,7 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
-            {!pushEnabled ? (
+            {!pushEnabled && pushPromptSnoozedUntil <= Date.now() ? (
               <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                 <CardBody className="gap-3 p-5">
                   <div>
@@ -10295,10 +10341,7 @@ export default function Page() {
                       radius="full"
                       variant="flat"
                       className="bg-white text-[#2C1A0E]"
-                      onPress={() => {
-                        markPushPromptAsked();
-                        setPushPromptOpen(false);
-                      }}
+                      onPress={snoozePushPrompt}
                     >
                       {copy.profile.maybeLater}
                     </Button>
@@ -11217,7 +11260,8 @@ export default function Page() {
         isOpen={pushPromptOpen}
         onOpenChange={(open) => {
           if (!open) {
-            markPushPromptAsked();
+            snoozePushPrompt();
+            return;
           }
           setPushPromptOpen(open);
         }}
@@ -11248,8 +11292,7 @@ export default function Page() {
                     variant="flat"
                     className="bg-white text-[#2C1A0E]"
                     onPress={() => {
-                      markPushPromptAsked();
-                      setPushPromptOpen(false);
+                      snoozePushPrompt();
                       setPushNotice("cool, we’ll leave notifications off for now.");
                     }}
                   >
