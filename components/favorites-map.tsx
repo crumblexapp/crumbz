@@ -462,14 +462,14 @@ export default function FavoritesMap({
           ) : null}
 
           {selectedMutualFans.length ? (
-            <div className="mt-4 inline-flex items-center gap-3 rounded-full bg-[#edf5ff] px-3 py-2">
-              <span className="text-xl">❤️</span>
-              <div className="flex -space-x-2">
+            <div className="mt-4 flex w-full items-center gap-3 rounded-[22px] bg-[#edf5ff] px-3 py-2">
+              <span className="shrink-0 text-xl">❤️</span>
+              <div className="flex shrink-0 -space-x-2">
                 {selectedMutualFans.slice(0, 3).map((fan) => (
                   <Avatar key={fan.email} src={fan.picture} name={fan.name} className="h-9 w-9 border-2 border-[#edf5ff]" />
                 ))}
               </div>
-              <p className="text-xs font-medium text-[#34517a]">
+              <p className="min-w-0 flex-1 text-xs font-medium leading-5 text-[#34517a]">
                 {selectedMutualFans.length === 1
                   ? copy.map.savedByOne(selectedMutualFans[0]?.username ?? "")
                   : copy.map.savedByMany(selectedMutualFans[0]?.username ?? "", selectedMutualFans.length - 1)}
