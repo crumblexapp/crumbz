@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, Spinner } from "@heroui/react";
+import { Avatar, Button, Modal, ModalBody, ModalContent, ModalHeader, Spinner } from "@heroui/react";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
@@ -225,6 +225,7 @@ export default function FavoritesMap({
   const selectedPreviewPlace = showSelectedPlaceCard ? focusedPlace : null;
   const selectedPreviewAccent = selectedPreviewPlace ? getPlaceAccent(selectedPreviewPlace.kind) : null;
   const selectedReview = selectedPreviewPlace ? pickDiscoveryReview(selectedPreviewPlace) : null;
+  const [fansModalOpen, setFansModalOpen] = useState(false);
 
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
@@ -462,19 +463,23 @@ export default function FavoritesMap({
           ) : null}
 
           {selectedMutualFans.length ? (
-            <div className="mt-4 flex w-full items-center gap-3 rounded-[22px] bg-[#edf5ff] px-3 py-2">
-              <span className="shrink-0 text-xl">❤️</span>
+            <button
+              type="button"
+              onClick={() => setFansModalOpen(true)}
+              className="mt-4 flex w-full items-center gap-2 rounded-[18px] bg-[#edf5ff] px-2.5 py-2 text-left"
+            >
+              <span className="shrink-0 text-lg">❤️</span>
               <div className="flex shrink-0 -space-x-2">
                 {selectedMutualFans.slice(0, 3).map((fan) => (
-                  <Avatar key={fan.email} src={fan.picture} name={fan.name} className="h-9 w-9 border-2 border-[#edf5ff]" />
+                  <Avatar key={fan.email} src={fan.picture} name={fan.name} className="h-8 w-8 border-2 border-[#edf5ff]" />
                 ))}
               </div>
-              <p className="min-w-0 flex-1 text-xs font-medium leading-5 text-[#34517a]">
+              <p className="min-w-0 flex-1 text-[11px] font-medium leading-4 text-[#34517a]">
                 {selectedMutualFans.length === 1
                   ? copy.map.savedByOne(selectedMutualFans[0]?.username ?? "")
                   : copy.map.savedByMany(selectedMutualFans[0]?.username ?? "", selectedMutualFans.length - 1)}
               </p>
-            </div>
+            </button>
           ) : null}
 
           <div className="mt-4 flex items-center gap-2">
@@ -499,6 +504,37 @@ export default function FavoritesMap({
           </div>
         </div>
       ) : null}
+
+      <Modal isOpen={fansModalOpen} onOpenChange={setFansModalOpen} placement="bottom-center" scrollBehavior="inside">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.friendSaves(selectedMutualFans.length)}</p>
+                  <p className="mt-1 text-lg font-semibold text-[#2b1530]">{selectedPreviewPlace?.name}</p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="bg-[#fffaf2] pb-6 pt-5">
+                <div className="grid gap-3">
+                  {selectedMutualFans.map((fan) => (
+                    <div key={fan.email} className="flex items-center gap-3 rounded-[20px] bg-[#FFF7E8] px-4 py-3">
+                      <Avatar src={fan.picture} name={fan.name} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#2b1530]">{fan.name}</p>
+                        <p className="truncate text-sm text-[#6c7289]">{fan.username}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
