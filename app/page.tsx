@@ -8734,35 +8734,6 @@ export default function Page() {
             </Card>
           </motion.section>
 
-          <nav
-            className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
-            style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
-          >
-            <div className="grid grid-cols-4 gap-1 text-center">
-              {[
-                { label: "overview", key: "overview" as AdminDashboardTab, icon: "⌂" },
-                { label: "challenge", key: "challengers" as AdminDashboardTab, icon: "⚑" },
-                { label: "post", key: "post" as AdminDashboardTab, icon: "+" },
-                { label: "referrals", key: "referrals" as AdminDashboardTab, icon: "↗" },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
-                    adminDashboardTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
-                  }`}
-                  onClick={() => setAdminDashboardTab(item.key)}
-                >
-                  <span className={`text-[22px] leading-none ${adminDashboardTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
-                    {item.icon}
-                  </span>
-                  <span className={`text-[11px] font-medium leading-none ${adminDashboardTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
-                    {item.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </nav>
         </div>
       </main>
     );
@@ -10600,6 +10571,36 @@ export default function Page() {
               </Tab>
             </Tabs>
           </motion.section>
+
+          <nav
+            className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
+            style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="grid grid-cols-4 gap-1 text-center">
+              {[
+                { label: "overview", key: "overview" as AdminDashboardTab, icon: "⌂" },
+                { label: "challenge", key: "challengers" as AdminDashboardTab, icon: "⚑" },
+                { label: "post", key: "post" as AdminDashboardTab, icon: "+" },
+                { label: "referrals", key: "referrals" as AdminDashboardTab, icon: "↗" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
+                    adminDashboardTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
+                  }`}
+                  onClick={() => setAdminDashboardTab(item.key)}
+                >
+                  <span className={`text-[22px] leading-none ${adminDashboardTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
+                    {item.icon}
+                  </span>
+                  <span className={`text-[11px] font-medium leading-none ${adminDashboardTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </nav>
         </div>
       </main>
     );
