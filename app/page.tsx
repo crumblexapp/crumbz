@@ -317,6 +317,7 @@ type AccountRole = "user" | "influencer" | "admin";
 type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dump";
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
+type CreatorPostFormat = "post" | "carousel" | "reel" | "story";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
 type InfluencerDashboardTab = "overview" | "content" | "referrals" | "support" | "settings" | "insights";
 type ProfilePostTab = "all" | "friend-review" | "post" | "sunday-dump";
@@ -480,6 +481,30 @@ const defaultPostFields = {
   tasteTag: "",
   priceTag: "",
 };
+
+const CREATOR_POST_FORMAT_OPTIONS: Array<{
+  key: CreatorPostFormat;
+  label: string;
+  description: string;
+}> = [
+  { key: "post", label: "post", description: "single photo or single video" },
+  { key: "carousel", label: "carousel", description: "2 to 10 slides" },
+  { key: "reel", label: "reel", description: "one vertical video" },
+  { key: "story", label: "story", description: "one 9:16 image or video" },
+];
+
+const CREATOR_REEL_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
+const CREATOR_STORY_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
+const CREATOR_POST_DIMENSIONS = [
+  { width: 1080, height: 1080 },
+  { width: 1080, height: 1350 },
+  { width: 1080, height: 566 },
+] as const;
+const CREATOR_CAROUSEL_DIMENSIONS = [
+  { width: 1080, height: 1080 },
+  { width: 1080, height: 1350 },
+] as const;
+const CREATOR_REEL_MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024 * 1024;
 
 function isStoryAspectRatio(width: number, height: number) {
   return Math.abs(width / height - STORY_RATIO) <= STORY_RATIO_TOLERANCE;
@@ -1598,6 +1623,48 @@ function renderCreatorBadge(compact = false) {
   );
 }
 
+function getVideoRatioFromDimensions(width: number, height: number): VideoRatio {
+  const ratio = width / height;
+
+  if (Math.abs(ratio - 1) <= 0.03) return "1:1";
+  if (Math.abs(ratio - 4 / 5) <= 0.03) return "4:5";
+  if (Math.abs(ratio - 9 / 16) <= 0.03) return "9:16";
+  return "16:9";
+}
+
+function getCreatorFormatRules(format: CreatorPostFormat) {
+  switch (format) {
+    case "carousel":
+      return "2 to 10 slides. 1:1 or 4:5. best size: 1080 x 1350.";
+    case "reel":
+      return "9:16 vertical. 1080 x 1920. 3 to 90 sec. up to 4 gb.";
+    case "story":
+      return "9:16. 1080 x 1920. image or video. videos up to 15 sec.";
+    default:
+      return "single photo or video. 1:1, 4:5, or 1.91:1. videos up to 60 sec.";
+  }
+}
+
+function getCreatorUploadPrompt(format: CreatorPostFormat) {
+  switch (format) {
+    case "carousel":
+      return "add carousel slides";
+    case "reel":
+      return "add your reel";
+    case "story":
+      return "add your story";
+    default:
+      return "add your post";
+  }
+}
+
+function inferCreatorPostFormat(post: AppPost): CreatorPostFormat {
+  if (post.cta === "story") return "story";
+  if (post.cta === "reel") return "reel";
+  if (post.mediaKind === "carousel" || post.cta === "carousel") return "carousel";
+  return "post";
+}
+
 function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
@@ -2227,6 +2294,9 @@ export default function Page() {
   const [dailyPostCaption, setDailyPostCaption] = useState("");
   const [dailyPostMentionQuery, setDailyPostMentionQuery] = useState("");
   const [dailyPostMentionRange, setDailyPostMentionRange] = useState<{ start: number; end: number } | null>(null);
+  const [dailyPostFormat, setDailyPostFormat] = useState<CreatorPostFormat>("post");
+  const [dailyPostComposerMediaKind, setDailyPostComposerMediaKind] = useState<MediaKind>("photo");
+  const [dailyPostVideoRatio, setDailyPostVideoRatio] = useState<VideoRatio>("4:5");
   const [dailyPostMediaUrls, setDailyPostMediaUrls] = useState<string[]>([]);
   const [dailyPostTaggedPlace, setDailyPostTaggedPlace] = useState<FavoritePlace | null>(null);
   const [editingDailyPostId, setEditingDailyPostId] = useState<string | null>(null);
@@ -6437,11 +6507,29 @@ export default function Page() {
     setDailyPostPlaceResults([]);
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
+    setDailyPostFormat("post");
+    setDailyPostComposerMediaKind("photo");
+    setDailyPostVideoRatio("4:5");
     setDailyPostNotice(`posting from ${place.name}. add your photo and tell friends what you thought.`);
     setStudentTab("profile");
     window.setTimeout(() => {
       document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 120);
+  };
+
+  const openCreatorStoryComposer = () => {
+    setStudentTab("profile");
+    setEditingDailyPostId(null);
+    setDailyPostFormat("story");
+    setDailyPostComposerMediaKind("photo");
+    setDailyPostVideoRatio("9:16");
+    setDailyPostMediaUrls([]);
+    setDailyPostNotice("story mode is ready. pick an image or video.");
+    setDailyPostInputKey((current) => current + 1);
+    window.setTimeout(() => {
+      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      dailyPostInputRef.current?.click();
+    }, 140);
   };
 
   const focusFavoritePlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
@@ -7121,20 +7209,190 @@ export default function Page() {
   const handleDailyPostFiles = async (files: FileList | null) => {
     if (!files?.length) return;
 
+    const fileList = Array.from(files);
+    const creatorFormat = isInfluencer ? dailyPostFormat : "post";
+    let nextMediaKind: MediaKind = isInfluencer
+      ? dailyPostFormat === "carousel"
+        ? "carousel"
+        : dailyPostFormat === "reel"
+          ? "video"
+          : dailyPostComposerMediaKind
+      : "photo";
+    let nextVideoRatio: VideoRatio = isInfluencer ? dailyPostVideoRatio : "4:5";
+
+    if (!isInfluencer && fileList.length > 1) {
+      setDailyPostNotice("pick one photo for your post.");
+      setDailyPostInputKey((current) => current + 1);
+      return;
+    }
+
+    const validateCreatorFiles = async (): Promise<{ notice: string } | { mediaKind: MediaKind; videoRatio: VideoRatio }> => {
+      if (creatorFormat === "carousel") {
+        if (fileList.length < 2 || fileList.length > 10) {
+          return { notice: "carousels need 2 to 10 slides." };
+        }
+
+        const invalidImage = fileList.find((file) => !matchesAcceptedType(file, ACCEPTED_IMAGE_TYPES));
+        if (invalidImage) {
+          return { notice: "carousel slides need image files." };
+        }
+
+        for (const file of fileList) {
+          try {
+            const dimensions = await readImageDimensions(file);
+            if (!hasExactDimensions(dimensions, CREATOR_CAROUSEL_DIMENSIONS)) {
+              return { notice: "carousel slides need to be 1080 x 1080 or 1080 x 1350." };
+            }
+          } catch {
+            return { notice: "we couldn't read one of those carousel slides. try again." };
+          }
+        }
+
+        return { mediaKind: "carousel" as MediaKind, videoRatio: "4:5" as VideoRatio };
+      }
+
+      if (creatorFormat === "reel") {
+        if (fileList.length !== 1) {
+          return { notice: "reels need one video file." };
+        }
+
+        const file = fileList[0];
+        if (!matchesAcceptedType(file, ACCEPTED_VIDEO_TYPES)) {
+          return { notice: "reels need to be mp4 or mov." };
+        }
+
+        if (file.size > CREATOR_REEL_MAX_FILE_SIZE_BYTES) {
+          return { notice: `that reel is ${formatFileSize(file.size)}. keep reels under 4 gb.` };
+        }
+
+        try {
+          const metadata = await readVideoMetadata(file);
+          if (!hasExactDimensions(metadata, CREATOR_REEL_DIMENSIONS)) {
+            return { notice: "reels need to be exactly 1080 x 1920." };
+          }
+          if (metadata.duration < 3 || metadata.duration > 90) {
+            return { notice: "reels need to be between 3 and 90 seconds." };
+          }
+          return { mediaKind: "video" as MediaKind, videoRatio: "9:16" as VideoRatio };
+        } catch {
+          return { notice: "we couldn't read that reel. try another mp4 or mov." };
+        }
+      }
+
+      if (creatorFormat === "story") {
+        if (fileList.length !== 1) {
+          return { notice: "stories need one image or video." };
+        }
+
+        const file = fileList[0];
+        const isVideo = matchesAcceptedType(file, ACCEPTED_VIDEO_TYPES);
+        const isImage = matchesAcceptedType(file, ACCEPTED_IMAGE_TYPES);
+
+        if (!isVideo && !isImage) {
+          return { notice: "stories need an image or mp4/mov video." };
+        }
+
+        if (isVideo) {
+          try {
+            const metadata = await readVideoMetadata(file);
+            if (!hasExactDimensions(metadata, CREATOR_STORY_DIMENSIONS)) {
+              return { notice: "story videos need to be exactly 1080 x 1920." };
+            }
+            if (metadata.duration > 15) {
+              return { notice: "story videos need to be 15 seconds or less." };
+            }
+            return { mediaKind: "video" as MediaKind, videoRatio: "9:16" as VideoRatio };
+          } catch {
+            return { notice: "we couldn't read that story video. try another file." };
+          }
+        }
+
+        try {
+          const dimensions = await readImageDimensions(file);
+          if (!hasExactDimensions(dimensions, CREATOR_STORY_DIMENSIONS)) {
+            return { notice: "story images need to be exactly 1080 x 1920." };
+          }
+          return { mediaKind: "photo" as MediaKind, videoRatio: "9:16" as VideoRatio };
+        } catch {
+          return { notice: "we couldn't read that story image. try another one." };
+        }
+      }
+
+      if (fileList.length !== 1) {
+        return { notice: "posts take one image or one video." };
+      }
+
+      const file = fileList[0];
+      const isVideo = matchesAcceptedType(file, ACCEPTED_VIDEO_TYPES);
+      const isImage = matchesAcceptedType(file, ACCEPTED_IMAGE_TYPES);
+
+      if (!isVideo && !isImage) {
+        return { notice: "posts need an image or mp4/mov video." };
+      }
+
+      if (isVideo) {
+        try {
+          const metadata = await readVideoMetadata(file);
+          if (!hasExactDimensions(metadata, CREATOR_POST_DIMENSIONS)) {
+            return { notice: "post videos need to be 1080 x 1080, 1080 x 1350, or 1080 x 566." };
+          }
+          if (metadata.duration > 60) {
+            return { notice: "video posts need to be 60 seconds or less." };
+          }
+          return { mediaKind: "video" as MediaKind, videoRatio: getVideoRatioFromDimensions(metadata.width, metadata.height) };
+        } catch {
+          return { notice: "we couldn't read that post video. try another file." };
+        }
+      }
+
+      try {
+        const dimensions = await readImageDimensions(file);
+        if (!hasExactDimensions(dimensions, CREATOR_POST_DIMENSIONS)) {
+          return { notice: "post images need to be 1080 x 1080, 1080 x 1350, or 1080 x 566." };
+        }
+        return { mediaKind: "photo" as MediaKind, videoRatio: "4:5" as VideoRatio };
+      } catch {
+        return { notice: "we couldn't read that post image. try another one." };
+      }
+    };
+
+    if (isInfluencer) {
+      const validationResult = await validateCreatorFiles();
+      if ("notice" in validationResult) {
+        setDailyPostNotice(validationResult.notice);
+        setDailyPostInputKey((current) => current + 1);
+        return;
+      }
+
+      nextMediaKind = validationResult.mediaKind;
+      nextVideoRatio = validationResult.videoRatio;
+      setDailyPostComposerMediaKind(nextMediaKind);
+      setDailyPostVideoRatio(nextVideoRatio);
+    }
+
     setIsUploadingDailyPost(true);
-    setDailyPostNotice("uploading your post...");
+    setDailyPostNotice(isInfluencer ? `uploading your ${creatorFormat}...` : "uploading your post...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
-        mediaKind: "photo",
-        maxFiles: 1,
+        mediaKind: nextMediaKind,
+        maxFiles: isInfluencer ? (dailyPostFormat === "carousel" ? 10 : 1) : 1,
         setNotice: setDailyPostNotice,
+        skipSizeLimit: isInfluencer,
       });
 
       if (!uploadResults?.length) return;
 
-      setDailyPostMediaUrls([uploadResults[0]]);
-      setDailyPostNotice("your photo is ready.");
+      setDailyPostMediaUrls(
+        isInfluencer && dailyPostFormat === "carousel" ? uploadResults.slice(0, 10) : [uploadResults[0]],
+      );
+      setDailyPostNotice(
+        isInfluencer
+          ? dailyPostFormat === "carousel"
+            ? `${uploadResults.length} slides are ready.`
+            : `your ${creatorFormat} is ready.`
+          : "your photo is ready.",
+      );
       setDailyPostInputKey((current) => current + 1);
     } finally {
       setIsUploadingDailyPost(false);
@@ -7144,6 +7402,8 @@ export default function Page() {
   const clearDailyPostPhoto = () => {
     setDailyPostMediaUrls([]);
     setDailyPostNotice("");
+    setDailyPostComposerMediaKind(dailyPostFormat === "reel" ? "video" : dailyPostFormat === "carousel" ? "carousel" : "photo");
+    setDailyPostVideoRatio(dailyPostFormat === "reel" || dailyPostFormat === "story" ? "9:16" : "4:5");
     setDailyPostInputKey((current) => current + 1);
   };
 
@@ -7152,6 +7412,9 @@ export default function Page() {
     setDailyPostCaption("");
     setDailyPostMentionQuery("");
     setDailyPostMentionRange(null);
+    setDailyPostFormat("post");
+    setDailyPostComposerMediaKind("photo");
+    setDailyPostVideoRatio("4:5");
     setDailyPostMediaUrls([]);
     setDailyPostTaggedPlace(null);
     setDailyPostPlaceQuery("");
@@ -7170,6 +7433,9 @@ export default function Page() {
     setDailyPostCaption(post.body);
     setDailyPostMentionQuery("");
     setDailyPostMentionRange(null);
+    setDailyPostFormat(inferCreatorPostFormat(post));
+    setDailyPostComposerMediaKind(post.mediaKind === "none" ? "photo" : post.mediaKind);
+    setDailyPostVideoRatio(post.videoRatio);
     setDailyPostMediaUrls(post.mediaUrls);
     setDailyPostTaggedPlace(
       post.taggedPlaceId && post.taggedPlaceName
@@ -7207,7 +7473,12 @@ export default function Page() {
     }
 
     if (!dailyPostMediaUrls.length) {
-      setDailyPostNotice("add at least one photo for today’s drop.");
+      setDailyPostNotice(isInfluencer ? `add media for this ${dailyPostFormat}.` : "add at least one photo for today’s drop.");
+      return;
+    }
+
+    if (isInfluencer && dailyPostFormat === "carousel" && (dailyPostMediaUrls.length < 2 || dailyPostMediaUrls.length > 10)) {
+      setDailyPostNotice("carousels need 2 to 10 slides.");
       return;
     }
 
@@ -7221,14 +7492,14 @@ export default function Page() {
       body: caption,
       bodyPl: "",
       type: "chapter",
-      cta: dailyPostTaggedPlace ? "friend review" : "live now",
+      cta: isInfluencer ? dailyPostFormat : dailyPostTaggedPlace ? "friend review" : "live now",
       ctaPl: "",
       originalLanguage: existingPost?.originalLanguage ?? language,
       createdAt: existingPost?.createdAt ?? formatNow(),
       createdAtIso: existingPost?.createdAtIso ?? createdAtIso,
-      mediaKind: "photo",
-      mediaUrls: [dailyPostMediaUrls[0]],
-      videoRatio: "4:5",
+      mediaKind: isInfluencer ? dailyPostComposerMediaKind : "photo",
+      mediaUrls: isInfluencer && dailyPostFormat === "carousel" ? dailyPostMediaUrls : [dailyPostMediaUrls[0]],
+      videoRatio: isInfluencer ? dailyPostVideoRatio : "4:5",
       authorRole: "student",
       authorName: user.profile.fullName,
       authorEmail,
@@ -7258,13 +7529,16 @@ export default function Page() {
     setDailyPostCaption("");
     setDailyPostMentionQuery("");
     setDailyPostMentionRange(null);
+    setDailyPostFormat("post");
+    setDailyPostComposerMediaKind("photo");
+    setDailyPostVideoRatio("4:5");
     setDailyPostMediaUrls([]);
     setDailyPostTaggedPlace(null);
     setDailyPostPlaceQuery("");
     setDailyPostPlaceResults([]);
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
-    setDailyPostNotice(existingPost ? "your post is updated." : "your post is live.");
+    setDailyPostNotice(existingPost ? "your post is updated." : isInfluencer ? `your ${dailyPostFormat} is live.` : "your post is live.");
     setDailyPostInputKey((current) => current + 1);
   };
 
@@ -11141,7 +11415,16 @@ export default function Page() {
                   <div className="flex justify-start">
                     <Badge
                       isInvisible={!isInfluencer}
-                      content={renderCreatorBadge(true)}
+                      content={
+                        <button
+                          type="button"
+                          aria-label="add a creator story"
+                          onClick={openCreatorStoryComposer}
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2C1A0E] text-[1.35rem] leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)]"
+                        >
+                          +
+                        </button>
+                      }
                       placement="bottom-right"
                     >
                       <Avatar
@@ -11181,7 +11464,10 @@ export default function Page() {
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
+                      {isInfluencer ? renderCreatorBadge(true) : null}
+                    </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
                   </div>
 
@@ -11323,37 +11609,100 @@ export default function Page() {
                       </Button>
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    aria-label={copy.profile.addPostPhoto}
-                    disabled={isUploadingDailyPost}
-                    onClick={() => dailyPostInputRef.current?.click()}
-                    className="relative flex h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
-                  >
-                    {dailyPostMediaUrls[0] ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
-                        <button
-                          type="button"
-                          aria-label="remove selected photo"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            clearDailyPostPhoto();
-                          }}
-                          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
-                        >
-                          ×
-                        </button>
-                      </>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-5xl leading-none">+</div>
-                        <p className="mt-3 text-sm font-medium">{copy.profile.addPostPhoto}</p>
+                  {isInfluencer ? (
+                    <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">creator format</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">pick what you want to publish, then we’ll keep the upload rules lined up with it.</p>
                       </div>
-                    )}
-                  </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CREATOR_POST_FORMAT_OPTIONS.map((option) => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => {
+                              setDailyPostFormat(option.key);
+                              setDailyPostMediaUrls([]);
+                              setDailyPostComposerMediaKind(option.key === "carousel" ? "carousel" : option.key === "reel" ? "video" : "photo");
+                              setDailyPostVideoRatio(option.key === "reel" || option.key === "story" ? "9:16" : "4:5");
+                              setDailyPostInputKey((current) => current + 1);
+                              setDailyPostNotice("");
+                            }}
+                            className={`rounded-[18px] border px-4 py-3 text-left transition ${
+                              dailyPostFormat === option.key
+                                ? "border-[#F5A623] bg-[#FFF0D0] text-[#2C1A0E]"
+                                : "border-[#f3e1cf] bg-white text-[#6c7289]"
+                            }`}
+                          >
+                            <p className="text-sm font-semibold">{option.label}</p>
+                            <p className="mt-1 text-xs leading-5">{option.description}</p>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="rounded-[18px] bg-white px-4 py-3 text-sm text-[#2C1A0E]">
+                        <span className="font-semibold">{dailyPostFormat}</span> • {getCreatorFormatRules(dailyPostFormat)}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      aria-label={isInfluencer ? getCreatorUploadPrompt(dailyPostFormat) : copy.profile.addPostPhoto}
+                      disabled={isUploadingDailyPost}
+                      onClick={() => dailyPostInputRef.current?.click()}
+                      className="relative flex min-h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
+                    >
+                      {dailyPostMediaUrls.length ? (
+                        <>
+                          {dailyPostComposerMediaKind === "video" ? (
+                            <video
+                              src={dailyPostMediaUrls[0]}
+                              className="h-full w-full object-cover"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
+                              {dailyPostComposerMediaKind === "carousel" ? (
+                                <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/82 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+                                  {dailyPostMediaUrls.length} slides
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            aria-label="remove selected media"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              clearDailyPostPhoto();
+                            }}
+                            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
+                          >
+                            ×
+                          </button>
+                        </>
+                      ) : (
+                        <div className="px-6 text-center">
+                          <div className="text-5xl leading-none">+</div>
+                          <p className="mt-3 text-sm font-medium">
+                            {isInfluencer ? getCreatorUploadPrompt(dailyPostFormat) : copy.profile.addPostPhoto}
+                          </p>
+                          {isInfluencer ? <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{getCreatorFormatRules(dailyPostFormat)}</p> : null}
+                        </div>
+                      )}
+                    </button>
+                    {isInfluencer && dailyPostMediaUrls.length ? (
+                      <div className="rounded-[18px] bg-[#fffaf2] px-4 py-3 text-sm text-[#6c7289]">
+                        {dailyPostFormat === "carousel"
+                          ? "you can swap the whole carousel by picking new slides."
+                          : `pick a new file any time to replace this ${dailyPostFormat}.`}
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="relative">
                     <Textarea
                       ref={dailyPostCaptionRef}
@@ -11503,7 +11852,16 @@ export default function Page() {
                     ref={dailyPostInputRef}
                     key={dailyPostInputKey}
                     type="file"
-                    accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                    accept={
+                      isInfluencer
+                        ? dailyPostFormat === "carousel"
+                          ? ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                          : dailyPostFormat === "reel"
+                            ? ".mp4,.mov,video/mp4,video/quicktime"
+                            : ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                        : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
+                    }
+                    multiple={isInfluencer && dailyPostFormat === "carousel"}
                     disabled={isUploadingDailyPost}
                     onChange={(event) => {
                       void handleDailyPostFiles(event.target.files);
@@ -11517,9 +11875,9 @@ export default function Page() {
                       radius="full"
                       size="lg"
                       isDisabled={isUploadingDailyPost}
-                      className="h-14 min-w-14 bg-[#ff6a24] px-5 text-2xl text-white disabled:opacity-60"
+                      className={`h-14 ${isInfluencer ? "min-w-[7.5rem]" : "min-w-14"} bg-[#ff6a24] px-5 ${isInfluencer ? "text-sm font-semibold uppercase tracking-[0.14em]" : "text-2xl"} text-white disabled:opacity-60`}
                     >
-                      {editingDailyPostId ? "save" : "→"}
+                      {editingDailyPostId ? "save" : isInfluencer ? `post ${dailyPostFormat}` : "→"}
                     </Button>
                   </div>
                 </form>
@@ -11767,17 +12125,11 @@ export default function Page() {
 
                   <div className="mt-5 grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
                     <div className="flex justify-start">
-                      <Badge
-                        isInvisible={!selectedProfileIsInfluencer}
-                        content={renderCreatorBadge(true)}
-                        placement="bottom-right"
-                      >
-                        <Avatar
-                          src={getAccountPicture(selectedProfileAccount)}
-                          name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
-                          className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
-                        />
-                      </Badge>
+                      <Avatar
+                        src={getAccountPicture(selectedProfileAccount)}
+                        name={selectedProfileAccount?.profile.fullName || selectedProfileAccount?.profile.username || "friend"}
+                        className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                      />
                     </div>
                     <div className="min-w-0 pt-2">
                       <div className="grid grid-cols-3 gap-1 text-center">
@@ -11813,7 +12165,10 @@ export default function Page() {
                   </div>
 
                   <div className="mt-4 space-y-1">
-                    <p className="text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
+                      {selectedProfileIsInfluencer ? renderCreatorBadge(true) : null}
+                    </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(selectedProfileAccount?.profile.city || "", selectedProfileAccount?.profile.schoolName || "")}</p>
                     {selectedProfileBio ? <p className="pt-2 text-sm leading-6 text-[#6c7289]">{selectedProfileBio}</p> : null}
                   </div>
