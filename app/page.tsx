@@ -492,7 +492,6 @@ const defaultPostFields = {
 };
 
 const CREATOR_REEL_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
-const CREATOR_STORY_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
 const CREATOR_POST_DIMENSIONS = [
   { width: 1080, height: 1080 },
   { width: 1080, height: 1350 },
@@ -7441,23 +7440,17 @@ export default function Page() {
         if (isVideo) {
           try {
             const metadata = await readVideoMetadata(file);
-            if (!hasExactDimensions(metadata, CREATOR_STORY_DIMENSIONS)) {
-              return { notice: "story videos need to be exactly 1080 x 1920." };
-            }
             if (metadata.duration > 15) {
               return { notice: "story videos need to be 15 seconds or less." };
             }
-            return { mediaKind: "video" as MediaKind, videoRatio: "9:16" as VideoRatio };
+            return { mediaKind: "video" as MediaKind, videoRatio: getVideoRatioFromDimensions(metadata.width, metadata.height) };
           } catch {
             return { notice: "we couldn't read that story video. try another file." };
           }
         }
 
         try {
-          const dimensions = await readImageDimensions(file);
-          if (!hasExactDimensions(dimensions, CREATOR_STORY_DIMENSIONS)) {
-            return { notice: "story images need to be exactly 1080 x 1920." };
-          }
+          await readImageDimensions(file);
           return { mediaKind: "photo" as MediaKind, videoRatio: "9:16" as VideoRatio };
         } catch {
           return { notice: "we couldn't read that story image. try another one." };
@@ -12629,7 +12622,7 @@ export default function Page() {
                   </button>
 
                   <div className="rounded-[24px] bg-white/8 px-4 py-4 text-sm leading-6 text-white/74">
-                    story rules: 9:16, 1080 x 1920, image or video. videos up to 15 sec. if the file is wrong, we’ll show a simple fix message and keep them in flow.
+                    story rules: image or video, videos up to 15 sec. vertical is best, but square and landscape still work and we’ll fit them into the story frame for you.
                   </div>
 
                   {dailyPostNotice ? (
@@ -12720,22 +12713,44 @@ export default function Page() {
                     className="absolute inset-y-0 right-0 z-10 w-1/3"
                     onClick={() => showAdjacentStory(1)}
                   />
-                  {selectedStoryPost.mediaKind === "video" && selectedStoryPost.mediaUrls[0] ? (
-                    <video
-                      src={selectedStoryPost.mediaUrls[0]}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      autoPlay
-                      playsInline
-                      muted
-                      onEnded={() => showAdjacentStory(1)}
-                    />
-                  ) : selectedStoryPost.mediaUrls[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={selectedStoryPost.mediaUrls[0]}
-                      alt={selectedStoryPostContent?.title || selectedStoryPost.title}
-                      className="absolute inset-0 h-full w-full object-cover"
-                    />
+                  {selectedStoryPost.mediaUrls[0] ? (
+                    <>
+                      {selectedStoryPost.mediaKind === "video" ? (
+                        <video
+                          src={selectedStoryPost.mediaUrls[0]}
+                          className="absolute inset-0 h-full w-full object-cover blur-2xl brightness-[0.45] scale-110"
+                          autoPlay
+                          playsInline
+                          muted
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={selectedStoryPost.mediaUrls[0]}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover blur-2xl brightness-[0.45] scale-110"
+                          aria-hidden="true"
+                        />
+                      )}
+                      {selectedStoryPost.mediaKind === "video" ? (
+                        <video
+                          src={selectedStoryPost.mediaUrls[0]}
+                          className="absolute inset-0 h-full w-full object-contain"
+                          autoPlay
+                          playsInline
+                          muted
+                          onEnded={() => showAdjacentStory(1)}
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={selectedStoryPost.mediaUrls[0]}
+                          alt={selectedStoryPostContent?.title || selectedStoryPost.title}
+                          className="absolute inset-0 h-full w-full object-contain"
+                        />
+                      )}
+                    </>
                   ) : null}
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,13,8,0.62)_0%,rgba(20,13,8,0.18)_36%,rgba(20,13,8,0.55)_100%)]" />
                   <div className="relative z-10 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
