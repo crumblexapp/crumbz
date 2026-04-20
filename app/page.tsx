@@ -1519,20 +1519,13 @@ function renderInfluencerTabIcon(tabKey: InfluencerDashboardTab, className: stri
 function renderCreatorBadge(compact = false) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full bg-[#0A84FF] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_10px_24px_rgba(10,132,255,0.22)] ${
+      className={`inline-flex items-center gap-1 rounded-full bg-[linear-gradient(180deg,_#F6C765_0%,_#E3A736_100%)] font-semibold uppercase tracking-[0.14em] text-[#2C1A0E] shadow-[0_10px_24px_rgba(227,167,54,0.28)] ${
         compact ? "h-7 w-7 justify-center" : "h-8 w-8 justify-center"
       }`}
     >
       <svg viewBox="0 0 24 24" fill="none" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden="true">
         <path
-          d="M6.75 9.25A2.25 2.25 0 0 1 9 7h5.25a2.25 2.25 0 0 1 2.25 2.25v5.5A2.25 2.25 0 0 1 14.25 17H9a2.25 2.25 0 0 1-2.25-2.25v-5.5Z"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="m16.5 10.5 3-1.75v6.5l-3-1.75"
+          d="m12 4.8 1.95 4 4.42.64-3.18 3.1.75 4.4L12 14.9l-3.94 2.04.75-4.4-3.18-3.1 4.42-.64L12 4.8Z"
           stroke="currentColor"
           strokeWidth="1.9"
           strokeLinecap="round"
