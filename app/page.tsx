@@ -317,6 +317,7 @@ type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dum
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type CreatorPostFormat = "post" | "carousel" | "reel" | "story";
+type AdminDashboardTab = "overview" | "challengers" | "post" | "referrals";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
 type InfluencerDashboardTab = "overview" | "content" | "referrals" | "support" | "settings" | "insights";
 type ProfilePostTab = "all" | "friend-review" | "post" | "sunday-dump";
@@ -2328,6 +2329,7 @@ export default function Page() {
   const [openReplyComposerLabel, setOpenReplyComposerLabel] = useState<string | null>(null);
   const [openCommentReactionPickerId, setOpenCommentReactionPickerId] = useState<string | null>(null);
   const [commentReactionViewer, setCommentReactionViewer] = useState<{ postId: string; commentId: string; replyId?: string; emoji: string } | null>(null);
+  const [adminDashboardTab, setAdminDashboardTab] = useState<AdminDashboardTab>("overview");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [pendingDeletePostId, setPendingDeletePostId] = useState<string | null>(null);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string | null>(null);
@@ -2830,7 +2832,9 @@ export default function Page() {
       const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
       if (!account || getAccountRole(account) !== "influencer") return false;
       const authorEmail = post.authorEmail.toLowerCase();
-      return authorEmail === currentUserEmail || friendEmails.includes(authorEmail) || normalizeCityKey(account.profile.city || "") === viewerCityKey;
+      const authorFriends = (account.profile.friends ?? []).map((email) => email.trim().toLowerCase());
+      const areFriendsEitherWay = friendEmails.includes(authorEmail) || authorFriends.includes(currentUserEmail);
+      return authorEmail === currentUserEmail || areFriendsEitherWay || normalizeCityKey(account.profile.city || "") === viewerCityKey;
     })
     .sort((a, b) => getPostTimestamp(a) - getPostTimestamp(b));
   const creatorStoryGroups = creatorLiveStoryPosts.reduce<Array<{ account: StoredUser; posts: AppPost[] }>>((groups, post) => {
@@ -8729,6 +8733,36 @@ export default function Page() {
               </CardBody>
             </Card>
           </motion.section>
+
+          <nav
+            className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
+            style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="grid grid-cols-4 gap-1 text-center">
+              {[
+                { label: "overview", key: "overview" as AdminDashboardTab, icon: "⌂" },
+                { label: "challenge", key: "challengers" as AdminDashboardTab, icon: "⚑" },
+                { label: "post", key: "post" as AdminDashboardTab, icon: "+" },
+                { label: "referrals", key: "referrals" as AdminDashboardTab, icon: "↗" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
+                    adminDashboardTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
+                  }`}
+                  onClick={() => setAdminDashboardTab(item.key)}
+                >
+                  <span className={`text-[22px] leading-none ${adminDashboardTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
+                    {item.icon}
+                  </span>
+                  <span className={`text-[11px] font-medium leading-none ${adminDashboardTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </nav>
         </div>
       </main>
     );
@@ -9219,9 +9253,11 @@ export default function Page() {
             className="mt-5"
           >
             <Tabs
+              selectedKey={adminDashboardTab}
+              onSelectionChange={(key) => setAdminDashboardTab(key as AdminDashboardTab)}
               aria-label="admin areas"
               classNames={{
-                tabList: "grid w-full grid-cols-3 gap-1 rounded-[28px] bg-white/90 p-1 sm:grid-cols-5",
+                tabList: "hidden",
                 cursor: "rounded-full bg-[#F5A623]",
                 tab: "h-11 min-w-0 px-2 text-xs font-medium text-[#2C1A0E] sm:text-sm",
                 tabContent: "truncate group-data-[selected=true]:text-white",
