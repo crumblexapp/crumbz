@@ -2341,6 +2341,7 @@ export default function Page() {
   const [postShareNotice, setPostShareNotice] = useState<{ postId: string; message: string } | null>(null);
   const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
+  const [storyActionMenuOpen, setStoryActionMenuOpen] = useState(false);
   const [postTranslations, setPostTranslations] = useState<Record<string, PostTranslationCacheEntry>>({});
   const [translatedPostVisibility, setTranslatedPostVisibility] = useState<Record<string, boolean>>({});
   const [translatingPostIds, setTranslatingPostIds] = useState<Record<string, boolean>>({});
@@ -2939,6 +2940,15 @@ export default function Page() {
       ? adminProfilePicture
       : getAccountPicture(selectedStoryAccount)
     : "";
+  const selectedStoryOwnedByCurrentUser = Boolean(
+    selectedStoryPost &&
+      selectedStoryPost.authorRole === "student" &&
+      selectedStoryPost.authorEmail.toLowerCase() === currentUserEmail,
+  );
+  const currentUserStoryGroup = creatorStoryGroups.find(
+    (group) => group.account.googleProfile?.email?.toLowerCase() === currentUserEmail,
+  );
+  const currentUserHasLiveStory = Boolean(currentUserStoryGroup?.posts.length);
   const likesViewerPost =
     (likesViewerPostId ? posts.find((post) => post.id === likesViewerPostId) : null) ??
     (selectedOwnPost?.id === likesViewerPostId ? selectedOwnPost : null);
@@ -6665,6 +6675,11 @@ export default function Page() {
     setSelectedStoryPostId(selectedStorySequence[nextIndex].id);
   };
 
+  const openOwnStorySequence = () => {
+    if (!currentUserStoryGroup?.posts.length) return;
+    setSelectedStoryPostId(currentUserStoryGroup.posts[0].id);
+  };
+
   const resetComposer = (notice = "") => {
     setEditingPostId(null);
     setPendingDeletePostId(null);
@@ -6912,6 +6927,33 @@ export default function Page() {
     if (selectedStoryPostId === postId) {
       setSelectedStoryPostId(null);
     }
+  };
+
+  const deleteOwnStory = (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost || targetPost.authorRole !== "student" || targetPost.authorEmail.toLowerCase() !== currentUserEmail || targetPost.type !== "story") {
+      return;
+    }
+
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("delete this story?");
+      if (!confirmed) return;
+    }
+
+    const nextPosts = posts.filter((post) => post.id !== postId);
+    const nextInteractions = { ...interactions };
+    delete nextInteractions[postId];
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPosts(nextPosts);
+    setInteractions(nextInteractions);
+    syncSharedState({
+      nextPosts,
+      nextInteractions,
+    });
+    setStoryActionMenuOpen(false);
+    setSelectedStoryPostId(null);
+    setDailyPostNotice("story deleted.");
   };
 
   const deleteUserFromAdmin = async (targetEmail: string) => {
@@ -11499,7 +11541,7 @@ export default function Page() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
+                <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-3">
                   <div className="flex justify-start">
                     <Badge
                       isInvisible={!isInfluencer}
@@ -11515,11 +11557,22 @@ export default function Page() {
                       }
                       placement="bottom-right"
                     >
-                      <Avatar
-                        src={currentUserPicture}
-                        name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
-                        className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
-                      />
+                      <button
+                        type="button"
+                        aria-label={currentUserHasLiveStory ? "open your story" : "your profile picture"}
+                        onClick={() => {
+                          if (currentUserHasLiveStory) {
+                            openOwnStorySequence();
+                          }
+                        }}
+                        className={`${currentUserHasLiveStory ? "rounded-full p-[3px] bg-[linear-gradient(135deg,#F5A623,#f4f0e7)] shadow-[0_10px_30px_rgba(44,26,14,0.08)]" : ""}`}
+                      >
+                        <Avatar
+                          src={currentUserPicture}
+                          name={liveProfile.fullName || user.googleProfile?.name || "crumbz"}
+                          className="h-24 w-24 border-4 border-[#FFF0D0] bg-[#FFF0D0] text-[#F5A623]"
+                        />
+                      </button>
                     </Badge>
                   </div>
                   <div className="min-w-0 pt-2">
@@ -11551,9 +11604,9 @@ export default function Page() {
                     </div>
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="col-span-2 space-y-1">
                     <div className="flex items-center gap-2 whitespace-nowrap">
-                      <p className="truncate text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
                       {isInfluencer ? renderCreatorBadge(true) : null}
                     </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
@@ -12180,7 +12233,7 @@ export default function Page() {
                     </Button>
                   </div>
 
-                  <div className="mt-5 grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-3">
+                  <div className="mt-5 grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-3">
                     <div className="flex justify-start">
                       <Avatar
                         src={getAccountPicture(selectedProfileAccount)}
@@ -12221,9 +12274,9 @@ export default function Page() {
                     </div>
                   </div>
 
-                  <div className="mt-4 space-y-1">
+                  <div className="col-span-2 mt-4 space-y-1">
                     <div className="flex items-center gap-2 whitespace-nowrap">
-                      <p className="truncate text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
+                      <p className="text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
                       {selectedProfileIsInfluencer ? renderCreatorBadge(true) : null}
                     </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(selectedProfileAccount?.profile.city || "", selectedProfileAccount?.profile.schoolName || "")}</p>
@@ -12448,6 +12501,38 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
+      <Modal isOpen={storyActionMenuOpen} onOpenChange={setStoryActionMenuOpen} placement="bottom-center">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="border-b border-[#FFF0D0]">
+                <div>
+                  <p className="font-[family-name:var(--font-young-serif)] text-[1.5rem] leading-none text-[#2C1A0E]">story options</p>
+                  <p className="mt-2 text-sm text-[#6c7289]">manage your live story.</p>
+                </div>
+              </ModalHeader>
+              <ModalBody className="gap-3 bg-[#fffaf2] pb-6 pt-5">
+                <Button
+                  radius="full"
+                  className="bg-[#B3261E] text-white"
+                  onPress={() => {
+                    if (selectedStoryPost) {
+                      deleteOwnStory(selectedStoryPost.id);
+                    }
+                    onClose();
+                  }}
+                >
+                  delete story
+                </Button>
+                <Button radius="full" variant="flat" className="bg-white text-[#2C1A0E]" onPress={onClose}>
+                  cancel
+                </Button>
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
       <Modal
         isOpen={pushPromptOpen}
         onOpenChange={(open) => {
@@ -12498,7 +12583,17 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={Boolean(selectedStoryPost)} onOpenChange={(open) => !open && setSelectedStoryPostId(null)} size="full" hideCloseButton>
+      <Modal
+        isOpen={Boolean(selectedStoryPost)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedStoryPostId(null);
+            setStoryActionMenuOpen(false);
+          }
+        }}
+        size="full"
+        hideCloseButton
+      >
         <ModalContent className="min-h-[100dvh] bg-[rgba(16,10,6,0.96)] shadow-none">
           {() => (
             <ModalBody className="flex min-h-[100dvh] items-center justify-center p-0">
@@ -12556,9 +12651,21 @@ export default function Page() {
                           </p>
                         </div>
                       </div>
-                      <Button radius="full" variant="light" className="min-w-0 bg-white/12 px-3 text-white" onPress={() => setSelectedStoryPostId(null)}>
-                        close
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {selectedStoryOwnedByCurrentUser ? (
+                          <button
+                            type="button"
+                            aria-label="story actions"
+                            onClick={() => setStoryActionMenuOpen(true)}
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/12 text-2xl leading-none text-white"
+                          >
+                            ⋮
+                          </button>
+                        ) : null}
+                        <Button radius="full" variant="light" className="min-w-0 bg-white/12 px-3 text-white" onPress={() => setSelectedStoryPostId(null)}>
+                          close
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="relative z-10 mt-auto space-y-3 px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-10 text-white">
