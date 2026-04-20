@@ -66,7 +66,6 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const ADMIN_EMAIL = "crumbleappco@gmail.com";
-const ADMIN_PUBLIC_NAME = "crumbz";
 const ADMIN_PUBLIC_HANDLE = "@crumbz.pl";
 const ADMIN_POST_IMAGE_SHARE_USERNAMES = new Set(["josheats"]);
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
@@ -337,6 +336,16 @@ type CrumbzHistoryState = {
   crumbzNav?: AppNavigationState;
 };
 
+type StoryRailItem = {
+  id: string;
+  postId: string | null;
+  label: string;
+  detail: string;
+  picture: string;
+  ring: string;
+  badge: string;
+};
+
 type GoogleCredentialResponse = {
   credential?: string;
 };
@@ -481,17 +490,6 @@ const defaultPostFields = {
   tasteTag: "",
   priceTag: "",
 };
-
-const CREATOR_POST_FORMAT_OPTIONS: Array<{
-  key: CreatorPostFormat;
-  label: string;
-  description: string;
-}> = [
-  { key: "post", label: "post", description: "single photo or single video" },
-  { key: "carousel", label: "carousel", description: "2 to 10 slides" },
-  { key: "reel", label: "reel", description: "one vertical video" },
-  { key: "story", label: "story", description: "one 9:16 image or video" },
-];
 
 const CREATOR_REEL_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
 const CREATOR_STORY_DIMENSIONS = [{ width: 1080, height: 1920 }] as const;
@@ -1658,8 +1656,15 @@ function getCreatorUploadPrompt(format: CreatorPostFormat) {
   }
 }
 
+function inferCreatorFormatFromFiles(files: File[]) {
+  if (files.length > 1) return "carousel" as const;
+  const firstFile = files[0];
+  if (!firstFile) return "post" as const;
+  return matchesAcceptedType(firstFile, ACCEPTED_VIDEO_TYPES) ? ("reel" as const) : ("post" as const);
+}
+
 function inferCreatorPostFormat(post: AppPost): CreatorPostFormat {
-  if (post.cta === "story") return "story";
+  if (post.type === "story" || post.cta === "story") return "story";
   if (post.cta === "reel") return "reel";
   if (post.mediaKind === "carousel" || post.cta === "carousel") return "carousel";
   return "post";
@@ -2787,7 +2792,7 @@ export default function Page() {
   const shouldShowSundayDumpFeed = canSubmitWeeklyDumpToday;
   const currentSundayKey = getSundayKey(today);
   const studentDailyPosts = posts
-    .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump")
+    .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump" && post.type !== "story")
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const studentWeeklyDumps = posts
@@ -2814,6 +2819,31 @@ export default function Page() {
     .filter((post) => post.type === "story" && !isLiveStory(post))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const adminStorySequence = [...adminLiveStoryPosts].reverse();
+  const viewerCityKey = normalizeCityKey(liveProfile.city || "");
+  const creatorLiveStoryPosts = posts
+    .filter((post) => post.authorRole === "student" && post.type === "story" && isLiveStory(post))
+    .filter((post) => {
+      const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
+      if (!account || getAccountRole(account) !== "influencer") return false;
+      return normalizeCityKey(account.profile.city || "") === viewerCityKey;
+    })
+    .sort((a, b) => getPostTimestamp(a) - getPostTimestamp(b));
+  const creatorStoryGroups = creatorLiveStoryPosts.reduce<Array<{ account: StoredUser; posts: AppPost[] }>>((groups, post) => {
+    const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
+    if (!account) return groups;
+
+    const existingGroup = groups.find(
+      (group) => group.account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase(),
+    );
+
+    if (existingGroup) {
+      existingGroup.posts.push(post);
+      return groups;
+    }
+
+    groups.push({ account, posts: [post] });
+    return groups;
+  }, []);
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const adminPostArchive = [...adminFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const mixedHomeFeedPosts = [...adminFeedPosts, ...influencerFeedPosts, ...friendDailyFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
@@ -2871,11 +2901,44 @@ export default function Page() {
   );
   const currentUsername = liveProfile.username?.trim().toLowerCase() ?? user.profile.username?.trim().toLowerCase() ?? "";
   const shareImageDataUrlCacheRef = useRef<Record<string, string>>({});
+  const selectedStoryPostSource =
+    selectedStoryPostId
+      ? posts.find((post) => post.id === selectedStoryPostId) ??
+        adminStorySequence.find((post) => post.id === selectedStoryPostId) ??
+        creatorLiveStoryPosts.find((post) => post.id === selectedStoryPostId) ??
+        null
+      : null;
+  const selectedStorySequence = useMemo(
+    () =>
+      selectedStoryPostSource?.authorRole === "admin"
+        ? adminStorySequence
+        : selectedStoryPostSource
+          ? creatorStoryGroups.find(
+              (group) => group.account.googleProfile?.email?.toLowerCase() === selectedStoryPostSource.authorEmail.toLowerCase(),
+            )?.posts ?? []
+          : [],
+    [adminStorySequence, creatorStoryGroups, selectedStoryPostSource],
+  );
   const selectedStoryPostIndex = selectedStoryPostId
-    ? adminStorySequence.findIndex((post) => post.id === selectedStoryPostId)
+    ? selectedStorySequence.findIndex((post) => post.id === selectedStoryPostId)
     : -1;
-  const selectedStoryPost = selectedStoryPostIndex >= 0 ? adminStorySequence[selectedStoryPostIndex] : null;
+  const selectedStoryPost = selectedStoryPostIndex >= 0 ? selectedStorySequence[selectedStoryPostIndex] : null;
   const selectedStoryPostContent = selectedStoryPost ? getLocalizedPostContent(selectedStoryPost, language) : null;
+  const selectedStoryAccount = selectedStoryPost
+    ? selectedStoryPost.authorRole === "admin"
+      ? adminAccount
+      : accountByEmail.get(selectedStoryPost.authorEmail.toLowerCase()) ?? null
+    : null;
+  const selectedStoryLabel = selectedStoryPost
+    ? selectedStoryPost.authorRole === "admin"
+      ? ADMIN_PUBLIC_HANDLE
+      : `@${selectedStoryAccount?.profile.username || selectedStoryPost.authorName || "creator"}`
+    : "";
+  const selectedStoryPicture = selectedStoryPost
+    ? selectedStoryPost.authorRole === "admin"
+      ? adminProfilePicture
+      : getAccountPicture(selectedStoryAccount)
+    : "";
   const likesViewerPost =
     (likesViewerPostId ? posts.find((post) => post.id === likesViewerPostId) : null) ??
     (selectedOwnPost?.id === likesViewerPostId ? selectedOwnPost : null);
@@ -3230,18 +3293,39 @@ export default function Page() {
       )
       .filter((item): item is { id: string; title: string; detail: string; city: string; place: FavoritePlace } => Boolean(item)),
   ].slice(0, 4);
-  const storyRailItems = adminStorySequence.length
-    ? [
-        {
-          id: "crumbz-story-rail",
-          postId: adminStorySequence[0]?.id ?? null,
-          label: ADMIN_PUBLIC_HANDLE,
-          detail: adminStorySequence.length > 1 ? `${adminStorySequence.length} stories` : adminStorySequence[0]?.title ?? "live",
-          picture: adminProfilePicture,
-          ring: "#F5A623",
-          badge: "live",
-        },
-      ]
+  const storyRailItems: StoryRailItem[] = [
+    ...(adminStorySequence.length
+      ? [
+          {
+            id: "crumbz-story-rail",
+            postId: adminStorySequence[0]?.id ?? null,
+            label: ADMIN_PUBLIC_HANDLE,
+            detail: adminStorySequence.length > 1 ? `${adminStorySequence.length} stories` : adminStorySequence[0]?.title ?? "live",
+            picture: adminProfilePicture,
+            ring: "#F5A623",
+            badge: "live",
+          } satisfies StoryRailItem,
+        ]
+      : []),
+    ...creatorStoryGroups
+      .slice()
+      .sort((a, b) => {
+        const latestA = a.posts[a.posts.length - 1] ?? a.posts[0];
+        const latestB = b.posts[b.posts.length - 1] ?? b.posts[0];
+        return getPostTimestamp(latestB) - getPostTimestamp(latestA);
+      })
+      .map((group) => ({
+        id: `story-group-${group.account.googleProfile?.email?.toLowerCase() ?? group.account.profile.username}`,
+        postId: group.posts[0]?.id ?? null,
+        label: `@${group.account.profile.username || "creator"}`,
+        detail: group.posts.length > 1 ? `${group.posts.length} stories` : group.posts[0]?.title || "live",
+        picture: getAccountPicture(group.account),
+        ring: "#F5A623",
+        badge: "live",
+      } satisfies StoryRailItem)),
+  ];
+  const visibleStoryRailItems = storyRailItems.length
+    ? storyRailItems
     : [
         {
           id: "crumbz-placeholder",
@@ -3249,9 +3333,9 @@ export default function Page() {
           label: ADMIN_PUBLIC_HANDLE,
           detail: copy.feed.storyComingSoon,
           picture: adminProfilePicture,
-          ring: "#F5A623",
-          badge: "live",
-        },
+          ring: "#E7D8BF",
+          badge: "",
+        } satisfies StoryRailItem,
       ];
   const mutualFansByPlace = Object.fromEntries(
     favoritePlaces.map((place) => [
@@ -5152,16 +5236,16 @@ export default function Page() {
 
     const timeout = window.setTimeout(() => {
       const nextIndex = selectedStoryPostIndex + 1;
-      if (nextIndex < 0 || nextIndex >= adminStorySequence.length) {
+      if (nextIndex < 0 || nextIndex >= selectedStorySequence.length) {
         setSelectedStoryPostId(null);
         return;
       }
 
-      setSelectedStoryPostId(adminStorySequence[nextIndex].id);
+      setSelectedStoryPostId(selectedStorySequence[nextIndex].id);
     }, 5000);
 
     return () => window.clearTimeout(timeout);
-  }, [adminStorySequence, selectedStoryPost, selectedStoryPostIndex]);
+  }, [selectedStoryPost, selectedStoryPostIndex, selectedStorySequence]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -6564,20 +6648,21 @@ export default function Page() {
   };
 
   const openStorySequence = (postId?: string | null) => {
-    if (!adminStorySequence.length) return;
-    setSelectedStoryPostId(postId && adminStorySequence.some((post) => post.id === postId) ? postId : adminStorySequence[0].id);
+    if (!storyRailItems.length) return;
+    const fallbackPostId = storyRailItems[0]?.postId ?? null;
+    setSelectedStoryPostId(postId && posts.some((post) => post.id === postId) ? postId : fallbackPostId);
   };
 
   const showAdjacentStory = (direction: -1 | 1) => {
-    if (!adminStorySequence.length || selectedStoryPostIndex < 0) return;
+    if (!selectedStorySequence.length || selectedStoryPostIndex < 0) return;
     const nextIndex = selectedStoryPostIndex + direction;
 
-    if (nextIndex < 0 || nextIndex >= adminStorySequence.length) {
+    if (nextIndex < 0 || nextIndex >= selectedStorySequence.length) {
       setSelectedStoryPostId(null);
       return;
     }
 
-    setSelectedStoryPostId(adminStorySequence[nextIndex].id);
+    setSelectedStoryPostId(selectedStorySequence[nextIndex].id);
   };
 
   const resetComposer = (notice = "") => {
@@ -7210,15 +7295,17 @@ export default function Page() {
     if (!files?.length) return;
 
     const fileList = Array.from(files);
-    const creatorFormat = isInfluencer ? dailyPostFormat : "post";
+    const creatorFormat = isInfluencer ? (dailyPostFormat === "story" ? "story" : inferCreatorFormatFromFiles(fileList)) : "post";
     let nextMediaKind: MediaKind = isInfluencer
-      ? dailyPostFormat === "carousel"
+      ? creatorFormat === "carousel"
         ? "carousel"
-        : dailyPostFormat === "reel"
+        : creatorFormat === "reel"
           ? "video"
-          : dailyPostComposerMediaKind
+          : creatorFormat === "story"
+            ? dailyPostComposerMediaKind
+            : "photo"
       : "photo";
-    let nextVideoRatio: VideoRatio = isInfluencer ? dailyPostVideoRatio : "4:5";
+    let nextVideoRatio: VideoRatio = isInfluencer ? (creatorFormat === "story" ? dailyPostVideoRatio : creatorFormat === "reel" ? "9:16" : "4:5") : "4:5";
 
     if (!isInfluencer && fileList.length > 1) {
       setDailyPostNotice("pick one photo for your post.");
@@ -7357,6 +7444,7 @@ export default function Page() {
     };
 
     if (isInfluencer) {
+      setDailyPostFormat(creatorFormat);
       const validationResult = await validateCreatorFiles();
       if ("notice" in validationResult) {
         setDailyPostNotice(validationResult.notice);
@@ -7376,7 +7464,7 @@ export default function Page() {
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: nextMediaKind,
-        maxFiles: isInfluencer ? (dailyPostFormat === "carousel" ? 10 : 1) : 1,
+        maxFiles: isInfluencer ? (creatorFormat === "carousel" ? 10 : 1) : 1,
         setNotice: setDailyPostNotice,
         skipSizeLimit: isInfluencer,
       });
@@ -7384,11 +7472,11 @@ export default function Page() {
       if (!uploadResults?.length) return;
 
       setDailyPostMediaUrls(
-        isInfluencer && dailyPostFormat === "carousel" ? uploadResults.slice(0, 10) : [uploadResults[0]],
+        isInfluencer && creatorFormat === "carousel" ? uploadResults.slice(0, 10) : [uploadResults[0]],
       );
       setDailyPostNotice(
         isInfluencer
-          ? dailyPostFormat === "carousel"
+          ? creatorFormat === "carousel"
             ? `${uploadResults.length} slides are ready.`
             : `your ${creatorFormat} is ready.`
           : "your photo is ready.",
@@ -7491,7 +7579,7 @@ export default function Page() {
       titlePl: "",
       body: caption,
       bodyPl: "",
-      type: "chapter",
+      type: isInfluencer && dailyPostFormat === "story" ? "story" : "chapter",
       cta: isInfluencer ? dailyPostFormat : dailyPostTaggedPlace ? "friend review" : "live now",
       ctaPl: "",
       originalLanguage: existingPost?.originalLanguage ?? language,
@@ -10771,7 +10859,7 @@ export default function Page() {
               className="mt-6"
             >
               <div className="flex gap-4 overflow-x-auto pb-2">
-                {storyRailItems.map((item) => (
+                {visibleStoryRailItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
@@ -11464,8 +11552,8 @@ export default function Page() {
                   </div>
 
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <p className="truncate text-lg font-semibold text-[#2C1A0E]">{liveProfile.fullName}</p>
                       {isInfluencer ? renderCreatorBadge(true) : null}
                     </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(liveProfile.city, liveProfile.schoolName)}</p>
@@ -11609,41 +11697,6 @@ export default function Page() {
                       </Button>
                     </div>
                   ) : null}
-                  {isInfluencer ? (
-                    <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">creator format</p>
-                        <p className="mt-1 text-sm text-[#6c7289]">pick what you want to publish, then we’ll keep the upload rules lined up with it.</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {CREATOR_POST_FORMAT_OPTIONS.map((option) => (
-                          <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => {
-                              setDailyPostFormat(option.key);
-                              setDailyPostMediaUrls([]);
-                              setDailyPostComposerMediaKind(option.key === "carousel" ? "carousel" : option.key === "reel" ? "video" : "photo");
-                              setDailyPostVideoRatio(option.key === "reel" || option.key === "story" ? "9:16" : "4:5");
-                              setDailyPostInputKey((current) => current + 1);
-                              setDailyPostNotice("");
-                            }}
-                            className={`rounded-[18px] border px-4 py-3 text-left transition ${
-                              dailyPostFormat === option.key
-                                ? "border-[#F5A623] bg-[#FFF0D0] text-[#2C1A0E]"
-                                : "border-[#f3e1cf] bg-white text-[#6c7289]"
-                            }`}
-                          >
-                            <p className="text-sm font-semibold">{option.label}</p>
-                            <p className="mt-1 text-xs leading-5">{option.description}</p>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="rounded-[18px] bg-white px-4 py-3 text-sm text-[#2C1A0E]">
-                        <span className="font-semibold">{dailyPostFormat}</span> • {getCreatorFormatRules(dailyPostFormat)}
-                      </div>
-                    </div>
-                  ) : null}
                   <div className="space-y-3">
                     <button
                       type="button"
@@ -11691,7 +11744,9 @@ export default function Page() {
                           <p className="mt-3 text-sm font-medium">
                             {isInfluencer ? getCreatorUploadPrompt(dailyPostFormat) : copy.profile.addPostPhoto}
                           </p>
-                          {isInfluencer ? <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{getCreatorFormatRules(dailyPostFormat)}</p> : null}
+                          {isInfluencer && dailyPostFormat === "story" ? (
+                            <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{getCreatorFormatRules(dailyPostFormat)}</p>
+                          ) : null}
                         </div>
                       )}
                     </button>
@@ -11706,7 +11761,11 @@ export default function Page() {
                   <div className="relative">
                     <Textarea
                       ref={dailyPostCaptionRef}
-                      placeholder={copy.profile.captionPlaceholder}
+                      placeholder={
+                        isInfluencer && dailyPostFormat === "story"
+                          ? "add to your story"
+                          : copy.profile.captionPlaceholder
+                      }
                       value={dailyPostCaption}
                       onValueChange={(value) => {
                         setDailyPostCaption(value);
@@ -11854,14 +11913,12 @@ export default function Page() {
                     type="file"
                     accept={
                       isInfluencer
-                        ? dailyPostFormat === "carousel"
-                          ? ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                          : dailyPostFormat === "reel"
-                            ? ".mp4,.mov,video/mp4,video/quicktime"
-                            : ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                        ? dailyPostFormat === "story"
+                          ? ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                          : ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
                         : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
                     }
-                    multiple={isInfluencer && dailyPostFormat === "carousel"}
+                    multiple={isInfluencer && dailyPostFormat !== "story"}
                     disabled={isUploadingDailyPost}
                     onChange={(event) => {
                       void handleDailyPostFiles(event.target.files);
@@ -12165,8 +12222,8 @@ export default function Page() {
                   </div>
 
                   <div className="mt-4 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <p className="truncate text-lg font-semibold text-[#2C1A0E]">{selectedProfileAccount?.profile.fullName || "friend"}</p>
                       {selectedProfileIsInfluencer ? renderCreatorBadge(true) : null}
                     </div>
                     <p className="text-sm text-[#2C1A0E]">{formatProfileMeta(selectedProfileAccount?.profile.city || "", selectedProfileAccount?.profile.schoolName || "")}</p>
@@ -12465,7 +12522,7 @@ export default function Page() {
                       className="absolute inset-0 h-full w-full object-cover"
                       autoPlay
                       playsInline
-                      controls
+                      muted
                       onEnded={() => showAdjacentStory(1)}
                     />
                   ) : selectedStoryPost.mediaUrls[0] ? (
@@ -12480,7 +12537,7 @@ export default function Page() {
                   <div className="relative z-10 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
                     <div className="mb-4 grid grid-cols-1 gap-2">
                       <div className="flex gap-1">
-                        {adminStorySequence.map((post, index) => (
+                        {selectedStorySequence.map((post, index) => (
                           <span key={post.id} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
                             <span
                               className={`block h-full rounded-full ${index <= selectedStoryPostIndex ? "bg-white" : "bg-transparent"}`}
@@ -12491,11 +12548,11 @@ export default function Page() {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <Avatar src={adminProfilePicture} name={ADMIN_PUBLIC_NAME} className="h-11 w-11 bg-[#F5A623] text-white" />
+                        <Avatar src={selectedStoryPicture} name={selectedStoryLabel} className="h-11 w-11 bg-[#F5A623] text-white" />
                         <div>
-                          <p className="text-sm font-semibold text-white">{ADMIN_PUBLIC_HANDLE}</p>
+                          <p className="text-sm font-semibold text-white">{selectedStoryLabel}</p>
                           <p className="text-xs uppercase tracking-[0.18em] text-white/70">
-                            story {selectedStoryPostIndex + 1} of {adminStorySequence.length} • {selectedStoryPost.createdAt}
+                            story {selectedStoryPostIndex + 1} of {selectedStorySequence.length} • {selectedStoryPost.createdAt}
                           </p>
                         </div>
                       </div>
