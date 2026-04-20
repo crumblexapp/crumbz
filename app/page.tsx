@@ -223,6 +223,7 @@ const defaultPosts: AppPost[] = [
     titlePl: "",
     body: "this is where the first real crumbz story lands once the team posts.",
     bodyPl: "",
+    originalLanguage: "en",
     type: "chapter",
     cta: "first drop loading",
     ctaPl: "",
@@ -252,6 +253,7 @@ const defaultPosts: AppPost[] = [
     titlePl: "",
     body: "flash deals, restaurant collabs, and campus-only offers will show up here first.",
     bodyPl: "",
+    originalLanguage: "en",
     type: "discount",
     cta: "rewards coming soon",
     ctaPl: "",
@@ -284,6 +286,7 @@ const fallbackFeedPosts: AppPost[] = [
     titlePl: "",
     body: "crumbz is getting ready to drop the first real story. stay close, it lands here first.",
     bodyPl: "",
+    originalLanguage: "en",
     type: "chapter",
     cta: "live soon",
     ctaPl: "",
@@ -428,6 +431,7 @@ type AppPost = {
   titlePl: string;
   body: string;
   bodyPl: string;
+  originalLanguage: Language;
   type: PostType;
   cta: string;
   ctaPl: string;
@@ -456,6 +460,7 @@ const defaultPostFields = {
   titlePl: "",
   bodyPl: "",
   ctaPl: "",
+  originalLanguage: "en" as Language,
   mediaKind: "none" as MediaKind,
   mediaUrls: [] as string[],
   videoRatio: "9:16" as VideoRatio,
@@ -783,36 +788,64 @@ function normalizePostTranslationCache(rawCache: unknown) {
 }
 
 function getLocalizedPostContent(
-  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl">,
+  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl" | "originalLanguage">,
   language: Language,
   translationOverride?: LocalizedPostContent | null,
 ): LocalizedPostContent {
   if (translationOverride) return translationOverride;
 
-  if (language === "pl") {
+  if (post.originalLanguage === "pl") {
     return {
-      title: post.titlePl.trim() || post.title,
-      body: post.bodyPl.trim() || post.body,
-      cta: post.ctaPl.trim() || post.cta,
+      title: post.title.trim(),
+      body: post.body.trim(),
+      cta: post.cta.trim(),
     };
   }
 
   return {
-    title: post.title,
-    body: post.body,
-    cta: post.cta,
+    title: post.title.trim(),
+    body: post.body.trim(),
+    cta: post.cta.trim(),
   };
 }
 
 function hasNativeLocalizedPostContent(
-  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl">,
-  language: Language,
+  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl" | "originalLanguage">,
+  targetLanguage: Language,
 ) {
-  if (language === "pl") {
+  if (targetLanguage === "pl" && post.originalLanguage !== "pl") {
     return Boolean(post.titlePl.trim() || post.bodyPl.trim() || post.ctaPl.trim());
   }
 
+  if (targetLanguage === "en" && post.originalLanguage === "pl") {
+    return Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
+  }
+
   return false;
+}
+
+function getNativeTranslatedPostContent(
+  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl" | "originalLanguage">,
+  targetLanguage: Language,
+): LocalizedPostContent | null {
+  if (targetLanguage === "pl" && post.originalLanguage !== "pl") {
+    if (!(post.titlePl.trim() || post.bodyPl.trim() || post.ctaPl.trim())) return null;
+    return {
+      title: post.titlePl.trim() || post.title.trim(),
+      body: post.bodyPl.trim() || post.body.trim(),
+      cta: post.ctaPl.trim() || post.cta.trim(),
+    };
+  }
+
+  if (targetLanguage === "en" && post.originalLanguage === "pl") {
+    return {
+      title: post.title.trim(),
+      body: post.body.trim(),
+      cta: post.cta.trim(),
+    };
+  }
+
+  return null;
 }
 
 function getPostTranslationCacheKey(postId: string, targetLanguage: Language) {
@@ -844,6 +877,16 @@ function backfillExistingAdminPolishCopy(post: Pick<AppPost, "authorRole" | "tit
     bodyPl: post.bodyPl,
     ctaPl: post.ctaPl,
   };
+}
+
+function inferOriginalPostLanguage(post: Pick<AppPost, "title" | "body" | "cta">): Language {
+  const detected = detectPostLanguage({
+    title: post.title,
+    body: post.body,
+    cta: post.cta,
+  });
+
+  return detected === "pl" ? "pl" : "en";
 }
 
 function detectPostLanguage(content: Pick<LocalizedPostContent, "title" | "body" | "cta">): DetectedPostLanguage {
@@ -939,6 +982,14 @@ function normalizePosts(posts: Partial<AppPost>[]) {
       titlePl: typeof post.titlePl === "string" ? post.titlePl : "",
       body: typeof post.body === "string" ? post.body : "",
       bodyPl: typeof post.bodyPl === "string" ? post.bodyPl : "",
+      originalLanguage:
+        post.originalLanguage === "pl" || post.originalLanguage === "en"
+          ? post.originalLanguage
+          : inferOriginalPostLanguage({
+              title: typeof post.title === "string" ? post.title : "",
+              body: typeof post.body === "string" ? post.body : "",
+              cta: typeof post.cta === "string" ? post.cta : "",
+            }),
       type: typeof post.type === "string" ? post.type : "chapter",
       cta: typeof post.cta === "string" ? post.cta : "live now",
       ctaPl: typeof post.ctaPl === "string" ? post.ctaPl : "",
@@ -3503,6 +3554,7 @@ export default function Page() {
   const renderCommentThread = (postId: string, comment: PostComment) => {
     const commentAuthorAccount = accountByEmail.get(comment.authorEmail.toLowerCase()) ?? null;
     const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
+    const canOpenCommentAuthorProfile = Boolean(commentAuthorAccount?.googleProfile?.email);
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const canReply = Boolean(currentUserEmail);
     const reactionSummary = [...new Set((comment.reactions ?? []).map((reaction) => reaction.emoji))];
@@ -3529,13 +3581,37 @@ export default function Page() {
           </div>
         ) : null}
         <div className="flex items-start gap-2">
-          <Avatar
-            src={getAccountPicture(commentAuthorAccount)}
-            name={comment.authorName}
-            className="mt-0.5 h-7 w-7 shrink-0 bg-white text-[#2C1A0E]"
-          />
+          {canOpenCommentAuthorProfile ? (
+            <button
+              type="button"
+              onClick={() => openProfileByEmail(commentAuthorAccount?.googleProfile?.email ?? "")}
+              className="shrink-0 rounded-full"
+            >
+              <Avatar
+                src={getAccountPicture(commentAuthorAccount)}
+                name={comment.authorName}
+                className="mt-0.5 h-7 w-7 shrink-0 bg-white text-[#2C1A0E]"
+              />
+            </button>
+          ) : (
+            <Avatar
+              src={getAccountPicture(commentAuthorAccount)}
+              name={comment.authorName}
+              className="mt-0.5 h-7 w-7 shrink-0 bg-white text-[#2C1A0E]"
+            />
+          )}
           <div className="min-w-0 flex-1 text-left">
-            <p className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+            {canOpenCommentAuthorProfile ? (
+              <button
+                type="button"
+                onClick={() => openProfileByEmail(commentAuthorAccount?.googleProfile?.email ?? "")}
+                className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]"
+              >
+                {commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}
+              </button>
+            ) : (
+              <p className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+            )}
             {renderCaptionWithTags(comment.text, "mt-0.5 text-[0.84rem] leading-[1.2rem] text-[#2C1A0E]")}
           </div>
         </div>
@@ -3579,15 +3655,30 @@ export default function Page() {
             {(comment.replies ?? []).map((reply) => {
               const replyAccount = accountByEmail.get(reply.authorEmail.toLowerCase()) ?? null;
               const replyUsername = replyAccount?.profile.username;
+              const canOpenReplyAuthorProfile = Boolean(replyAccount?.googleProfile?.email);
               const replyReactionSummary = [...new Set((reply.reactions ?? []).map((reaction) => reaction.emoji))];
               const replyReactionPickerId = `${postId}:${comment.id}:${reply.id}`;
               return (
                 <div key={reply.id} className="flex items-start gap-1.5">
-                  <Avatar
-                    src={getAccountPicture(replyAccount)}
-                    name={reply.authorName}
-                    className="mt-0.5 h-5 w-5 shrink-0 bg-white text-[#2C1A0E]"
-                  />
+                  {canOpenReplyAuthorProfile ? (
+                    <button
+                      type="button"
+                      onClick={() => openProfileByEmail(replyAccount?.googleProfile?.email ?? "")}
+                      className="shrink-0 rounded-full"
+                    >
+                      <Avatar
+                        src={getAccountPicture(replyAccount)}
+                        name={reply.authorName}
+                        className="mt-0.5 h-5 w-5 shrink-0 bg-white text-[#2C1A0E]"
+                      />
+                    </button>
+                  ) : (
+                    <Avatar
+                      src={getAccountPicture(replyAccount)}
+                      name={reply.authorName}
+                      className="mt-0.5 h-5 w-5 shrink-0 bg-white text-[#2C1A0E]"
+                    />
+                  )}
                   <div className="min-w-0 flex-1 rounded-[14px] bg-white/70 px-2 py-1.5">
                     {openCommentReactionPickerId === replyReactionPickerId ? (
                       <div className="mb-1.5 flex items-center gap-1 rounded-full bg-[#2C1A0E] px-1.5 py-1 shadow-[0_12px_28px_rgba(44,26,14,0.18)]">
@@ -3606,7 +3697,17 @@ export default function Page() {
                         ))}
                       </div>
                     ) : null}
-                    <p className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                    {canOpenReplyAuthorProfile ? (
+                      <button
+                        type="button"
+                        onClick={() => openProfileByEmail(replyAccount?.googleProfile?.email ?? "")}
+                        className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]"
+                      >
+                        {replyUsername ? `@${replyUsername}` : reply.authorName}
+                      </button>
+                    ) : (
+                      <p className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                    )}
                     {renderCaptionWithTags(reply.text, "mt-0.5 text-[0.8rem] leading-[1.1rem] text-[#2C1A0E]")}
                     {replyReactionSummary.length ? (
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -3704,6 +3805,19 @@ export default function Page() {
       return;
     }
 
+    const nativeTranslation = getNativeTranslatedPostContent(post, targetLanguage);
+    if (nativeTranslation) {
+      const nextTranslation: PostTranslationCacheEntry = {
+        ...nativeTranslation,
+        sourceLanguage: post.originalLanguage,
+        translatedAt: new Date().toISOString(),
+      };
+      setPostTranslations((current) => ({ ...current, [cacheKey]: nextTranslation }));
+      setTranslatedPostVisibility((current) => ({ ...current, [cacheKey]: true }));
+      setTranslationNotice(null);
+      return;
+    }
+
     setTranslatingPostIds((current) => ({ ...current, [cacheKey]: true }));
     setTranslationNotice(null);
 
@@ -3763,13 +3877,14 @@ export default function Page() {
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
-    const postSourceLanguage = detectPostLanguage({ title: post.title, body: post.body, cta: post.cta });
-    const hasNativeLocalizedCopy = hasNativeLocalizedPostContent(post, language);
-    const targetTranslationLanguage: Language | null = language === "pl" ? "pl" : language === "en" ? "en" : null;
+    const postSourceLanguage = post.originalLanguage;
+    const targetTranslationLanguage: Language | null =
+      language === "pl" && postSourceLanguage === "en" ? "pl" : language === "en" && postSourceLanguage === "pl" ? "en" : null;
+    const hasNativeLocalizedCopy = targetTranslationLanguage ? hasNativeLocalizedPostContent(post, targetTranslationLanguage) : false;
     const translationCacheKey = targetTranslationLanguage ? getPostTranslationCacheKey(post.id, targetTranslationLanguage) : "";
     const translatedContent =
       translationCacheKey && translatedPostVisibility[translationCacheKey] ? postTranslations[translationCacheKey] ?? null : null;
-    const localizedPost = getLocalizedPostContent(post, language, translatedContent);
+    const localizedPost = getLocalizedPostContent(post, post.originalLanguage, translatedContent);
     const trimmedPostTitle = localizedPost.title.trim();
     const trimmedPostBody = localizedPost.body.trim();
     const showPostBody = Boolean(trimmedPostBody) && (!isStudentPost || (trimmedPostBody !== profileMeta && trimmedPostBody !== schoolName));
@@ -3781,8 +3896,6 @@ export default function Page() {
     const canTranslatePost =
       Boolean(targetTranslationLanguage) &&
       isStudentPost &&
-      !hasNativeLocalizedCopy &&
-      postSourceLanguage !== "unknown" &&
       postSourceLanguage !== language &&
       Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
     const isTranslatingPost = translationCacheKey ? Boolean(translatingPostIds[translationCacheKey]) : false;
@@ -6447,6 +6560,7 @@ export default function Page() {
       bodyPl: trimmedBodyPl,
       cta: trimmedCta,
       ctaPl: trimmedCtaPl,
+      originalLanguage: language,
       type: composer.type,
       createdAt: editingPostId
         ? posts.find((post) => post.id === editingPostId)?.createdAt ?? formatNow()
@@ -6523,6 +6637,7 @@ export default function Page() {
       bodyPl: "",
       cta: "sunday dump",
       ctaPl: "",
+      originalLanguage: language,
       type: "weekly-dump",
       createdAt: currentUserWeeklyDump?.createdAt ?? formatNow(),
       createdAtIso: currentUserWeeklyDump?.createdAtIso ?? new Date().toISOString(),
@@ -7108,6 +7223,7 @@ export default function Page() {
       type: "chapter",
       cta: dailyPostTaggedPlace ? "friend review" : "live now",
       ctaPl: "",
+      originalLanguage: existingPost?.originalLanguage ?? language,
       createdAt: existingPost?.createdAt ?? formatNow(),
       createdAtIso: existingPost?.createdAtIso ?? createdAtIso,
       mediaKind: "photo",
@@ -9394,6 +9510,7 @@ export default function Page() {
                                           titlePl: composer.titlePl,
                                           body: composer.body,
                                           bodyPl: composer.bodyPl,
+                                          originalLanguage: language,
                                           type: composer.type,
                                           cta: composer.cta,
                                           ctaPl: composer.ctaPl,
