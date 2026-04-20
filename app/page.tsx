@@ -2342,6 +2342,7 @@ export default function Page() {
   const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [storyActionMenuOpen, setStoryActionMenuOpen] = useState(false);
+  const [creatorStoryComposerOpen, setCreatorStoryComposerOpen] = useState(false);
   const [postTranslations, setPostTranslations] = useState<Record<string, PostTranslationCacheEntry>>({});
   const [translatedPostVisibility, setTranslatedPostVisibility] = useState<Record<string, boolean>>({});
   const [translatingPostIds, setTranslatingPostIds] = useState<Record<string, boolean>>({});
@@ -2366,6 +2367,8 @@ export default function Page() {
   const profileCameraInputRef = useRef<HTMLInputElement>(null);
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
+  const creatorStoryLibraryInputRef = useRef<HTMLInputElement>(null);
+  const creatorStoryCameraInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
   const favoritesMapSectionRef = useRef<HTMLElement | null>(null);
   const userRef = useRef(user);
@@ -6618,12 +6621,26 @@ export default function Page() {
     setDailyPostComposerMediaKind("photo");
     setDailyPostVideoRatio("9:16");
     setDailyPostMediaUrls([]);
-    setDailyPostNotice("story mode is ready. pick an image or video.");
+    setDailyPostNotice("");
     setDailyPostInputKey((current) => current + 1);
+    setCreatorStoryComposerOpen(true);
+  };
+
+  const launchCreatorStoryPicker = (source: "photos" | "camera") => {
+    setStudentTab("profile");
+    setDailyPostFormat("story");
+    setDailyPostComposerMediaKind("photo");
+    setDailyPostVideoRatio("9:16");
+    setCreatorStoryComposerOpen(false);
+
     window.setTimeout(() => {
       document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      dailyPostInputRef.current?.click();
-    }, 140);
+      if (source === "camera") {
+        creatorStoryCameraInputRef.current?.click();
+        return;
+      }
+      creatorStoryLibraryInputRef.current?.click();
+    }, 120);
   };
 
   const focusFavoritePlace = (place: FavoritePlace, cityName = currentFavoriteCity) => {
@@ -11550,7 +11567,7 @@ export default function Page() {
                           type="button"
                           aria-label="add a creator story"
                           onClick={openCreatorStoryComposer}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2C1A0E] text-[1.35rem] leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)]"
+                          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2C1A0E] text-[1.1rem] leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)]"
                         >
                           +
                         </button>
@@ -11613,6 +11630,25 @@ export default function Page() {
                   </div>
 
                   <div className="col-span-2 space-y-1 pt-1">
+                    <input
+                      ref={creatorStoryLibraryInputRef}
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                      onChange={(event) => {
+                        void handleDailyPostFiles(event.currentTarget.files);
+                      }}
+                      className="hidden"
+                    />
+                    <input
+                      ref={creatorStoryCameraInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      capture="environment"
+                      onChange={(event) => {
+                        void handleDailyPostFiles(event.currentTarget.files);
+                      }}
+                      className="hidden"
+                    />
                     <input
                       key={profilePhotoInputKey}
                       ref={profilePhotoInputRef}
@@ -12529,6 +12565,79 @@ export default function Page() {
                 </Button>
               </ModalBody>
             </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        isOpen={creatorStoryComposerOpen}
+        onOpenChange={setCreatorStoryComposerOpen}
+        size="full"
+        hideCloseButton
+      >
+        <ModalContent className="min-h-[100dvh] bg-[rgba(10,8,6,0.98)] shadow-none">
+          {(onClose) => (
+            <ModalBody className="flex min-h-[100dvh] items-center justify-center p-0">
+              <div className="relative flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-[linear-gradient(180deg,_#130d09_0%,_#070606_100%)] px-6 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(1.5rem+env(safe-area-inset-top))] text-white">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    aria-label="close story composer"
+                    onClick={onClose}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl leading-none text-white"
+                  >
+                    ×
+                  </button>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-[0.26em] text-white/55">new story</p>
+                    <p className="mt-2 text-sm text-white/72">pick one vertical photo or video</p>
+                  </div>
+                </div>
+
+                <div className="mt-10 space-y-4">
+                  <p className="font-[family-name:var(--font-young-serif)] text-[2.8rem] leading-none text-white">
+                    add to story
+                  </p>
+                  <p className="max-w-[17rem] text-base leading-7 text-white/78">
+                    we’ll guide them into the right picker, and if the file is off we’ll tell them what to fix in plain language.
+                  </p>
+                </div>
+
+                <div className="mt-auto space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => launchCreatorStoryPicker("photos")}
+                    className="flex w-full items-center justify-between rounded-[28px] border border-white/10 bg-white/8 px-5 py-5 text-left shadow-[0_18px_40px_rgba(0,0,0,0.24)]"
+                  >
+                    <div>
+                      <p className="text-xl font-semibold text-white">pick from photos</p>
+                      <p className="mt-2 text-sm leading-6 text-white/70">opens their photo library. ios will handle the photo access prompt if it needs to.</p>
+                    </div>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl leading-none text-[#140d08]">⊞</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => launchCreatorStoryPicker("camera")}
+                    className="flex w-full items-center justify-between rounded-[28px] border border-[#F5A623]/40 bg-[linear-gradient(135deg,rgba(245,166,35,0.2),rgba(245,166,35,0.08))] px-5 py-5 text-left shadow-[0_18px_40px_rgba(0,0,0,0.24)]"
+                  >
+                    <div>
+                      <p className="text-xl font-semibold text-white">use camera</p>
+                      <p className="mt-2 text-sm leading-6 text-white/76">opens the camera first so they can shoot a story right there.</p>
+                    </div>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F5A623] text-2xl leading-none text-[#140d08]">◉</span>
+                  </button>
+
+                  <div className="rounded-[24px] bg-white/8 px-4 py-4 text-sm leading-6 text-white/74">
+                    story rules: 9:16, 1080 x 1920, image or video. videos up to 15 sec. if the file is wrong, we’ll show a simple fix message and keep them in flow.
+                  </div>
+
+                  {dailyPostNotice ? (
+                    <p className="text-sm leading-6 text-[#FFBE98]">{dailyPostNotice}</p>
+                  ) : null}
+                </div>
+              </div>
+            </ModalBody>
           )}
         </ModalContent>
       </Modal>
