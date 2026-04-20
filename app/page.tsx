@@ -804,6 +804,17 @@ function getLocalizedPostContent(
   };
 }
 
+function hasNativeLocalizedPostContent(
+  post: Pick<AppPost, "title" | "titlePl" | "body" | "bodyPl" | "cta" | "ctaPl">,
+  language: Language,
+) {
+  if (language === "pl") {
+    return Boolean(post.titlePl.trim() || post.bodyPl.trim() || post.ctaPl.trim());
+  }
+
+  return false;
+}
+
 function getPostTranslationCacheKey(postId: string, targetLanguage: Language) {
   return `${postId}:${targetLanguage}`;
 }
@@ -3753,6 +3764,7 @@ export default function Page() {
     const profileMeta = authorAccount ? formatProfileMeta(authorAccount.profile.city, authorAccount.profile.schoolName) : "";
     const schoolName = authorAccount?.profile.schoolName?.trim() ?? "";
     const postSourceLanguage = detectPostLanguage({ title: post.title, body: post.body, cta: post.cta });
+    const hasNativeLocalizedCopy = hasNativeLocalizedPostContent(post, language);
     const targetTranslationLanguage: Language | null = language === "pl" ? "pl" : language === "en" ? "en" : null;
     const translationCacheKey = targetTranslationLanguage ? getPostTranslationCacheKey(post.id, targetTranslationLanguage) : "";
     const translatedContent =
@@ -3769,6 +3781,7 @@ export default function Page() {
     const canTranslatePost =
       Boolean(targetTranslationLanguage) &&
       isStudentPost &&
+      !hasNativeLocalizedCopy &&
       postSourceLanguage !== "unknown" &&
       postSourceLanguage !== language &&
       Boolean(post.title.trim() || post.body.trim() || post.cta.trim());
