@@ -10529,7 +10529,10 @@ export default function Page() {
                       <Button
                         radius="full"
                         className="h-12 bg-[#ff6a24] px-8 text-lg font-semibold text-white shadow-[0_14px_30px_rgba(255,106,36,0.28)]"
-                        onPress={openOwnReferralLink}
+                        onPress={() => {
+                          setReferralNotice("");
+                          void shareReferralLink();
+                        }}
                       >
                         {copy.feed.remindMe}
                       </Button>
