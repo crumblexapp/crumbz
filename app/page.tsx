@@ -18,6 +18,7 @@ import {
   ModalHeader,
   Select,
   SelectItem,
+  Switch,
   Tab,
   Tabs,
   Textarea,
@@ -2046,6 +2047,7 @@ export default function Page() {
   const [language, setLanguage] = useState<Language>(detectPreferredLanguage);
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
   const [influencerDashboardTab, setInfluencerDashboardTab] = useState<InfluencerDashboardTab>("overview");
+  const [creatorDashboardOpen, setCreatorDashboardOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -9949,7 +9951,7 @@ export default function Page() {
     );
   }
 
-  if (isInfluencer) {
+  if (isInfluencer && creatorDashboardOpen) {
     return (
       <main className="min-h-screen bg-[#fff8ef] text-[#2C1A0E]">
         <div className="mx-auto min-h-screen w-full max-w-md px-4 pb-20 pt-5 font-[family-name:var(--font-manrope)]">
@@ -9967,9 +9969,21 @@ export default function Page() {
                 </h1>
                 <p className="mt-2 text-sm text-white/80">{liveProfile.city || "city pending"} • influencer access is on</p>
               </div>
-              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
-                log out
-              </Button>
+              <div className="flex shrink-0 items-center gap-3 rounded-[20px] bg-white/10 px-3 py-2">
+                <div className="text-right">
+                  <p className="text-xs uppercase tracking-[0.18em] text-white/60">creator mode</p>
+                  <p className="text-sm text-white/85">{creatorDashboardOpen ? "dashboard on" : "dashboard off"}</p>
+                </div>
+                <Switch
+                  isSelected={creatorDashboardOpen}
+                  onValueChange={setCreatorDashboardOpen}
+                  color="warning"
+                  aria-label="toggle creator dashboard"
+                />
+                <Button radius="full" className="bg-white text-[#2C1A0E]" onPress={signOut}>
+                  log out
+                </Button>
+              </div>
             </div>
           </motion.section>
 
@@ -11024,6 +11038,37 @@ export default function Page() {
                 </div>
               </CardBody>
             </Card>
+
+            {isInfluencer ? (
+              <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                <CardBody className="gap-4 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">creator dashboard</p>
+                      <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                        creator mode
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[#6c7289]">
+                        turn this on to check your creator dashboard, then flip it off and you’re back to normal crumbz.
+                      </p>
+                    </div>
+                    <Chip className="bg-white text-[#2C1A0E]">creator</Chip>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-[20px] bg-white px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#2C1A0E]">open creator dashboard</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{creatorDashboardOpen ? "dashboard is on" : "dashboard is off"}</p>
+                    </div>
+                    <Switch
+                      isSelected={creatorDashboardOpen}
+                      onValueChange={setCreatorDashboardOpen}
+                      color="warning"
+                      aria-label="toggle creator dashboard from profile"
+                    />
+                  </div>
+                </CardBody>
+              </Card>
+            ) : null}
 
             <Card id="daily-post-composer" className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-4 p-5">
