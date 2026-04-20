@@ -11567,7 +11567,7 @@ export default function Page() {
                           type="button"
                           aria-label="add a creator story"
                           onClick={openCreatorStoryComposer}
-                          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#2C1A0E] text-[1.1rem] leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)]"
+                          className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2C1A0E] text-[1rem] leading-none text-white"
                         >
                           +
                         </button>
