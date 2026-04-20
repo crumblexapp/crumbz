@@ -1516,29 +1516,29 @@ function renderInfluencerTabIcon(tabKey: InfluencerDashboardTab, className: stri
   }
 }
 
-function renderCreatorBadge(label = "creator", compact = false) {
+function renderCreatorBadge(compact = false) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full bg-[#0A84FF] font-semibold uppercase tracking-[0.14em] text-white shadow-[0_10px_24px_rgba(10,132,255,0.22)] ${
-        compact ? "px-2.5 py-1 text-[0.65rem]" : "px-3 py-1.5 text-[0.72rem]"
+        compact ? "h-7 w-7 justify-center" : "h-8 w-8 justify-center"
       }`}
     >
       <svg viewBox="0 0 24 24" fill="none" className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} aria-hidden="true">
         <path
-          d="m9.2 12.7 1.9 1.9 3.7-4.1"
+          d="M6.75 9.25A2.25 2.25 0 0 1 9 7h5.25a2.25 2.25 0 0 1 2.25 2.25v5.5A2.25 2.25 0 0 1 14.25 17H9a2.25 2.25 0 0 1-2.25-2.25v-5.5Z"
           stroke="currentColor"
-          strokeWidth="2.2"
+          strokeWidth="1.9"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         <path
-          d="M12 3.8 14.1 5l2.4-.2 1.3 2.1 2.1 1.3-.2 2.4L20.2 12l-1.2 2.1.2 2.4-2.1 1.3-1.3 2.1-2.4-.2-2.1 1.2-2.1-1.2-2.4.2-1.3-2.1-2.1-1.3.2-2.4L3.8 12 5 9.9l-.2-2.4 2.1-1.3 1.3-2.1 2.4.2L12 3.8Z"
+          d="m16.5 10.5 3-1.75v6.5l-3-1.75"
           stroke="currentColor"
-          strokeWidth="1.7"
+          strokeWidth="1.9"
+          strokeLinecap="round"
           strokeLinejoin="round"
         />
       </svg>
-      <span>{label}</span>
     </span>
   );
 }
@@ -10978,10 +10978,7 @@ export default function Page() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-[family-name:var(--font-young-serif)] text-[1.45rem] leading-none text-[#2C1A0E] sm:text-[1.6rem]">
-                      <span className="inline-flex items-center gap-2">
-                        <span>@{liveProfile.username}</span>
-                        {isInfluencer ? renderCreatorBadge("creator", true) : null}
-                      </span>
+                      @{liveProfile.username}
                     </p>
                     <div className="mt-2 flex items-center">
                       <div className="flex items-center rounded-full border border-[#FFF0D0] bg-[#FFF7E8] p-1">
@@ -11018,7 +11015,7 @@ export default function Page() {
                   <div className="flex justify-start">
                     <Badge
                       isInvisible={!isInfluencer}
-                      content={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0A84FF] text-white">✓</span>}
+                      content={renderCreatorBadge(true)}
                       placement="bottom-right"
                     >
                       <Avatar
@@ -11625,10 +11622,7 @@ export default function Page() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="break-all font-[family-name:var(--font-young-serif)] text-[1.55rem] leading-none text-[#2C1A0E] sm:text-[2.1rem]">
-                        <span className="inline-flex items-center gap-2">
-                          <span>@{selectedProfileAccount?.profile.username || "crumbz-user"}</span>
-                          {selectedProfileIsInfluencer ? renderCreatorBadge("creator", true) : null}
-                        </span>
+                        @{selectedProfileAccount?.profile.username || "crumbz-user"}
                       </p>
                       <p className="mt-2 text-sm text-[#6c7289]">their crumbz profile</p>
                     </div>
@@ -11649,7 +11643,7 @@ export default function Page() {
                     <div className="flex justify-start">
                       <Badge
                         isInvisible={!selectedProfileIsInfluencer}
-                        content={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0A84FF] text-white">✓</span>}
+                        content={renderCreatorBadge(true)}
                         placement="bottom-right"
                       >
                         <Avatar
