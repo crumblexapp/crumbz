@@ -317,7 +317,7 @@ type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dum
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type CreatorPostFormat = "post" | "carousel" | "reel" | "story";
-type AdminDashboardTab = "overview" | "challengers" | "post" | "referrals";
+type AdminDashboardTab = "overview" | "challengers" | "post" | "community" | "referrals";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
 type InfluencerDashboardTab = "overview" | "content" | "referrals" | "support" | "settings" | "insights";
 type ProfilePostTab = "all" | "friend-review" | "post" | "sunday-dump";
@@ -10576,11 +10576,12 @@ export default function Page() {
             className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
             style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
           >
-            <div className="grid grid-cols-4 gap-1 text-center">
+            <div className="grid grid-cols-5 gap-1 text-center">
               {[
                 { label: "overview", key: "overview" as AdminDashboardTab, icon: "⌂" },
                 { label: "challenge", key: "challengers" as AdminDashboardTab, icon: "⚑" },
                 { label: "post", key: "post" as AdminDashboardTab, icon: "+" },
+                { label: "community", key: "community" as AdminDashboardTab, icon: "◎" },
                 { label: "referrals", key: "referrals" as AdminDashboardTab, icon: "↗" },
               ].map((item) => (
                 <button
