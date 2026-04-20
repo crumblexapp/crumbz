@@ -86,7 +86,7 @@ function sortPosts(posts: JsonRecord[]) {
 
 function normalizeInteractionsMap(rawInteractions: unknown) {
   if (!rawInteractions || typeof rawInteractions !== "object" || Array.isArray(rawInteractions)) {
-    return {} as Record<string, { comments: JsonRecord[]; shares: JsonRecord[]; likes: JsonRecord[] }>;
+    return {} as Record<string, { comments: JsonRecord[]; shares: JsonRecord[]; likes: JsonRecord[]; views: JsonRecord[]; saves: JsonRecord[] }>;
   }
 
   return Object.fromEntries(
@@ -99,6 +99,8 @@ function normalizeInteractionsMap(rawInteractions: unknown) {
           comments: normalizeObjectArray(safeBucket.comments),
           shares: normalizeObjectArray(safeBucket.shares),
           likes: normalizeObjectArray(safeBucket.likes),
+          views: normalizeObjectArray(safeBucket.views),
+          saves: normalizeObjectArray(safeBucket.saves),
         },
       ];
     }),

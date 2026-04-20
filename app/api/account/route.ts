@@ -24,6 +24,7 @@ type StoredUser = {
     username: string;
     city: string;
     preferredLanguage?: "en" | "pl";
+    accountRole?: "user" | "influencer" | "admin";
     bio?: string;
     isStudent: boolean | null;
     schoolName: string;
@@ -59,6 +60,12 @@ function normalizeAccount(account: StoredUser) {
     profile: {
       ...account.profile,
       preferredLanguage: (account.profile.preferredLanguage === "pl" ? "pl" : "en") as "en" | "pl",
+      accountRole:
+        account.googleProfile?.email?.toLowerCase() === "crumbleappco@gmail.com"
+          ? "admin"
+          : account.profile.accountRole === "influencer"
+            ? "influencer"
+            : "user",
       bio: account.profile.bio ?? "",
       friends: account.profile.friends ?? [],
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],

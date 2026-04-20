@@ -309,10 +309,12 @@ const fallbackFeedPosts: AppPost[] = [
 ];
 
 type AuthMode = "signup" | "login";
+type AccountRole = "user" | "influencer" | "admin";
 type PostType = "chapter" | "story" | "discount" | "ad" | "collab" | "weekly-dump";
 type MediaKind = "none" | "photo" | "video" | "carousel";
 type VideoRatio = "9:16" | "4:5" | "1:1" | "16:9";
 type StudentTab = "feed" | "favorites" | "rewards" | "social" | "profile";
+type InfluencerDashboardTab = "overview" | "content" | "referrals" | "support" | "settings" | "insights";
 type ProfilePostTab = "all" | "friend-review" | "post" | "sunday-dump";
 type AppNavigationState = {
   studentTab: StudentTab;
@@ -348,6 +350,7 @@ type StoredUser = {
     username: string;
     city: string;
     preferredLanguage?: Language;
+    accountRole?: AccountRole;
     bio?: string;
     picture?: string;
     isStudent: boolean | null;
@@ -605,6 +608,18 @@ type PostLike = {
   createdAt: string;
 };
 
+type PostView = {
+  authorEmail: string;
+  createdAt: string;
+};
+
+type PostSave = {
+  authorEmail: string;
+  authorName: string;
+  placeId: string;
+  createdAt: string;
+};
+
 type AppAnnouncement = {
   id: string;
   title: string;
@@ -643,6 +658,8 @@ type PostInteraction = {
   comments: PostComment[];
   shares: PostShare[];
   likes: PostLike[];
+  views: PostView[];
+  saves: PostSave[];
 };
 
 type InteractionsMap = Record<string, PostInteraction>;
@@ -685,6 +702,7 @@ const defaultUser: StoredUser = {
     username: "",
     city: "",
     preferredLanguage: "en",
+    accountRole: "user",
     bio: "",
     picture: "",
     isStudent: null,
@@ -879,6 +897,11 @@ function decodeBase64Url(value: string) {
 
 function readAccounts() {
   return normalizeAccounts(readJson<StoredUser[]>(ACCOUNTS_KEY, []));
+}
+
+function getAccountRole(account: Pick<StoredUser, "googleProfile" | "profile"> | null | undefined): AccountRole {
+  if (account?.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) return "admin";
+  return account?.profile.accountRole === "influencer" ? "influencer" : "user";
 }
 
 function readPosts() {
@@ -1217,6 +1240,11 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
         preferredLanguage: (candidate.profile?.preferredLanguage === "pl" ? "pl" : "en") as Language,
+        accountRole: (candidate.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL
+          ? "admin"
+          : candidate.profile?.accountRole === "influencer"
+            ? "influencer"
+            : "user") as AccountRole,
         bio: typeof candidate.profile?.bio === "string" ? candidate.profile.bio : "",
         picture: typeof candidate.profile?.picture === "string" ? candidate.profile.picture : "",
         schoolName: typeof candidate.profile?.schoolName === "string" ? candidate.profile.schoolName : "",
@@ -1281,6 +1309,8 @@ function normalizeInteractions(interactions: unknown): InteractionsMap {
           comments: Array.isArray(safeBucket.comments) ? safeBucket.comments.filter((item): item is PostComment => Boolean(item && typeof item === "object")) : [],
           shares: Array.isArray(safeBucket.shares) ? safeBucket.shares.filter((item): item is PostShare => Boolean(item && typeof item === "object")) : [],
           likes: Array.isArray(safeBucket.likes) ? safeBucket.likes.filter((item): item is PostLike => Boolean(item && typeof item === "object")) : [],
+          views: Array.isArray(safeBucket.views) ? safeBucket.views.filter((item): item is PostView => Boolean(item && typeof item === "object")) : [],
+          saves: Array.isArray(safeBucket.saves) ? safeBucket.saves.filter((item): item is PostSave => Boolean(item && typeof item === "object")) : [],
         },
       ];
     }),
@@ -1762,7 +1792,7 @@ function pruneExpiredWeeklyDumps(posts: AppPost[], interactions: InteractionsMap
 }
 
 function getInteractionBucket(interactions: InteractionsMap, postId: string) {
-  return interactions[postId] ?? { comments: [], shares: [], likes: [] };
+  return interactions[postId] ?? { comments: [], shares: [], likes: [], views: [], saves: [] };
 }
 
 function openMediaDb(): Promise<IDBDatabase> {
@@ -2015,6 +2045,7 @@ export default function Page() {
   const [postSignupNotice, setPostSignupNotice] = useState("");
   const [language, setLanguage] = useState<Language>(detectPreferredLanguage);
   const [studentTab, setStudentTab] = useState<StudentTab>("feed");
+  const [influencerDashboardTab, setInfluencerDashboardTab] = useState<InfluencerDashboardTab>("overview");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -2147,6 +2178,8 @@ export default function Page() {
       (account) => account.googleProfile?.email?.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
     ) ?? null;
   const liveProfile = liveAccount?.profile ?? user.profile;
+  const currentAccountRole = getAccountRole(liveAccount ?? user);
+  const isInfluencer = currentAccountRole === "influencer";
   const currentUserPicture = getAccountPicture(liveAccount ?? user);
   const needsOnboarding =
     user.signedIn &&
@@ -2411,10 +2444,12 @@ export default function Page() {
     setStudentTab(tabParam as StudentTab);
   }, []);
 
+
   const adminAccount =
     accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
   const adminProfilePicture = getAccountPicture(adminAccount);
   const nonAdminAccounts = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL);
+  const influencerAccounts = nonAdminAccounts.filter((account) => getAccountRole(account) === "influencer");
   const nonAdminEmailSet = new Set(
     nonAdminAccounts
       .map((account) => account.googleProfile?.email?.toLowerCase() ?? "")
@@ -2538,7 +2573,10 @@ export default function Page() {
   const reminderChallengers = dare.reminderEmails.map((email) => resolveChallenger(email));
   const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
-  const adminPosts = posts.filter((post) => post.authorRole !== "student");
+  const adminPosts = posts.filter((post) => post.authorEmail.toLowerCase() === ADMIN_EMAIL || post.authorRole === "admin");
+  const influencerFeedPosts = posts
+    .filter((post) => influencerAccounts.some((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()))
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
   const today = new Date();
@@ -2575,7 +2613,7 @@ export default function Page() {
   const adminStorySequence = [...adminLiveStoryPosts].reverse();
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const adminPostArchive = [...adminFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const mixedHomeFeedPosts = [...adminFeedPosts, ...friendDailyFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const mixedHomeFeedPosts = [...adminFeedPosts, ...influencerFeedPosts, ...friendDailyFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -2740,6 +2778,113 @@ export default function Page() {
       .filter(([postId]) => validPostIds.has(postId))
       .flatMap(([, item]) => item.shares.map((share) => share.authorEmail)),
   ).size;
+  const influencerPosts = posts
+    .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const influencerReferralSignups = nonAdminAccounts.filter(
+    (account) => account.profile.referredByEmail?.toLowerCase() === currentUserEmail,
+  );
+  const influencerMetrics = influencerPosts.map((post) => {
+    const bucket = getInteractionBucket(interactions, post.id);
+    const uniqueViews = [...new Set(bucket.views.map((view) => view.authorEmail.toLowerCase()))];
+    const uniqueSaves = [...new Set(bucket.saves.map((save) => save.authorEmail.toLowerCase()))];
+    const cityCounts = uniqueViews.reduce<Record<string, number>>((acc, viewerEmail) => {
+      const viewerCity = accountByEmail.get(viewerEmail)?.profile.city?.trim() || "unknown";
+      acc[viewerCity] = (acc[viewerCity] ?? 0) + 1;
+      return acc;
+    }, {});
+    return {
+      post,
+      views: uniqueViews.length,
+      likes: bucket.likes.length,
+      comments: bucket.comments.filter((comment) => !comment.hidden).length,
+      saves: uniqueSaves.length,
+      topCities: Object.entries(cityCounts).sort(([, a], [, b]) => b - a).slice(0, 3),
+    };
+  });
+  const influencerOverview = influencerMetrics.reduce(
+    (acc, item) => ({
+      views: acc.views + item.views,
+      likes: acc.likes + item.likes,
+      comments: acc.comments + item.comments,
+      saves: acc.saves + item.saves,
+    }),
+    { views: 0, likes: 0, comments: 0, saves: 0 },
+  );
+  const influencerTopCities = Object.entries(
+    influencerMetrics.reduce<Record<string, number>>((acc, item) => {
+      item.topCities.forEach(([city, count]) => {
+        acc[city] = (acc[city] ?? 0) + count;
+      });
+      return acc;
+    }, {}),
+  ).sort(([, a], [, b]) => b - a);
+  const influencerTopSavedSpots = influencerMetrics
+    .filter((item) => item.post.taggedPlaceName)
+    .sort((a, b) => b.saves - a.saves || b.views - a.views)
+    .slice(0, 5);
+  const influencerChecklist = [
+    {
+      label: "finish profile",
+      done: Boolean(liveProfile.fullName && liveProfile.username && liveProfile.city && (liveProfile.bio ?? "").trim()),
+      detail: "make sure your name, city, username, and bio are all filled in.",
+    },
+    {
+      label: "publish 3 posts this week",
+      done: influencerPosts.filter((post) => Date.now() - getPostTimestamp(post) < 7 * 24 * 60 * 60 * 1000).length >= 3,
+      detail: "keep your page active so people see fresh city picks.",
+    },
+    {
+      label: "get 10 saves",
+      done: influencerOverview.saves >= 10,
+      detail: "saves are the strongest signal that people want to try your spots.",
+    },
+    {
+      label: "share your referral link",
+      done: influencerReferralSignups.length > 0,
+      detail: "your link is how we track who joined because of you.",
+    },
+  ];
+
+  useEffect(() => {
+    if (!user.signedIn || isAdmin || isInfluencer || studentTab !== "feed") return;
+    const viewerEmail = user.googleProfile?.email?.toLowerCase();
+    if (!viewerEmail || !mixedHomeFeedPosts.length) return;
+
+    const postsNeedingViews = mixedHomeFeedPosts.filter((post) => {
+      const bucket = getInteractionBucket(interactions, post.id);
+      return !bucket.views.some((view) => view.authorEmail.toLowerCase() === viewerEmail);
+    });
+
+    if (!postsNeedingViews.length) return;
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setInteractions((current) => {
+      const createdAt = formatNow();
+      let changed = false;
+      const nextInteractions = { ...current };
+
+      postsNeedingViews.forEach((post) => {
+        const bucket = getInteractionBucket(nextInteractions, post.id);
+        if (bucket.views.some((view) => view.authorEmail.toLowerCase() === viewerEmail)) return;
+        changed = true;
+        nextInteractions[post.id] = {
+          ...bucket,
+          views: [...bucket.views, { authorEmail: viewerEmail, createdAt }],
+        };
+      });
+
+      if (changed) {
+        syncSharedState({
+          nextPosts: posts,
+          nextInteractions,
+          source: "auto",
+        });
+      }
+
+      return changed ? nextInteractions : current;
+    });
+  }, [interactions, isAdmin, isInfluencer, mixedHomeFeedPosts, posts, studentTab, user.googleProfile?.email, user.signedIn]);
   const normalizedFriendQuery = friendQuery.trim().replace(/^@+/, "").toLowerCase();
   const exactFriendMatch = accounts.find((account) => {
     const email = account.googleProfile?.email ?? "";
@@ -3529,7 +3674,7 @@ export default function Page() {
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const hasLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail);
-    const isStudentPost = post.authorRole === "student";
+    const isStudentPost = post.authorEmail.toLowerCase() !== ADMIN_EMAIL;
     const isSundayDump = post.type === "weekly-dump";
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
@@ -3632,18 +3777,41 @@ export default function Page() {
                   <h3 className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">{localizedPost.title}</h3>
                 ) : null}
                 {post.taggedPlaceName ? (
-                  <button
-                    type="button"
-                    onClick={() => openPostPlace(post)}
-                    className={`${trimmedPostTitle ? "mt-3" : ""} flex w-full items-start justify-between gap-3 rounded-[18px] bg-white/90 px-4 py-3 text-left shadow-[0_10px_24px_rgba(44,26,14,0.06)]`}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
-                      <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
-                      {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                  <div className={`${trimmedPostTitle ? "mt-3" : ""} rounded-[18px] bg-white/90 px-4 py-3 shadow-[0_10px_24px_rgba(44,26,14,0.06)]`}>
+                    <button type="button" onClick={() => openPostPlace(post)} className="flex w-full items-start justify-between gap-3 text-left">
+                      <div className="min-w-0">
+                        <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                        <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                        {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                      </div>
+                      <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                    </button>
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        radius="full"
+                        size="sm"
+                        className="bg-[#2C1A0E] text-white"
+                        onPress={() =>
+                          toggleFavoritePlace(
+                            {
+                              id: post.taggedPlaceId,
+                              name: post.taggedPlaceName,
+                              kind: post.taggedPlaceKind || "food spot",
+                              lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
+                              lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
+                              address: post.taggedPlaceAddress,
+                            },
+                            post.id,
+                          )
+                        }
+                      >
+                        {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
+                      </Button>
+                      <Button radius="full" size="sm" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => openPostPlace(post)}>
+                        view map
+                      </Button>
                     </div>
-                    <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
-                  </button>
+                  </div>
                 ) : null}
                 {showPostBody ? renderCaptionWithTags(localizedPost.body, "mt-2 text-sm leading-6 text-[#2C1A0E]") : null}
                 {post.tasteTag || post.priceTag ? (
@@ -3687,18 +3855,38 @@ export default function Page() {
             ) : null}
 
             {isFriendFeedCard && post.taggedPlaceName ? (
-              <button
-                type="button"
-                onClick={() => openPostPlace(post)}
-                className="flex w-full items-start justify-between gap-3 rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 text-left ring-1 ring-[#FFF0D0]"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
-                  <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
-                  {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+              <div className="rounded-[18px] bg-[linear-gradient(180deg,_#FFF8EA_0%,_#ffffff_100%)] px-4 py-3 ring-1 ring-[#FFF0D0]">
+                <button type="button" onClick={() => openPostPlace(post)} className="flex w-full items-start justify-between gap-3 text-left">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{post.taggedPlaceKind || "food spot"}</p>
+                    <p className="mt-1 truncate text-base font-semibold text-[#2C1A0E]">{post.taggedPlaceName}</p>
+                    {post.taggedPlaceAddress ? <p className="mt-1 truncate text-sm text-[#6c7289]">{post.taggedPlaceAddress}</p> : null}
+                  </div>
+                  <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
+                </button>
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    radius="full"
+                    size="sm"
+                    className="bg-[#2C1A0E] text-white"
+                    onPress={() =>
+                      toggleFavoritePlace(
+                        {
+                          id: post.taggedPlaceId,
+                          name: post.taggedPlaceName,
+                          kind: post.taggedPlaceKind || "food spot",
+                          lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
+                          lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
+                          address: post.taggedPlaceAddress,
+                        },
+                        post.id,
+                      )
+                    }
+                  >
+                    {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
+                  </Button>
                 </div>
-                <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
-              </button>
+              </div>
             ) : null}
 
             {isFriendFeedCard && (post.tasteTag || post.priceTag) ? (
@@ -3766,7 +3954,9 @@ export default function Page() {
             >
               {bucket.likes.length} likes
             </button>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.views.length} views</span>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{visibleComments.length} comments</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.saves.length} saves</span>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.shares.length} shares</span>
           </div>
 
@@ -5391,11 +5581,10 @@ export default function Page() {
       });
   };
 
-  const toggleFavoritePlace = (place: FavoritePlace) => {
+  const toggleFavoritePlace = (place: FavoritePlace, sourcePostId?: string) => {
     const placeId = place.id;
-    const nextFavoritePlaceIds = favoritePlaceIds.includes(placeId)
-      ? favoritePlaceIds.filter((id) => id !== placeId)
-      : [...favoritePlaceIds, placeId];
+    const isRemoving = favoritePlaceIds.includes(placeId);
+    const nextFavoritePlaceIds = isRemoving ? favoritePlaceIds.filter((id) => id !== placeId) : [...favoritePlaceIds, placeId];
 
     void mutateAccountState({
       action: "update_favorites",
@@ -5408,6 +5597,39 @@ export default function Page() {
         if (result.user) {
           persistUser(result.user as StoredUser);
         }
+
+        if (!sourcePostId || !user.googleProfile?.email) return;
+
+        const authorEmail = user.googleProfile.email.toLowerCase();
+        lastSharedStateMutationAtRef.current = Date.now();
+        setInteractions((current) => {
+          const bucket = getInteractionBucket(current, sourcePostId);
+          const nextSaves = isRemoving
+            ? bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail)
+            : [
+                ...bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail),
+                {
+                  authorEmail,
+                  authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+                  placeId: place.id,
+                  createdAt: formatNow(),
+                },
+              ];
+          const nextInteractions = {
+            ...current,
+            [sourcePostId]: {
+              ...bucket,
+              saves: nextSaves,
+            },
+          };
+
+          syncSharedState({
+            nextPosts: posts,
+            nextInteractions,
+          });
+
+          return nextInteractions;
+        });
       })
       .catch((error) => {
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
@@ -6346,6 +6568,33 @@ export default function Page() {
       })
       .catch((error: unknown) => {
         setAdminActionNotice(error instanceof Error ? error.message : "that delete didn’t stick. try again.");
+      });
+  };
+
+  const setAccountRoleFromAdmin = async (account: StoredUser, accountRole: AccountRole) => {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then update this creator again."))) {
+      return;
+    }
+
+    const nextAccount: StoredUser = {
+      ...account,
+      profile: {
+        ...account.profile,
+        accountRole,
+      },
+    };
+
+    setAdminActionNotice("");
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextAccount,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        setAdminActionNotice(accountRole === "influencer" ? "creator dashboard access is on." : "creator dashboard access is off.");
+      })
+      .catch((error: unknown) => {
+        setAdminActionNotice(error instanceof Error ? error.message : "that role change didn’t stick. try again.");
       });
   };
 
@@ -9445,10 +9694,21 @@ export default function Page() {
                                 </p>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
+                                <Chip className={getAccountRole(account) === "influencer" ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}>
+                                  {getAccountRole(account) === "influencer" ? "influencer" : "user"}
+                                </Chip>
                                 {account.profile.username && duplicateUsernames[account.profile.username.trim().toLowerCase()] > 1 ? (
                                   <Chip className="bg-[#FFE1D6] text-[#B3261E]">duplicate username</Chip>
                                 ) : null}
                                 <Chip className="bg-white text-[#2C1A0E]">{account.signedIn ? "active" : "saved"}</Chip>
+                                <Button
+                                  radius="full"
+                                  variant="flat"
+                                  className="bg-white text-[#2C1A0E]"
+                                  onPress={() => setAccountRoleFromAdmin(account, getAccountRole(account) === "influencer" ? "user" : "influencer")}
+                                >
+                                  {getAccountRole(account) === "influencer" ? "remove creator" : "make creator"}
+                                </Button>
                                 <Button radius="full" color="danger" variant="flat" className="bg-white text-[#B3261E]" onPress={() => deleteUserFromAdmin(account.googleProfile?.email ?? "")}>
                                   delete
                                 </Button>
@@ -9677,6 +9937,234 @@ export default function Page() {
                         ) : (
                           <p className="text-sm text-[#2C1A0E]">no referral data yet.</p>
                         )}
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+            </Tabs>
+          </motion.section>
+        </div>
+      </main>
+    );
+  }
+
+  if (isInfluencer) {
+    return (
+      <main className="min-h-screen bg-[#fff8ef] text-[#2C1A0E]">
+        <div className="mx-auto min-h-screen w-full max-w-md px-4 pb-20 pt-5 font-[family-name:var(--font-manrope)]">
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="rounded-[30px] bg-[#2C1A0E] p-5 text-white shadow-[0_22px_60px_rgba(44,26,14,0.22)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.28em] text-white/70">creator dashboard</p>
+                <h1 className="mt-2 font-[family-name:var(--font-young-serif)] text-[2.3rem] leading-none">
+                  @{liveProfile.username || "creator"}
+                </h1>
+                <p className="mt-2 text-sm text-white/80">{liveProfile.city || "city pending"} • influencer access is on</p>
+              </div>
+              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
+                log out
+              </Button>
+            </div>
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.08 }}
+            className="mt-5"
+          >
+            <Tabs
+              aria-label="influencer dashboard areas"
+              selectedKey={influencerDashboardTab}
+              onSelectionChange={(key) => setInfluencerDashboardTab(String(key) as InfluencerDashboardTab)}
+              classNames={{
+                tabList: "grid w-full grid-cols-3 gap-1 rounded-[28px] bg-white/90 p-1",
+                cursor: "rounded-full bg-[#F5A623]",
+                tab: "h-11 min-w-0 px-2 text-xs font-medium text-[#2C1A0E]",
+                tabContent: "truncate group-data-[selected=true]:text-white",
+              }}
+            >
+              <Tab key="overview" title="overview">
+                <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { label: "views", value: influencerOverview.views },
+                      { label: "saves", value: influencerOverview.saves },
+                      { label: "likes", value: influencerOverview.likes },
+                      { label: "referrals", value: influencerReferralSignups.length },
+                    ].map((item) => (
+                      <Card key={item.label} className="rounded-[24px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                        <CardBody className="gap-1 p-4">
+                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">weekly checklist</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">the few things to stay on top of this week.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        {influencerChecklist.map((item) => (
+                          <div key={item.label} className="flex items-start justify-between gap-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3">
+                            <div>
+                              <p className="font-semibold text-[#2C1A0E]">{item.label}</p>
+                              <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
+                            </div>
+                            <Chip className={item.done ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}>
+                              {item.done ? "done" : "todo"}
+                            </Chip>
+                          </div>
+                        ))}
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="content" title="content">
+                <div className="mt-4 space-y-4">
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">content performance</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">how each post is landing right now.</p>
+                      </div>
+                      {influencerMetrics.length ? (
+                        <div className="grid gap-3">
+                          {influencerMetrics.map((item) => (
+                            <div key={item.post.id} className="rounded-[20px] bg-[#FFF7E8] p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || "untitled post"}</p>
+                                  <p className="mt-1 text-sm text-[#6c7289]">{item.post.taggedPlaceName || item.post.type} • {item.post.createdAt}</p>
+                                </div>
+                                <Chip className="bg-white text-[#2C1A0E]">{item.views} views</Chip>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <Chip className="bg-white text-[#2C1A0E]">{item.likes} likes</Chip>
+                                <Chip className="bg-white text-[#2C1A0E]">{item.comments} comments</Chip>
+                                <Chip className="bg-white text-[#2C1A0E]">{item.saves} saves</Chip>
+                              </div>
+                              {item.topCities.length ? (
+                                <p className="mt-3 text-sm text-[#6c7289]">
+                                  top cities: {item.topCities.map(([city, count]) => `${city} (${count})`).join(", ")}
+                                </p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#6c7289]">your posts will start showing here once people see and save them.</p>
+                      )}
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="referrals" title="referrals">
+                <div className="mt-4 space-y-4">
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">referral tracking</p>
+                          <p className="mt-1 text-sm text-[#2C1A0E]">everyone who joined from your link shows up here.</p>
+                        </div>
+                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{influencerReferralSignups.length} signups</Chip>
+                      </div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                        <p className="text-sm font-semibold text-[#2C1A0E]">your code</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">{liveProfile.referralCode || "waiting for referral code"}</p>
+                        {postSignupReferralUrl ? <p className="mt-2 break-all text-sm text-[#2C1A0E]">{postSignupReferralUrl}</p> : null}
+                      </div>
+                      {influencerReferralSignups.length ? (
+                        <div className="grid gap-2">
+                          {influencerReferralSignups.map((account) => (
+                            <div key={account.googleProfile?.email} className="rounded-[18px] bg-[#FFF7E8] px-4 py-3">
+                              <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new signup"}</p>
+                              <p className="mt-1 text-sm text-[#6c7289]">{account.profile.city || "city pending"} • @{account.profile.username || "pending"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#6c7289]">no referral signups yet.</p>
+                      )}
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="support" title="support">
+                <div className="mt-4 space-y-4">
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">support & resources</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">need help, ideas, or a quick answer from the founder.</p>
+                      </div>
+                      <a href="mailto:crumbleappco@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
+                        <p className="font-semibold text-[#2C1A0E]">message the founder</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">crumbleappco@gmail.com</p>
+                      </a>
+                      <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                        <p className="font-semibold text-[#2C1A0E]">what to post</p>
+                        <p className="mt-1 text-sm text-[#6c7289]">best-performing posts tag a place, say why it’s worth saving, and make the city feel specific.</p>
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="settings" title="settings">
+                <div className="mt-4 space-y-4">
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">settings & profile</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">same login, same profile, creator access layered on top.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">email: {user.googleProfile?.email}</div>
+                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">city: {liveProfile.city || "pending"}</div>
+                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">bio: {(liveProfile.bio ?? "").trim() || "add a short creator bio in your profile"}</div>
+                      </div>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Tab>
+
+              <Tab key="insights" title="insights">
+                <div className="mt-4 space-y-4">
+                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-3 p-5">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">insights & analytics</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">the deeper read on where attention is coming from.</p>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                          <p className="font-semibold text-[#2C1A0E]">top audience cities</p>
+                          <p className="mt-2 text-sm text-[#6c7289]">
+                            {influencerTopCities.length ? influencerTopCities.slice(0, 5).map(([city, count]) => `${city} (${count})`).join(", ") : "city data will show once views come in."}
+                          </p>
+                        </div>
+                        <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                          <p className="font-semibold text-[#2C1A0E]">top saved spots</p>
+                          <p className="mt-2 text-sm text-[#6c7289]">
+                            {influencerTopSavedSpots.length ? influencerTopSavedSpots.map((item) => `${item.post.taggedPlaceName} (${item.saves})`).join(", ") : "saved spots will show once people start bookmarking your recs."}
+                          </p>
+                        </div>
                       </div>
                     </CardBody>
                   </Card>
