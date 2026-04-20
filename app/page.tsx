@@ -2786,6 +2786,7 @@ export default function Page() {
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => post.authorEmail.toLowerCase() === ADMIN_EMAIL || post.authorRole === "admin");
   const influencerFeedPosts = posts
+    .filter((post) => post.type !== "story")
     .filter((post) => influencerAccounts.some((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
@@ -2828,7 +2829,8 @@ export default function Page() {
     .filter((post) => {
       const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
       if (!account || getAccountRole(account) !== "influencer") return false;
-      return normalizeCityKey(account.profile.city || "") === viewerCityKey;
+      const authorEmail = post.authorEmail.toLowerCase();
+      return authorEmail === currentUserEmail || friendEmails.includes(authorEmail) || normalizeCityKey(account.profile.city || "") === viewerCityKey;
     })
     .sort((a, b) => getPostTimestamp(a) - getPostTimestamp(b));
   const creatorStoryGroups = creatorLiveStoryPosts.reduce<Array<{ account: StoredUser; posts: AppPost[] }>>((groups, post) => {
@@ -2859,6 +2861,7 @@ export default function Page() {
     authoredWeeklyDumps[0] ??
     null;
   const nonAdminUserPosts = posts
+    .filter((post) => post.type !== "story")
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserAllPosts = [...studentDailyPosts, ...studentWeeklyDumps]
@@ -3058,6 +3061,7 @@ export default function Page() {
       .flatMap(([, item]) => item.shares.map((share) => share.authorEmail)),
   ).size;
   const influencerPosts = posts
+    .filter((post) => post.type !== "story")
     .filter((post) => post.authorEmail.toLowerCase() === currentUserEmail)
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const influencerReferralSignups = nonAdminAccounts.filter(
@@ -7678,7 +7682,7 @@ export default function Page() {
     setDailyPostPlaceResults([]);
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
-    setDailyPostNotice(existingPost ? "your post is updated." : isInfluencer ? `your ${dailyPostFormat} is live.` : "your post is live.");
+    setDailyPostNotice("");
     setDailyPostInputKey((current) => current + 1);
   };
 
