@@ -1467,6 +1467,55 @@ function renderStudentTabIcon(tabKey: StudentTab, className: string) {
   }
 }
 
+function renderInfluencerTabIcon(tabKey: InfluencerDashboardTab, className: string) {
+  switch (tabKey) {
+    case "overview":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <path d="M5 18.25h14" strokeLinecap="round" />
+          <path d="M7.5 15V9.5" strokeLinecap="round" />
+          <path d="M12 15V6" strokeLinecap="round" />
+          <path d="M16.5 15V11.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "content":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <rect x="4.5" y="5" width="15" height="14" rx="2.5" />
+          <path d="m8 14 2.5-2.5L13 14l3.5-3.5L19 13" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "referrals":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <path d="M10 7.5h7a2.5 2.5 0 0 1 0 5h-7a2.5 2.5 0 0 1 0-5Z" />
+          <path d="M14 11.5h-4a2.5 2.5 0 0 0 0 5h7a2.5 2.5 0 0 0 0-5h-1" />
+        </svg>
+      );
+    case "support":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v6A2.5 2.5 0 0 1 16.5 16H10l-4 3v-3.5A2.5 2.5 0 0 1 5 13.5Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <path d="M12 8.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Z" />
+          <path d="M19 12a7.37 7.37 0 0 0-.07-1l2.02-1.58-2-3.46-2.42.97a7.2 7.2 0 0 0-1.73-1l-.36-2.57H9.56L9.2 5.93c-.62.23-1.2.57-1.73 1l-2.42-.97-2 3.46L5.07 11a7.37 7.37 0 0 0 0 2l-2.02 1.58 2 3.46 2.42-.97c.53.43 1.11.77 1.73 1l.36 2.57h4.88l.36-2.57c.62-.23 1.2-.57 1.73-1l2.42.97 2-3.46L18.93 13c.05-.33.07-.66.07-1Z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "insights":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className={className} aria-hidden="true">
+          <path d="m5 15 4-4 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M16 7h3v3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+  }
+}
+
 function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
@@ -9954,35 +10003,43 @@ export default function Page() {
   if (isInfluencer && creatorDashboardOpen) {
     return (
       <main className="min-h-screen bg-[#fff8ef] text-[#2C1A0E]">
-        <div className="mx-auto min-h-screen w-full max-w-md px-4 pb-20 pt-5 font-[family-name:var(--font-manrope)]">
+        <div className="mx-auto min-h-screen w-full max-w-md px-4 pb-36 pt-5 font-[family-name:var(--font-manrope)]">
           <motion.section
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="rounded-[30px] bg-[#2C1A0E] p-5 text-white shadow-[0_22px_60px_rgba(44,26,14,0.22)]"
+            className="overflow-hidden rounded-[32px] border border-[#4A2F1B] bg-[radial-gradient(circle_at_top_right,_rgba(255,221,168,0.14),_transparent_30%),linear-gradient(180deg,_#332013_0%,_#24160D_100%)] p-5 text-white shadow-[0_22px_60px_rgba(44,26,14,0.18)]"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.28em] text-white/70">creator dashboard</p>
-                <h1 className="mt-2 font-[family-name:var(--font-young-serif)] text-[2.3rem] leading-none">
+                <p className="text-[0.7rem] uppercase tracking-[0.32em] text-[#D6B68D]">creator dashboard</p>
+                <h1 className="mt-3 truncate font-[family-name:var(--font-young-serif)] text-[2.55rem] leading-none text-white">
                   @{liveProfile.username || "creator"}
                 </h1>
-                <p className="mt-2 text-sm text-white/80">{liveProfile.city || "city pending"} • influencer access is on</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3 rounded-[20px] bg-white/10 px-3 py-2">
-                <div className="text-right">
-                  <p className="text-xs uppercase tracking-[0.18em] text-white/60">creator mode</p>
-                  <p className="text-sm text-white/85">{creatorDashboardOpen ? "dashboard on" : "dashboard off"}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/78">
+                  <span>{liveProfile.city || "city pending"}</span>
+                  <span className="text-white/35">•</span>
+                  <span>influencer access on</span>
                 </div>
+              </div>
+              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
+                log out
+              </Button>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[#D6B68D]">creator mode</p>
+                <p className="mt-1 text-sm text-white/82">flip this off any time to jump back into normal crumbz.</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <p className="text-sm text-white/82">{creatorDashboardOpen ? "on" : "off"}</p>
                 <Switch
                   isSelected={creatorDashboardOpen}
                   onValueChange={setCreatorDashboardOpen}
                   color="warning"
                   aria-label="toggle creator dashboard"
                 />
-                <Button radius="full" className="bg-white text-[#2C1A0E]" onPress={signOut}>
-                  log out
-                </Button>
               </div>
             </div>
           </motion.section>
@@ -9993,199 +10050,219 @@ export default function Page() {
             transition={{ duration: 0.35, delay: 0.08 }}
             className="mt-5"
           >
-            <Tabs
-              aria-label="influencer dashboard areas"
-              selectedKey={influencerDashboardTab}
-              onSelectionChange={(key) => setInfluencerDashboardTab(String(key) as InfluencerDashboardTab)}
-              classNames={{
-                tabList: "grid w-full grid-cols-3 gap-1 rounded-[28px] bg-white/90 p-1",
-                cursor: "rounded-full bg-[#F5A623]",
-                tab: "h-11 min-w-0 px-2 text-xs font-medium text-[#2C1A0E]",
-                tabContent: "truncate group-data-[selected=true]:text-white",
-              }}
-            >
-              <Tab key="overview" title="overview">
-                <div className="mt-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "views", value: influencerOverview.views },
-                      { label: "saves", value: influencerOverview.saves },
-                      { label: "likes", value: influencerOverview.likes },
-                      { label: "referrals", value: influencerReferralSignups.length },
-                    ].map((item) => (
-                      <Card key={item.label} className="rounded-[24px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                        <CardBody className="gap-1 p-4">
-                          <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
-                          <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
-                        </CardBody>
-                      </Card>
-                    ))}
-                  </div>
+            {influencerDashboardTab === "overview" ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "views", value: influencerOverview.views },
+                    { label: "saves", value: influencerOverview.saves },
+                    { label: "likes", value: influencerOverview.likes },
+                    { label: "referrals", value: influencerReferralSignups.length },
+                  ].map((item) => (
+                    <Card key={item.label} className="rounded-[24px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                      <CardBody className="gap-1 p-4">
+                        <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
+                      </CardBody>
+                    </Card>
+                  ))}
+                </div>
 
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">weekly checklist</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">the few things to stay on top of this week.</p>
-                      </div>
-                      <div className="grid gap-2">
-                        {influencerChecklist.map((item) => (
-                          <div key={item.label} className="flex items-start justify-between gap-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3">
-                            <div>
-                              <p className="font-semibold text-[#2C1A0E]">{item.label}</p>
-                              <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">weekly checklist</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">the few things to stay on top of this week.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      {influencerChecklist.map((item) => (
+                        <div key={item.label} className="flex items-start justify-between gap-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3">
+                          <div>
+                            <p className="font-semibold text-[#2C1A0E]">{item.label}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
+                          </div>
+                          <Chip className={item.done ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}>
+                            {item.done ? "done" : "todo"}
+                          </Chip>
+                        </div>
+                      ))}
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
+
+            {influencerDashboardTab === "content" ? (
+              <div className="space-y-4">
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">content performance</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">how each post is landing right now.</p>
+                    </div>
+                    {influencerMetrics.length ? (
+                      <div className="grid gap-3">
+                        {influencerMetrics.map((item) => (
+                          <div key={item.post.id} className="rounded-[20px] bg-[#FFF7E8] p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || "untitled post"}</p>
+                                <p className="mt-1 text-sm text-[#6c7289]">{item.post.taggedPlaceName || item.post.type} • {item.post.createdAt}</p>
+                              </div>
+                              <Chip className="bg-white text-[#2C1A0E]">{item.views} views</Chip>
                             </div>
-                            <Chip className={item.done ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}>
-                              {item.done ? "done" : "todo"}
-                            </Chip>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Chip className="bg-white text-[#2C1A0E]">{item.likes} likes</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{item.comments} comments</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{item.saves} saves</Chip>
+                            </div>
+                            {item.topCities.length ? (
+                              <p className="mt-3 text-sm text-[#6c7289]">
+                                top cities: {item.topCities.map(([city, count]) => `${city} (${count})`).join(", ")}
+                              </p>
+                            ) : null}
                           </div>
                         ))}
                       </div>
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
+                    ) : (
+                      <p className="text-sm text-[#6c7289]">your posts will start showing here once people see and save them.</p>
+                    )}
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
 
-              <Tab key="content" title="content">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
+            {influencerDashboardTab === "referrals" ? (
+              <div className="space-y-4">
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">content performance</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">how each post is landing right now.</p>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">referral tracking</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">everyone who joined from your link shows up here.</p>
                       </div>
-                      {influencerMetrics.length ? (
-                        <div className="grid gap-3">
-                          {influencerMetrics.map((item) => (
-                            <div key={item.post.id} className="rounded-[20px] bg-[#FFF7E8] p-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || "untitled post"}</p>
-                                  <p className="mt-1 text-sm text-[#6c7289]">{item.post.taggedPlaceName || item.post.type} • {item.post.createdAt}</p>
-                                </div>
-                                <Chip className="bg-white text-[#2C1A0E]">{item.views} views</Chip>
-                              </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <Chip className="bg-white text-[#2C1A0E]">{item.likes} likes</Chip>
-                                <Chip className="bg-white text-[#2C1A0E]">{item.comments} comments</Chip>
-                                <Chip className="bg-white text-[#2C1A0E]">{item.saves} saves</Chip>
-                              </div>
-                              {item.topCities.length ? (
-                                <p className="mt-3 text-sm text-[#6c7289]">
-                                  top cities: {item.topCities.map(([city, count]) => `${city} (${count})`).join(", ")}
-                                </p>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-[#6c7289]">your posts will start showing here once people see and save them.</p>
-                      )}
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
+                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{influencerReferralSignups.length} signups</Chip>
+                    </div>
+                    <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                      <p className="text-sm font-semibold text-[#2C1A0E]">your code</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{liveProfile.referralCode || "waiting for referral code"}</p>
+                      {postSignupReferralUrl ? <p className="mt-2 break-all text-sm text-[#2C1A0E]">{postSignupReferralUrl}</p> : null}
+                    </div>
+                    {influencerReferralSignups.length ? (
+                      <div className="grid gap-2">
+                        {influencerReferralSignups.map((account) => (
+                          <div key={account.googleProfile?.email} className="rounded-[18px] bg-[#FFF7E8] px-4 py-3">
+                            <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new signup"}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{account.profile.city || "city pending"} • @{account.profile.username || "pending"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-[#6c7289]">no referral signups yet.</p>
+                    )}
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
 
-              <Tab key="referrals" title="referrals">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">referral tracking</p>
-                          <p className="mt-1 text-sm text-[#2C1A0E]">everyone who joined from your link shows up here.</p>
-                        </div>
-                        <Chip className="bg-[#FFF0D0] text-[#F5A623]">{influencerReferralSignups.length} signups</Chip>
+            {influencerDashboardTab === "support" ? (
+              <div className="space-y-4">
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">support & resources</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">need help, ideas, or a quick answer from the founder.</p>
+                    </div>
+                    <a href="mailto:crumbleappco@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
+                      <p className="font-semibold text-[#2C1A0E]">message the founder</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">crumbleappco@gmail.com</p>
+                    </a>
+                    <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                      <p className="font-semibold text-[#2C1A0E]">what to post</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">best-performing posts tag a place, say why it’s worth saving, and make the city feel specific.</p>
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
+
+            {influencerDashboardTab === "settings" ? (
+              <div className="space-y-4">
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">settings & profile</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">same login, same profile, creator access layered on top.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">email: {user.googleProfile?.email}</div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">city: {liveProfile.city || "pending"}</div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">bio: {(liveProfile.bio ?? "").trim() || "add a short creator bio in your profile"}</div>
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
+
+            {influencerDashboardTab === "insights" ? (
+              <div className="space-y-4">
+                <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                  <CardBody className="gap-3 p-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">insights & analytics</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">the deeper read on where attention is coming from.</p>
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="rounded-[18px] bg-[#FFF7E8] p-4">
+                        <p className="font-semibold text-[#2C1A0E]">top audience cities</p>
+                        <p className="mt-2 text-sm text-[#6c7289]">
+                          {influencerTopCities.length ? influencerTopCities.slice(0, 5).map(([city, count]) => `${city} (${count})`).join(", ") : "city data will show once views come in."}
+                        </p>
                       </div>
                       <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                        <p className="text-sm font-semibold text-[#2C1A0E]">your code</p>
-                        <p className="mt-1 text-sm text-[#6c7289]">{liveProfile.referralCode || "waiting for referral code"}</p>
-                        {postSignupReferralUrl ? <p className="mt-2 break-all text-sm text-[#2C1A0E]">{postSignupReferralUrl}</p> : null}
+                        <p className="font-semibold text-[#2C1A0E]">top saved spots</p>
+                        <p className="mt-2 text-sm text-[#6c7289]">
+                          {influencerTopSavedSpots.length ? influencerTopSavedSpots.map((item) => `${item.post.taggedPlaceName} (${item.saves})`).join(", ") : "saved spots will show once people start bookmarking your recs."}
+                        </p>
                       </div>
-                      {influencerReferralSignups.length ? (
-                        <div className="grid gap-2">
-                          {influencerReferralSignups.map((account) => (
-                            <div key={account.googleProfile?.email} className="rounded-[18px] bg-[#FFF7E8] px-4 py-3">
-                              <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new signup"}</p>
-                              <p className="mt-1 text-sm text-[#6c7289]">{account.profile.city || "city pending"} • @{account.profile.username || "pending"}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-[#6c7289]">no referral signups yet.</p>
-                      )}
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-
-              <Tab key="support" title="support">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">support & resources</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">need help, ideas, or a quick answer from the founder.</p>
-                      </div>
-                      <a href="mailto:crumbleappco@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
-                        <p className="font-semibold text-[#2C1A0E]">message the founder</p>
-                        <p className="mt-1 text-sm text-[#6c7289]">crumbleappco@gmail.com</p>
-                      </a>
-                      <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                        <p className="font-semibold text-[#2C1A0E]">what to post</p>
-                        <p className="mt-1 text-sm text-[#6c7289]">best-performing posts tag a place, say why it’s worth saving, and make the city feel specific.</p>
-                      </div>
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-
-              <Tab key="settings" title="settings">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">settings & profile</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">same login, same profile, creator access layered on top.</p>
-                      </div>
-                      <div className="grid gap-2">
-                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">email: {user.googleProfile?.email}</div>
-                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">city: {liveProfile.city || "pending"}</div>
-                        <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">bio: {(liveProfile.bio ?? "").trim() || "add a short creator bio in your profile"}</div>
-                      </div>
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-
-              <Tab key="insights" title="insights">
-                <div className="mt-4 space-y-4">
-                  <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
-                    <CardBody className="gap-3 p-5">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">insights & analytics</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">the deeper read on where attention is coming from.</p>
-                      </div>
-                      <div className="grid gap-2">
-                        <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                          <p className="font-semibold text-[#2C1A0E]">top audience cities</p>
-                          <p className="mt-2 text-sm text-[#6c7289]">
-                            {influencerTopCities.length ? influencerTopCities.slice(0, 5).map(([city, count]) => `${city} (${count})`).join(", ") : "city data will show once views come in."}
-                          </p>
-                        </div>
-                        <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                          <p className="font-semibold text-[#2C1A0E]">top saved spots</p>
-                          <p className="mt-2 text-sm text-[#6c7289]">
-                            {influencerTopSavedSpots.length ? influencerTopSavedSpots.map((item) => `${item.post.taggedPlaceName} (${item.saves})`).join(", ") : "saved spots will show once people start bookmarking your recs."}
-                          </p>
-                        </div>
-                      </div>
-                    </CardBody>
-                  </Card>
-                </div>
-              </Tab>
-            </Tabs>
+                    </div>
+                  </CardBody>
+                </Card>
+              </div>
+            ) : null}
           </motion.section>
+
+          <nav
+            className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#4A2F1B] bg-[#2C1A0E] px-3 py-3 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
+            style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <div className="grid grid-cols-6 gap-1 text-center">
+              {[
+                { label: "overview", key: "overview" },
+                { label: "content", key: "content" },
+                { label: "referrals", key: "referrals" },
+                { label: "support", key: "support" },
+                { label: "settings", key: "settings" },
+                { label: "insights", key: "insights" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-1 py-2 transition-colors ${
+                    influencerDashboardTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
+                  }`}
+                  onClick={() => setInfluencerDashboardTab(item.key as InfluencerDashboardTab)}
+                >
+                  <span className={`text-[22px] leading-none ${influencerDashboardTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
+                    {renderInfluencerTabIcon(item.key as InfluencerDashboardTab, "h-5 w-5")}
+                  </span>
+                  <span className={`text-[10px] font-medium leading-none ${influencerDashboardTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </nav>
         </div>
       </main>
     );
@@ -11040,24 +11117,19 @@ export default function Page() {
             </Card>
 
             {isInfluencer ? (
-              <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
-                <CardBody className="gap-4 p-5">
-                  <div className="flex items-start justify-between gap-3">
+              <Card className="rounded-[24px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_14px_34px_rgba(254,138,1,0.07)]">
+                <CardBody className="gap-3 p-4">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">creator dashboard</p>
-                      <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                        creator mode
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[#6c7289]">
-                        turn this on to check your creator dashboard, then flip it off and you’re back to normal crumbz.
-                      </p>
+                      <p className="mt-1 text-sm text-[#6c7289]">flip this on when you want your creator stats.</p>
                     </div>
                     <Chip className="bg-white text-[#2C1A0E]">creator</Chip>
                   </div>
-                  <div className="flex items-center justify-between gap-3 rounded-[20px] bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
                     <div>
-                      <p className="text-sm font-semibold text-[#2C1A0E]">open creator dashboard</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{creatorDashboardOpen ? "dashboard is on" : "dashboard is off"}</p>
+                      <p className="text-sm font-semibold text-[#2C1A0E]">creator mode</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{creatorDashboardOpen ? "dashboard on" : "dashboard off"}</p>
                     </div>
                     <Switch
                       isSelected={creatorDashboardOpen}
