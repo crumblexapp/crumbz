@@ -11832,30 +11832,30 @@ export default function Page() {
                     </Badge>
                   </div>
                   <div className="min-w-0 pt-2">
-                    <div className="grid grid-cols-3 gap-1 text-center">
+                    <div className="grid grid-cols-3 gap-1.5 text-center">
                       <button
                         type="button"
                         onClick={openOwnArchive}
-                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
-                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
+                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">posts</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("followers")}
-                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">{copy.profile.followers}</p>
+                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.followers}</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("favorites")}
-                        className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                        <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">{copy.profile.favorites}</p>
+                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.favorites}</p>
                       </button>
                     </div>
                   </div>
@@ -12517,22 +12517,22 @@ export default function Page() {
                       />
                     </div>
                     <div className="min-w-0 pt-2">
-                      <div className="grid grid-cols-3 gap-1 text-center">
+                      <div className="grid grid-cols-3 gap-1.5 text-center">
                         <button
                           type="button"
                           onClick={() => setProfileDrawer("followers")}
-                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                          className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                         >
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFollowersCount}</p>
-                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">followers</p>
+                          <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">followers</p>
                         </button>
                         <button
                           type="button"
                           onClick={() => setProfileDrawer("favorites")}
-                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                          className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                         >
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileFavoriteCount}</p>
-                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">favorites</p>
+                          <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">favorites</p>
                         </button>
                         <button
                           type="button"
@@ -12540,10 +12540,10 @@ export default function Page() {
                             setSelectedProfilePostFiltersOpen(true);
                             setSelectedProfilePostTab("all");
                           }}
-                          className="flex min-h-[3.75rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                          className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
                         >
                           <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{selectedProfileAuthoredPosts.length}</p>
-                          <p className="mt-1 whitespace-nowrap text-[0.78rem] text-[#6c7289]">posts</p>
+                          <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">posts</p>
                         </button>
                       </div>
                     </div>
