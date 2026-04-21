@@ -107,6 +107,19 @@ function normalizeInteractionsMap(rawInteractions: unknown) {
   );
 }
 
+function pruneInteractionsMapToPosts(rawInteractions: unknown, rawPosts: unknown) {
+  const interactions = normalizeInteractionsMap(rawInteractions);
+  const validPostIds = new Set(
+    normalizeObjectArray(rawPosts)
+      .map((post) => normalizeText(post.id))
+      .filter(Boolean),
+  );
+
+  return Object.fromEntries(
+    Object.entries(interactions).filter(([postId]) => postId.startsWith("__") || validPostIds.has(postId)),
+  );
+}
+
 function dedupeByKey<T extends JsonRecord>(items: T[], getKey: (item: T) => string) {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -799,7 +812,7 @@ export async function GET() {
     ok: true,
     accounts: accountState?.accounts ?? [],
     posts: stateData?.posts ?? [],
-    interactions: fallbackMeta.interactions,
+    interactions: pruneInteractionsMapToPosts(fallbackMeta.interactions, stateData?.posts ?? []),
     dare: fallbackMeta.dare ?? {},
     announcements: supportsAnnouncements ? stateData?.announcements ?? [] : fallbackMeta.announcements,
   }, {
@@ -898,7 +911,15 @@ export async function POST(request: Request) {
     !currentAnnouncementIds.has(newestAnnouncement.id);
 
   if ("interactions" in (body ?? {}) || "announcements" in (body ?? {}) || "dare" in (body ?? {})) {
-    updates.interactions = mergeInteractionsAndAnnouncements(nextInteractions, nextAnnouncements, nextDare);
+    const interactionPosts =
+      "posts" in updates
+        ? updates.posts
+        : stateData?.posts ?? [];
+    updates.interactions = mergeInteractionsAndAnnouncements(
+      pruneInteractionsMapToPosts(nextInteractions, interactionPosts),
+      nextAnnouncements,
+      nextDare,
+    );
     if (supportsAnnouncements && "announcements" in (body ?? {})) {
       updates.announcements = nextAnnouncements;
     }
@@ -915,12 +936,24 @@ export async function POST(request: Request) {
     accounts: [],
     posts: "posts" in updates ? updates.posts : stateData?.posts ?? [],
   };
+  const safeInteractions = pruneInteractionsMapToPosts(
+    "interactions" in updates ? updates.interactions : supportsAnnouncements ? stateData?.interactions ?? {} : fallbackMeta.interactions,
+    nextRow.posts,
+  );
 
   if (supportsAnnouncements) {
-    nextRow.interactions = "interactions" in updates ? updates.interactions : stateData?.interactions ?? {};
+    nextRow.interactions = mergeInteractionsAndAnnouncements(
+      safeInteractions,
+      "announcements" in updates ? updates.announcements : stateData?.announcements ?? [],
+      nextDare,
+    );
     nextRow.announcements = "announcements" in updates ? updates.announcements : stateData?.announcements ?? [];
   } else {
-    nextRow.interactions = "interactions" in updates ? updates.interactions : fallbackMeta.interactions;
+    nextRow.interactions = mergeInteractionsAndAnnouncements(
+      safeInteractions,
+      fallbackMeta.announcements,
+      nextDare,
+    );
   }
 
   const { error } = await supabaseServer

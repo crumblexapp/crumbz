@@ -1073,6 +1073,14 @@ function mergePostsPreferLocal(localPosts: AppPost[], serverPosts: AppPost[]) {
   });
 }
 
+function pruneInteractionsToKnownPosts(posts: Pick<AppPost, "id">[], interactions: InteractionsMap) {
+  const validPostIds = new Set(posts.map((post) => post.id));
+
+  return Object.fromEntries(
+    Object.entries(interactions).filter(([postId]) => postId.startsWith("__") || validPostIds.has(postId)),
+  );
+}
+
 function preserveLocalMedia(localPosts: AppPost[], incomingPosts: AppPost[]) {
   const localPostsById = new Map(localPosts.map((post) => [post.id, post] as const));
 
@@ -1102,10 +1110,17 @@ function preserveLocalMedia(localPosts: AppPost[], incomingPosts: AppPost[]) {
 }
 
 function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, serverInteractions: InteractionsMap) {
-  return {
-    ...serverInteractions,
-    ...localInteractions,
-  };
+  const mergedPostIds = [
+    ...new Set([...Object.keys(serverInteractions), ...Object.keys(localInteractions)]),
+  ].map((id) => ({ id }));
+
+  return pruneInteractionsToKnownPosts(
+    mergedPostIds,
+    {
+      ...serverInteractions,
+      ...localInteractions,
+    },
+  );
 }
 
 function getInteractionTotals(interactions: InteractionsMap) {
@@ -1118,30 +1133,6 @@ function getInteractionTotals(interactions: InteractionsMap) {
       views: totals.views + bucket.views.length,
     }),
     { comments: 0, likes: 0, shares: 0, saves: 0, views: 0 },
-  );
-}
-
-function shouldPreferLocalSnapshot(
-  localPosts: AppPost[],
-  serverPosts: AppPost[],
-  localInteractions: InteractionsMap,
-  serverInteractions: InteractionsMap,
-) {
-  if (localPosts.length > serverPosts.length) return true;
-
-  const localPostIds = new Set(localPosts.map((post) => post.id));
-  const serverMissingFromLocal = serverPosts.some((post) => !localPostIds.has(post.id));
-  if (!serverMissingFromLocal && localPosts.length !== serverPosts.length) return true;
-
-  const localTotals = getInteractionTotals(localInteractions);
-  const serverTotals = getInteractionTotals(serverInteractions);
-
-  return (
-    localTotals.comments > serverTotals.comments ||
-    localTotals.likes > serverTotals.likes ||
-    localTotals.shares > serverTotals.shares ||
-    localTotals.saves > serverTotals.saves ||
-    localTotals.views > serverTotals.views
   );
 }
 
@@ -4662,6 +4653,10 @@ export default function Page() {
       return;
     }
 
+    const safePosts = nextPosts ? serializePostsForStorage(nextPosts) : undefined;
+    const safeInteractions = nextInteractions
+      ? pruneInteractionsToKnownPosts(nextPosts ?? postsRef.current, nextInteractions)
+      : undefined;
     const headers = await getAuthenticatedHeaders({
       "Content-Type": "application/json",
     });
@@ -4670,8 +4665,8 @@ export default function Page() {
       cache: "no-store",
       headers,
       body: JSON.stringify({
-        ...(nextPosts ? { posts: serializePostsForStorage(nextPosts) } : {}),
-        ...(nextInteractions ? { interactions: nextInteractions } : {}),
+        ...(safePosts ? { posts: safePosts } : {}),
+        ...(safeInteractions ? { interactions: safeInteractions } : {}),
         ...(nextDare ? { dare: nextDare } : {}),
         ...(nextAnnouncements ? { announcements: nextAnnouncements } : {}),
         ...(deletePostId ? { deletePostId } : {}),
@@ -4736,7 +4731,7 @@ export default function Page() {
     const nextUser = readUser();
     const nextAccounts = readAccounts();
     const nextPosts = readPosts();
-    const nextInteractions = readInteractions();
+    const nextInteractions = pruneInteractionsToKnownPosts(nextPosts, readInteractions());
     const nextDare = readDare();
 
     cachedUserSnapshot = nextUser;
@@ -4769,8 +4764,7 @@ export default function Page() {
           const serverHasState = hasAnySharedState(payload);
           const normalizedServerPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
           const serverPostsWithMedia = preserveLocalMedia(nextPosts, normalizedServerPosts);
-          const serverInteractions = normalizeInteractions(payload.interactions);
-          const preferLocalSnapshot = shouldPreferLocalSnapshot(nextPosts, serverPostsWithMedia, nextInteractions, serverInteractions);
+          const serverInteractions = pruneInteractionsToKnownPosts(serverPostsWithMedia, normalizeInteractions(payload.interactions));
 
           if (!serverHasState) {
             void seedAccountsToBackend(nextAccounts).catch(() => undefined);
@@ -4787,18 +4781,11 @@ export default function Page() {
             });
           } else {
             setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
-            setPosts(preferLocalSnapshot ? mergePostsPreferLocal(nextPosts, serverPostsWithMedia) : serverPostsWithMedia);
-            setInteractions(preferLocalSnapshot ? mergeInteractionsPreferLocal(nextInteractions, serverInteractions) : serverInteractions);
+            setPosts(serverPostsWithMedia);
+            setInteractions(serverInteractions);
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
-            if (preferLocalSnapshot) {
-              recoverSharedState({
-                nextPosts: mergePostsPreferLocal(nextPosts, serverPostsWithMedia),
-                nextInteractions: mergeInteractionsPreferLocal(nextInteractions, serverInteractions),
-                nextDare,
-              });
-            }
           }
         });
       })
@@ -5313,8 +5300,8 @@ export default function Page() {
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
-    window.localStorage.setItem(INTERACTIONS_KEY, JSON.stringify(interactions));
-  }, [interactions]);
+    window.localStorage.setItem(INTERACTIONS_KEY, JSON.stringify(pruneInteractionsToKnownPosts(posts, interactions)));
+  }, [interactions, posts]);
 
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
@@ -5427,24 +5414,31 @@ export default function Page() {
             Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
           );
           const baseServerPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
-          const serverInteractions = filterRecentDeletedInteractions(normalizeInteractions(payload.interactions), recentDeletedPostIds);
+          const serverInteractions = pruneInteractionsToKnownPosts(
+            baseServerPosts,
+            filterRecentDeletedInteractions(normalizeInteractions(payload.interactions), recentDeletedPostIds),
+          );
           const shouldPreserveLocalPosts = now - lastSharedStateMutationAtRef.current < 5000;
           const currentPosts = postsRef.current;
-          const currentInteractions = interactionsRef.current;
+          const currentInteractions = pruneInteractionsToKnownPosts(currentPosts, interactionsRef.current);
           const mergedPosts = mergePostsPreferLocal(currentPosts, preserveLocalMedia(currentPosts, baseServerPosts));
-          const mergedInteractions = mergeInteractionsPreferLocal(currentInteractions, serverInteractions);
-          const preferLocalSnapshot =
-            shouldPreserveLocalPosts || shouldPreferLocalSnapshot(currentPosts, preserveLocalMedia(currentPosts, baseServerPosts), currentInteractions, serverInteractions);
+          const mergedInteractions = pruneInteractionsToKnownPosts(
+            mergedPosts,
+            mergeInteractionsPreferLocal(currentInteractions, serverInteractions),
+          );
           setPosts((current) => {
             const serverPosts = preserveLocalMedia(current, baseServerPosts);
-            return preferLocalSnapshot ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
+            return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
           });
           setInteractions((current) => {
-            return preferLocalSnapshot ? mergeInteractionsPreferLocal(current, serverInteractions) : serverInteractions;
+            const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
+            return shouldPreserveLocalPosts
+              ? pruneInteractionsToKnownPosts(mergedPosts, mergeInteractionsPreferLocal(safeCurrent, serverInteractions))
+              : serverInteractions;
           });
           setDare(normalizeDareState(payload.dare));
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
-          if (preferLocalSnapshot) {
+          if (shouldPreserveLocalPosts) {
             recoverSharedState({
               nextPosts: mergedPosts,
               nextInteractions: mergedInteractions,
