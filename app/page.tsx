@@ -1155,6 +1155,10 @@ function filterRecentDeletedInteractions(interactions: InteractionsMap, deletedP
   return Object.fromEntries(Object.entries(interactions).filter(([postId]) => !deletedPostIds.has(postId)));
 }
 
+function dedupeLowercaseEmails(emails: string[]) {
+  return [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+}
+
 function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: StoredUser[]) {
   const localByEmail = new Map(
     localAccounts
@@ -1174,6 +1178,26 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
         ...account.profile,
         bio: localAccount.profile.bio || account.profile.bio || "",
         picture: localAccount.profile.picture || account.profile.picture || "",
+        friends: dedupeLowercaseEmails([...account.profile.friends, ...localAccount.profile.friends]),
+        incomingFriendRequests: dedupeLowercaseEmails([
+          ...account.profile.incomingFriendRequests,
+          ...localAccount.profile.incomingFriendRequests,
+        ]),
+        outgoingFriendRequests: dedupeLowercaseEmails([
+          ...account.profile.outgoingFriendRequests,
+          ...localAccount.profile.outgoingFriendRequests,
+        ]),
+        favoritePlaceIds: [...new Set([...(account.profile.favoritePlaceIds ?? []), ...(localAccount.profile.favoritePlaceIds ?? [])])],
+        favoriteActivities:
+          account.profile.favoriteActivities?.length || localAccount.profile.favoriteActivities?.length
+            ? [
+                ...(account.profile.favoriteActivities ?? []),
+                ...(localAccount.profile.favoriteActivities ?? []),
+              ].filter(
+                (activity, index, items) =>
+                  items.findIndex((candidate) => candidate.id === activity.id) === index,
+              )
+            : [],
       },
     };
   });
@@ -4725,6 +4749,23 @@ export default function Page() {
   }, [user]);
 
   useEffect(() => {
+    if (!user.signedIn || !liveAccount) return;
+
+    const syncedUser = {
+      ...user,
+      signedIn: liveAccount.signedIn || user.signedIn,
+      googleProfile: user.googleProfile ?? liveAccount.googleProfile,
+      profile: {
+        ...user.profile,
+        ...liveAccount.profile,
+      },
+    };
+
+    if (JSON.stringify(syncedUser) === JSON.stringify(user)) return;
+    persistUser(syncedUser);
+  }, [liveAccount, user]);
+
+  useEffect(() => {
     if (lastDraftSyncedDareIdRef.current === dare.id) return;
 
     setDareTitleDraft(dare.title);
@@ -5937,7 +5978,7 @@ export default function Page() {
 
   const addFriend = async (friendEmail: string) => {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
-    if (user.profile.friends.includes(friendEmail) || user.profile.outgoingFriendRequests.includes(friendEmail)) return;
+    if (liveProfile.friends.includes(friendEmail) || liveProfile.outgoingFriendRequests.includes(friendEmail)) return;
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
