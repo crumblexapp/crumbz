@@ -1155,6 +1155,14 @@ function filterRecentDeletedInteractions(interactions: InteractionsMap, deletedP
   return Object.fromEntries(Object.entries(interactions).filter(([postId]) => !deletedPostIds.has(postId)));
 }
 
+function dedupePostsById(posts: AppPost[]) {
+  return posts.filter((post, index, list) => list.findIndex((candidate) => candidate.id === post.id) === index);
+}
+
+function getPostLikeCount(interactions: InteractionsMap, postId: string) {
+  return interactions[postId]?.likes.length ?? 0;
+}
+
 function dedupeLowercaseEmails(emails: string[]) {
   return [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
 }
@@ -2851,10 +2859,6 @@ export default function Page() {
   const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => post.authorEmail.toLowerCase() === ADMIN_EMAIL || post.authorRole === "admin");
-  const influencerFeedPosts = posts
-    .filter((post) => post.type !== "story")
-    .filter((post) => influencerAccounts.some((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()))
-    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
   const today = new Date();
@@ -2884,6 +2888,39 @@ export default function Page() {
   const friendWeeklyDumps = visibleStudentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() !== currentUserEmail,
   );
+  const sameCityInfluencerFeedPosts = posts
+    .filter((post) => post.type !== "story")
+    .filter((post) => influencerAccounts.some((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()))
+    .filter((post) => {
+      const authorEmail = post.authorEmail.toLowerCase();
+      if (authorEmail === currentUserEmail || friendEmails.includes(authorEmail)) return false;
+      const account = accountByEmail.get(authorEmail) ?? null;
+      return normalizeCityKey(account?.profile.city || "") === normalizeCityKey(liveProfile.city || "");
+    })
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const globalInfluencerFallbackPosts = influencerAccounts
+    .map((account) => {
+      const accountEmail = account.googleProfile?.email?.toLowerCase() ?? "";
+      if (!accountEmail || accountEmail === currentUserEmail || friendEmails.includes(accountEmail)) return null;
+      if (normalizeCityKey(account.profile.city || "") === normalizeCityKey(liveProfile.city || "")) return null;
+
+      const topPost = posts
+        .filter((post) => post.type !== "story")
+        .filter((post) => post.authorEmail.toLowerCase() === accountEmail)
+        .sort((a, b) => {
+          const likeGap = getPostLikeCount(interactions, b.id) - getPostLikeCount(interactions, a.id);
+          if (likeGap !== 0) return likeGap;
+          return getPostTimestamp(b) - getPostTimestamp(a);
+        })[0] ?? null;
+
+      return topPost;
+    })
+    .filter((post): post is AppPost => Boolean(post))
+    .sort((a, b) => {
+      const likeGap = getPostLikeCount(interactions, b.id) - getPostLikeCount(interactions, a.id);
+      if (likeGap !== 0) return likeGap;
+      return getPostTimestamp(b) - getPostTimestamp(a);
+    });
   const adminLiveStoryPosts = adminPosts.filter((post) => isLiveStory(post)).slice(0, 8);
   const adminArchivedStoryPosts = adminPosts
     .filter((post) => post.type === "story" && !isLiveStory(post))
@@ -2919,7 +2956,19 @@ export default function Page() {
   }, []);
   const adminFeedPosts = adminPosts.filter((post) => post.type !== "story");
   const adminPostArchive = [...adminFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
-  const mixedHomeFeedPosts = [...adminFeedPosts, ...influencerFeedPosts, ...friendDailyFeedPosts].sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const mixedHomeFeedPosts = dedupePostsById([
+    ...adminFeedPosts,
+    ...friendDailyFeedPosts,
+    ...sameCityInfluencerFeedPosts,
+    ...globalInfluencerFallbackPosts,
+  ])
+    .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const feedReasonEntries: Array<readonly [string, "friend" | "city-influencer" | "global-influencer"]> = [
+    ...friendDailyFeedPosts.map((post) => [post.id, "friend"] as const),
+    ...sameCityInfluencerFeedPosts.map((post) => [post.id, "city-influencer"] as const),
+    ...globalInfluencerFallbackPosts.map((post) => [post.id, "global-influencer"] as const),
+  ];
+  const feedReasonByPostId = new Map<string, "friend" | "city-influencer" | "global-influencer">(feedReasonEntries);
   const authoredWeeklyDumps = studentWeeklyDumps.filter(
     (post) => post.authorEmail.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
   );
@@ -4141,6 +4190,15 @@ export default function Page() {
       translationCacheKey && translatedPostVisibility[translationCacheKey]
         ? "show original"
         : `see translation (${language === "pl" ? "polish" : "english"})`;
+    const feedReason = feedReasonByPostId.get(post.id) ?? null;
+    const feedReasonLabel =
+      feedReason === "global-influencer"
+        ? "creator spotlight"
+        : feedReason === "city-influencer"
+          ? "creator in your city"
+          : feedReason === "friend"
+            ? "friend post"
+            : "";
     return (
       <Card
         id={`post-${post.id}`}
@@ -4190,17 +4248,20 @@ export default function Page() {
                 ) : (
                   <span />
                 )}
-                {isStudentPost && ctaLabel ? (
-                  <button
-                    type="button"
-                    onClick={() => openProfileByEmail(post.authorEmail)}
-                    className="ml-auto flex shrink-0 justify-end"
-                  >
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-                  </button>
-                ) : ctaLabel ? (
-                  <Chip className="ml-auto shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-                ) : null}
+                <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
+                  {feedReasonLabel ? <Chip className="bg-[#2C1A0E] text-white">{feedReasonLabel}</Chip> : null}
+                  {isStudentPost && ctaLabel ? (
+                    <button
+                      type="button"
+                      onClick={() => openProfileByEmail(post.authorEmail)}
+                      className="flex shrink-0 justify-end"
+                    >
+                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+                    </button>
+                  ) : ctaLabel ? (
+                    <Chip className="shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
+                  ) : null}
+                </div>
               </div>
             </div>
           </CardHeader>
