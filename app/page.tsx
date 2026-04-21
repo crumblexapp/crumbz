@@ -1313,6 +1313,11 @@ function isIosDevice() {
   return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
 }
 
+function isAndroidDevice() {
+  if (typeof window === "undefined") return false;
+  return /android/i.test(window.navigator.userAgent);
+}
+
 function isStandaloneDisplayMode() {
   if (typeof window === "undefined") return false;
   const iosStandalone = "standalone" in window.navigator && Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
@@ -2349,7 +2354,7 @@ export default function Page() {
   const [isUploadingDareProof, setIsUploadingDareProof] = useState(false);
   const [adminActionNotice, setAdminActionNotice] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
-  const [showWelcomeScreen, setShowWelcomeScreen] = useState(true);
+  const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
   const [googleInitError, setGoogleInitError] = useState(false);
   const [error, setError] = useState("");
@@ -4993,14 +4998,16 @@ export default function Page() {
     if (!email) return;
 
     const hasPendingOnboarding = window.localStorage.getItem(getPostSignupOnboardingPendingKey(email)) === "true";
-    const hasCompletedOnboarding = window.localStorage.getItem(getPostSignupOnboardingDoneKey(email)) === "true";
 
-    if (hasPendingOnboarding && !hasCompletedOnboarding) {
-      setPostSignupOnboardingOpen(true);
-      const savedStep = Number(window.localStorage.getItem(getPostSignupOnboardingStepKey(email)) ?? "0");
-      setPostSignupOnboardingStep(Number.isInteger(savedStep) && savedStep >= 0 && savedStep <= 2 ? savedStep : 0);
-      setPostSignupNotice("");
+    if (hasPendingOnboarding) {
+      window.localStorage.setItem(getPostSignupOnboardingDoneKey(email), "true");
+      window.localStorage.removeItem(getPostSignupOnboardingPendingKey(email));
+      window.localStorage.removeItem(getPostSignupOnboardingStepKey(email));
     }
+
+    setPostSignupOnboardingOpen(false);
+    setPostSignupOnboardingStep(0);
+    setPostSignupNotice("");
   }, [isAdmin, needsOnboarding, user.googleProfile?.email, user.signedIn]);
 
   useEffect(() => {
@@ -5036,6 +5043,20 @@ export default function Page() {
 
     setFavoriteMapMode("home");
   }, [isAdmin, user.googleProfile?.email, user.signedIn]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || user.signedIn) {
+      setShowWelcomeScreen(false);
+      return;
+    }
+
+    if (isStandaloneDisplayMode()) {
+      setShowWelcomeScreen(false);
+      return;
+    }
+
+    setShowWelcomeScreen(isIosDevice() || isAndroidDevice());
+  }, [user.signedIn]);
 
   useEffect(() => {
     if (typeof window === "undefined" || user.signedIn) {
@@ -5572,9 +5593,11 @@ export default function Page() {
           }
           persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
           if (typeof window !== "undefined") {
-            window.localStorage.setItem(getPostSignupOnboardingPendingKey(profile.email), "true");
-            window.localStorage.removeItem(getPostSignupOnboardingDoneKey(profile.email));
+            window.localStorage.setItem(getPostSignupOnboardingDoneKey(profile.email), "true");
+            window.localStorage.removeItem(getPostSignupOnboardingPendingKey(profile.email));
+            window.localStorage.removeItem(getPostSignupOnboardingStepKey(profile.email));
           }
+          setPostSignupOnboardingOpen(false);
           setFullName(profile.name);
           setUsername((current) => current ?? (profile.email.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
           setIsStudent(null);
@@ -5725,8 +5748,14 @@ export default function Page() {
         persistUser((result.user as StoredUser | null) ?? nextUser);
         if (typeof window !== "undefined") {
           window.localStorage.removeItem(PENDING_REFERRAL_CODE_KEY);
+          if (user.googleProfile?.email) {
+            window.localStorage.setItem(getPostSignupOnboardingDoneKey(user.googleProfile.email), "true");
+            window.localStorage.removeItem(getPostSignupOnboardingPendingKey(user.googleProfile.email));
+            window.localStorage.removeItem(getPostSignupOnboardingStepKey(user.googleProfile.email));
+          }
         }
         setPendingReferralCode("");
+        setPostSignupOnboardingOpen(false);
         setError("");
       })
       .catch(() => {
@@ -7178,6 +7207,7 @@ export default function Page() {
     syncSharedState({
       nextPosts,
       nextInteractions,
+      deletePostId: postId,
     });
     setStoryActionMenuOpen(false);
     setSelectedStoryPostId(null);
@@ -8806,6 +8836,54 @@ export default function Page() {
     );
   };
 
+  const mobileWelcomeMode = installPromptMode ?? (isIosDevice() ? "ios" : isAndroidDevice() ? "android" : null);
+  const mobileWelcomeCopy =
+    language === "pl"
+      ? {
+          label: "zanim wejdziesz",
+          title: mobileWelcomeMode === "android" ? "najlepiej otwórz crumbz jak apkę" : "dodaj crumbz do ekranu głównego",
+          body:
+            mobileWelcomeMode === "android"
+              ? "na androidzie najlepiej zainstalować crumbz z przeglądarki, ale jeśli chcesz, możesz też przejść dalej od razu."
+              : "na iphone crumbz działa najlepiej po dodaniu do ekranu głównego. potem alerty też będą działać dużo lepiej.",
+          steps:
+            mobileWelcomeMode === "android"
+              ? [
+                  "1. jeśli widzisz przycisk instalacji, stuknij go teraz",
+                  "2. potem wracaj do crumbz z ikony na telefonie",
+                  "3. albo przejdź dalej i zarejestruj się od razu",
+                ]
+              : [
+                  "1. stuknij przycisk udostępniania w safari",
+                  "2. wybierz dodaj do ekranu głównego",
+                  "3. następnym razem otwórz crumbz z tej ikony",
+                ],
+          continueLabel: "dalej do rejestracji",
+          installLabel: "zainstaluj apkę",
+        }
+      : {
+          label: "before you jump in",
+          title: mobileWelcomeMode === "android" ? "crumbz works best like an app" : "add crumbz to your home screen",
+          body:
+            mobileWelcomeMode === "android"
+              ? "on android, crumbz feels best when you install it from the browser first, but you can still keep going right now if you want."
+              : "on iphone, crumbz works best after you add it to your home screen. alerts get way smoother after that too.",
+          steps:
+            mobileWelcomeMode === "android"
+              ? [
+                  "1. if you see the install button, tap it now",
+                  "2. come back to crumbz from the phone icon after that",
+                  "3. or keep going and sign up right away",
+                ]
+              : [
+                  "1. tap the share button in safari",
+                  "2. choose add to home screen",
+                  "3. open crumbz from that icon next time",
+                ],
+          continueLabel: "continue to sign up",
+          installLabel: "install app",
+        };
+
   if (!user.signedIn) {
     if (showWelcomeScreen) {
       return (
@@ -8826,15 +8904,39 @@ export default function Page() {
                 sizes="100vw"
               />
 
-              <button
-                type="button"
-                aria-label="continue"
-                className="absolute inset-0"
-                onClick={() => setShowWelcomeScreen(false)}
-              />
+              <div className="absolute inset-x-4 bottom-6 z-10">
+                <Card className="rounded-[28px] border border-[#FFE1B3] bg-white/96 shadow-[0_16px_40px_rgba(44,26,14,0.12)] backdrop-blur">
+                  <CardBody className="gap-4 p-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{mobileWelcomeCopy.label}</p>
+                      <p className="mt-2 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                        {mobileWelcomeCopy.title}
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-[#6c7289]">{mobileWelcomeCopy.body}</p>
+                    </div>
 
-              <div className="pointer-events-none absolute inset-x-4 bottom-6 z-10">
-                <div className="pointer-events-auto">{renderInstallPrompt()}</div>
+                    <div className="rounded-[20px] bg-[#FFF7E8] p-4 text-sm leading-6 text-[#2C1A0E]">
+                      {mobileWelcomeCopy.steps.map((step) => (
+                        <p key={step}>{step}</p>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {mobileWelcomeMode === "android" && deferredInstallPrompt ? (
+                        <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => void installApp()}>
+                          {mobileWelcomeCopy.installLabel}
+                        </Button>
+                      ) : null}
+                      <Button
+                        radius="full"
+                        className={mobileWelcomeMode === "android" && deferredInstallPrompt ? "bg-[#FFF0D0] text-[#2C1A0E]" : "bg-[#2C1A0E] text-white"}
+                        onPress={() => setShowWelcomeScreen(false)}
+                      >
+                        {mobileWelcomeCopy.continueLabel}
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
               </div>
             </motion.section>
           </div>

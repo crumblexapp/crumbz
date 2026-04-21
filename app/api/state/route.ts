@@ -642,17 +642,19 @@ async function sendAdminPostPush(rawPosts: unknown, previousPosts: unknown) {
 function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
   const currentPosts = normalizeObjectArray(currentPostsRaw);
   const proposedPosts = normalizeObjectArray(proposedPostsRaw);
-  const preservedPosts = currentPosts.filter((post) => normalizeEmail(post.authorEmail) !== verifiedEmail);
-  const preservedIds = new Set(preservedPosts.map((post) => String(post.id ?? "")).filter(Boolean));
-  const nextOwnPosts = proposedPosts.filter(
+  // Preserve ALL existing server posts — never let a client payload remove them.
+  // This prevents a cleared/corrupted localStorage from wiping a user's posts.
+  const currentIds = new Set(currentPosts.map((post) => String(post.id ?? "")).filter(Boolean));
+  // Only accept genuinely new posts authored by this verified user.
+  const newOwnPosts = proposedPosts.filter(
     (post) =>
       normalizeEmail(post.authorEmail) === verifiedEmail &&
       post.authorRole === "student" &&
       typeof post.id === "string" &&
-      !preservedIds.has(post.id),
+      !currentIds.has(post.id),
   );
 
-  return sortPosts([...preservedPosts, ...nextOwnPosts]);
+  return sortPosts([...currentPosts, ...newOwnPosts]);
 }
 
 function mergeInteractionsForUser(currentRaw: unknown, proposedRaw: unknown, verifiedEmail: string) {
@@ -855,8 +857,14 @@ export async function POST(request: Request) {
 
   const deletePostId = body?.deletePostId?.trim() ?? "";
   if (deletePostId) {
+    const existingPost = normalizeObjectArray(stateData?.posts).find((post) => String(post.id ?? "") === deletePostId);
+    const postAuthorEmail = normalizeEmail(existingPost?.authorEmail);
+
     if (!identity.isAdmin) {
-      return NextResponse.json({ ok: false, message: "only the admin account can delete posts here." }, { status: 403 });
+      // Non-admins may only delete their own student posts.
+      if (!existingPost || postAuthorEmail !== identity.email || existingPost.authorRole !== "student") {
+        return NextResponse.json({ ok: false, message: "you can only delete your own posts." }, { status: 403 });
+      }
     }
 
     const nextPosts = normalizeObjectArray(stateData?.posts).filter((post) => String(post.id ?? "") !== deletePostId);
