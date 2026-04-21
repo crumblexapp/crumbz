@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total per request
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
 }
@@ -22,8 +36,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Too many files at once." }, { status: 400 });
   }
 
-  if (files.some((file) => !file.type || (!file.type.startsWith("image/") && !file.type.startsWith("video/")))) {
-    return NextResponse.json({ ok: false, message: "Only image and video uploads are allowed." }, { status: 400 });
+  // Validate total size
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_TOTAL_SIZE) {
+    return NextResponse.json({ ok: false, message: `Total file size exceeds ${MAX_TOTAL_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
+  }
+
+  // Validate individual file size and MIME type
+  for (const file of files) {
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ ok: false, message: `File "${file.name}" exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
+    }
+    if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
+      return NextResponse.json({ ok: false, message: `File "${file.name}" has an unsupported file type.` }, { status: 400 });
+    }
   }
 
   const uploads = await Promise.all(
