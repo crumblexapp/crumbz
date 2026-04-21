@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireVerifiedIdentity } from "@/lib/google-auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -16,6 +18,17 @@ export async function POST(request: Request) {
       { ok: false, message: "missing OPENAI_API_KEY for post translation" },
       { status: 500 },
     );
+  }
+
+  const { error: authError, identity } = await requireVerifiedIdentity(request);
+  if (authError || !identity) {
+    return authError;
+  }
+
+  // Rate limit translations (10 per minute - costs money)
+  const rateLimit = await checkRateLimit(identity.email, "translate");
+  if (!rateLimit.ok) {
+    return NextResponse.json({ ok: false, message: rateLimit.message }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } });
   }
 
   const body = (await request.json().catch(() => null)) as TranslatePayload | null;

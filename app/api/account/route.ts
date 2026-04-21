@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { buildFriendRequestNotification } from "@/lib/notification-copy";
 import { sendPushToEmails } from "@/lib/push-notifications";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -232,6 +233,7 @@ export async function POST(request: Request) {
     return authError;
   }
 
+  // Rate limit friend actions
   const body = (await request.json().catch(() => null)) as
     | {
         action?: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
@@ -253,6 +255,14 @@ export async function POST(request: Request) {
   const action = body?.action;
   if (!action) {
     return NextResponse.json({ ok: false, message: "missing account action" }, { status: 400 });
+  }
+
+  // Rate limit friend-related actions (10 per minute)
+  if (action.includes("friend")) {
+    const rateLimit = await checkRateLimit(identity.email, "friend_request");
+    if (!rateLimit.ok) {
+      return NextResponse.json({ ok: false, message: rateLimit.message }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } });
+    }
   }
 
   const { accounts, error } = await readAccounts();

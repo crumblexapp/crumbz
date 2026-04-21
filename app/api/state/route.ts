@@ -4,6 +4,7 @@ import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { sendPushToEmails } from "@/lib/push-notifications";
 import { buildAdminPostNotification, buildAnnouncementNotification, buildFriendPostNotification, buildTaggedPostNotification } from "@/lib/notification-copy";
 import { webPushEnabled } from "@/lib/web-push";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -830,6 +831,7 @@ export async function POST(request: Request) {
     return authError;
   }
 
+  // Rate limit posts and interactions (20 posts/min, 30 interactions/min)
   const body = (await request.json().catch(() => null)) as
     | {
         accounts?: unknown;
@@ -840,6 +842,22 @@ export async function POST(request: Request) {
         deletePostId?: string;
       }
     | null;
+
+  // Check rate limits for non-admin users
+  if (!identity.isAdmin) {
+    if (body?.posts) {
+      const postLimit = await checkRateLimit(identity.email, "post");
+      if (!postLimit.ok) {
+        return NextResponse.json({ ok: false, message: postLimit.message }, { status: 429, headers: { "Retry-After": String(postLimit.retryAfter ?? 60) } });
+      }
+    }
+    if (body?.interactions) {
+      const interactionLimit = await checkRateLimit(identity.email, "interaction");
+      if (!interactionLimit.ok) {
+        return NextResponse.json({ ok: false, message: interactionLimit.message }, { status: 429, headers: { "Retry-After": String(interactionLimit.retryAfter ?? 60) } });
+      }
+    }
+  }
 
   const { data: currentData, error: currentError, supportsAnnouncements } = await readAppState();
   const { data: currentAccountData } = await readAccountState();

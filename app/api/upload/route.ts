@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total per request
@@ -21,9 +22,15 @@ function sanitizeFileName(fileName: string) {
 }
 
 export async function POST(request: Request) {
-  const { error: authError } = await requireVerifiedIdentity(request);
+  const { error: authError, identity } = await requireVerifiedIdentity(request);
   if (authError) {
     return authError;
+  }
+
+  // Rate limit uploads (10 per minute)
+  const rateLimit = await checkRateLimit(identity.email, "upload");
+  if (!rateLimit.ok) {
+    return NextResponse.json({ ok: false, message: rateLimit.message }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } });
   }
 
   const formData = await request.formData().catch(() => null);
