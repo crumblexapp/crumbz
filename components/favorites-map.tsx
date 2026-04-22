@@ -5,6 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { type Language, translations } from "@/lib/i18n";
 import Script from "next/script";
 
+declare global {
+  interface Window {
+    gm_authFailure?: () => void;
+  }
+}
+
 type FavoritePlace = {
   id: string;
   googlePlaceId?: string;
@@ -33,6 +39,7 @@ type FriendProfile = {
 };
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+const DEFAULT_MAPS_ERROR = GOOGLE_MAPS_API_KEY ? "" : "missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY";
 
 const cityCenters: Record<string, [number, number]> = {
   warsaw: [52.2297, 21.0122],
@@ -263,7 +270,7 @@ export default function FavoritesMap({
   const copy = translations[language];
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
-  const [googleMapsError, setGoogleMapsError] = useState("");
+  const [googleMapsError, setGoogleMapsError] = useState(DEFAULT_MAPS_ERROR);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
@@ -321,6 +328,19 @@ export default function FavoritesMap({
   const selectedReview = selectedPreviewPlace ? pickDiscoveryReview(selectedPreviewPlace) : null;
   const [fansModalOpen, setFansModalOpen] = useState(false);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.gm_authFailure = () => {
+      setGoogleMapsError("google maps rejected this browser key");
+      setGoogleMapsLoaded(false);
+    };
+
+    return () => {
+      delete window.gm_authFailure;
+    };
+  }, []);
+
   // Initialize Google Map
   useEffect(() => {
     if (!googleMapsLoaded || typeof window === "undefined" || !document.getElementById("google-map")) return;
@@ -346,8 +366,8 @@ export default function FavoritesMap({
 
   // Handle Google Maps script load error
   const handleGoogleMapsError = () => {
-    setGoogleMapsError("map failed to load");
-    setGoogleMapsLoaded(true);
+    setGoogleMapsError("google maps script was blocked or could not load");
+    setGoogleMapsLoaded(false);
   };
 
   // Update markers when places change
@@ -537,7 +557,16 @@ export default function FavoritesMap({
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="lazyOnload"
-        onLoad={() => setGoogleMapsLoaded(true)}
+        onLoad={() => {
+          if (typeof window !== "undefined" && window.google?.maps) {
+            setGoogleMapsLoaded(true);
+            setGoogleMapsError("");
+            return;
+          }
+
+          setGoogleMapsError("google maps script loaded, but the api was unavailable");
+          setGoogleMapsLoaded(false);
+        }}
         onError={handleGoogleMapsError}
       />
 
