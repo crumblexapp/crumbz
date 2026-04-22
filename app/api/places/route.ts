@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
 
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
-
-type NominatimResult = {
-  osm_id: number;
-  osm_type: "node" | "way" | "relation";
-  lat: string;
-  lon: string;
-  class: string;
-  type: string;
-  name?: string;
-  address?: Record<string, string>;
-  extratags?: Record<string, string>;
-};
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
 
 type OverpassElement = {
   type: "node" | "way" | "relation";
@@ -42,8 +33,10 @@ type Place = {
 
 const FOOD_AMENITIES = "restaurant|cafe|bar|fast_food|pub|biergarten|food_court|ice_cream";
 const FOOD_SHOPS = "bakery|confectionery|ice_cream|deli|pastry";
-const AMENITY_FOOD_SET = new Set(["restaurant", "cafe", "bar", "fast_food", "pub", "biergarten", "food_court", "ice_cream"]);
-const SHOP_FOOD_SET = new Set(["bakery", "confectionery", "ice_cream", "deli", "pastry"]);
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function mapToKind(amenity: string | undefined, shop: string | undefined, cuisine = ""): string {
   const c = cuisine.toLowerCase();
@@ -64,75 +57,6 @@ function mapToKind(amenity: string | undefined, shop: string | undefined, cuisin
   if (shop === "deli") return "deli";
   return (amenity ?? shop ?? "restaurant").replace(/_/g, " ");
 }
-
-// --- Nominatim: fast text search ---
-
-function isFoodNominatim(r: NominatimResult): boolean {
-  if (r.class === "amenity" && AMENITY_FOOD_SET.has(r.type)) return true;
-  if (r.class === "shop" && SHOP_FOOD_SET.has(r.type)) return true;
-  return false;
-}
-
-function normalizeNominatim(r: NominatimResult): Place | null {
-  if (!isFoodNominatim(r)) return null;
-  const name = r.name ?? r.address?.amenity ?? r.address?.shop;
-  if (!name) return null;
-  const lat = parseFloat(r.lat);
-  const lon = parseFloat(r.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-  const cuisine = r.extratags?.cuisine ?? "";
-  const kind = mapToKind(r.class === "amenity" ? r.type : undefined, r.class === "shop" ? r.type : undefined, cuisine);
-
-  const addr = r.address ?? {};
-  const parts: string[] = [];
-  if (addr.road && addr.house_number) parts.push(`${addr.road} ${addr.house_number}`);
-  else if (addr.road) parts.push(addr.road);
-  const cityPart = addr.city ?? addr.town ?? addr.suburb;
-  if (cityPart) parts.push(cityPart);
-
-  const openingHoursRaw = r.extratags?.opening_hours;
-
-  return {
-    id: `osm-${r.osm_id}`,
-    name,
-    kind,
-    lat,
-    lon,
-    address: parts.join(", ") || "Unknown location",
-    priceLevel: "",
-    openingHours: openingHoursRaw ? [openingHoursRaw] : [],
-    openNow: openingHoursRaw === "24/7" ? true : null,
-    reviews: [],
-  };
-}
-
-async function textSearch(query: string, lat: number, lon: number): Promise<Place[]> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "20");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("extratags", "1");
-  url.searchParams.set("dedupe", "1");
-  // viewbox as soft preference — no bounded=1 so we still get results outside it
-  url.searchParams.set("viewbox", `${lon - 0.2},${lat + 0.2},${lon + 0.2},${lat - 0.2}`);
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      "User-Agent": "CrumbzApp/1.0 (contact@crumbz.app)",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) throw new Error(`Nominatim error: ${response.status}`);
-
-  const results = (await response.json()) as NominatimResult[];
-  return results.map(normalizeNominatim).filter((p): p is Place => p !== null);
-}
-
-// --- Overpass: nearby map load (returns opening_hours) ---
 
 function normalizeOverpass(el: OverpassElement): Place | null {
   const tags = el.tags ?? {};
@@ -167,8 +91,71 @@ function normalizeOverpass(el: OverpassElement): Place | null {
   };
 }
 
+async function runOverpassQuery(ql: string): Promise<Place[]> {
+  let lastError: Error = new Error("no endpoints tried");
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "CrumbzApp/1.0 (contact@crumbz.app)",
+        },
+        body: `data=${encodeURIComponent(ql)}`,
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        lastError = new Error(`Overpass ${endpoint} returned ${response.status}`);
+        continue;
+      }
+
+      const data = (await response.json()) as { elements?: OverpassElement[]; remark?: string };
+
+      if (typeof data.remark === "string" && (data.remark.includes("timeout") || data.remark.includes("error"))) {
+        lastError = new Error(`Overpass: ${data.remark}`);
+        continue;
+      }
+
+      return (data.elements ?? []).map(normalizeOverpass).filter((p): p is Place => p !== null);
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error("fetch failed");
+    }
+  }
+
+  throw lastError;
+}
+
+async function textSearch(query: string, lat: number, lon: number): Promise<Place[]> {
+  const safe = escapeRegex(query);
+  // 10 km radius covers entire city; name filter keeps the query fast
+  const ql = `
+[out:json][timeout:12];
+(
+  node["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:10000,${lat},${lon});
+  way["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:10000,${lat},${lon});
+  node["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:10000,${lat},${lon});
+  way["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:10000,${lat},${lon});
+  node["amenity"~"${safe}"]["name"](around:10000,${lat},${lon});
+  way["amenity"~"${safe}"]["name"](around:10000,${lat},${lon});
+  node["cuisine"~"${safe}",i]["name"](around:10000,${lat},${lon});
+  way["cuisine"~"${safe}",i]["name"](around:10000,${lat},${lon});
+);
+out center tags 15;
+`;
+  const seen = new Set<string>();
+  const places: Place[] = [];
+  for (const place of await runOverpassQuery(ql)) {
+    if (!seen.has(place.id)) {
+      seen.add(place.id);
+      places.push(place);
+    }
+  }
+  return places;
+}
+
 async function nearbySearch(lat: number, lon: number, radius: number): Promise<Place[]> {
-  // Cap radius at 3 km so the Overpass query stays fast
   const r = Math.min(radius, 3000);
   const ql = `
 [out:json][timeout:12];
@@ -180,24 +167,8 @@ async function nearbySearch(lat: number, lon: number, radius: number): Promise<P
 );
 out center tags 50;
 `;
-
-  const response = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "CrumbzApp/1.0 (contact@crumbz.app)",
-    },
-    body: `data=${encodeURIComponent(ql)}`,
-    cache: "no-store",
-  });
-
-  if (!response.ok) throw new Error(`Overpass error: ${response.status}`);
-
-  const data = (await response.json()) as { elements: OverpassElement[] };
-  const places = data.elements.map(normalizeOverpass).filter((p): p is Place => p !== null);
-
+  const places = await runOverpassQuery(ql);
   places.sort((a, b) => (a.lat - lat) ** 2 + (a.lon - lon) ** 2 - ((b.lat - lat) ** 2 + (b.lon - lon) ** 2));
-
   return places;
 }
 

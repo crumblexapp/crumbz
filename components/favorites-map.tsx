@@ -195,6 +195,7 @@ export default function FavoritesMap({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
+  const [searchError, setSearchError] = useState("");
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [previewedPlace, setPreviewedPlace] = useState<FavoritePlace | null>(null);
   const defaultDisplayedPlaces = useMemo(() => places.slice(0, 50), [places]);
@@ -248,11 +249,13 @@ export default function FavoritesMap({
     if (query.length < 2) {
       setSearchResults([]);
       setSearchLoading(false);
+      setSearchError("");
       return;
     }
 
     const timeout = window.setTimeout(async () => {
       setSearchLoading(true);
+      setSearchError("");
 
       try {
         const params = new URLSearchParams({
@@ -264,9 +267,13 @@ export default function FavoritesMap({
           params.set("city", searchCityName);
         }
         const response = await fetch(`/api/places?${params.toString()}`, { cache: "no-store" });
-        const payload = (await response.json().catch(() => ({ places: [] }))) as { places?: FavoritePlace[] };
-        const nextResults = (payload.places ?? []).slice(0, 12);
+        const payload = (await response.json().catch(() => ({ ok: false, places: [] }))) as { ok?: boolean; message?: string; places?: FavoritePlace[] };
 
+        if (payload.ok === false && payload.message) {
+          setSearchError(payload.message);
+        }
+
+        const nextResults = (payload.places ?? []).slice(0, 12);
         setSearchResults(nextResults);
         setSelectedPlaceId(nextResults[0]?.id ?? null);
         setPreviewedPlace(nextResults[0] ?? null);
@@ -274,10 +281,11 @@ export default function FavoritesMap({
         setSearchResults([]);
         setSelectedPlaceId(null);
         setPreviewedPlace(null);
+        setSearchError("search unavailable right now");
       } finally {
         setSearchLoading(false);
       }
-    }, 300);
+    }, 600);
 
     return () => window.clearTimeout(timeout);
   }, [effectiveCenter, searchCityName, searchQuery]);
@@ -345,7 +353,9 @@ export default function FavoritesMap({
                 ))}
               </div>
             ) : (
-              <div className="px-4 py-4 text-sm text-[#7c6d60]">{copy.map.noResults}</div>
+              <div className="px-4 py-4 text-sm text-[#7c6d60]">
+                {searchError ? `⚠ ${searchError}` : copy.map.noResults}
+              </div>
             )}
           </div>
         ) : null}
