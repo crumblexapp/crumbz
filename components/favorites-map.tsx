@@ -31,6 +31,38 @@ type FriendProfile = {
   favoritePlaceIds: string[];
 };
 
+function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const earthRadius = 6371000;
+  const latDelta = ((bLat - aLat) * Math.PI) / 180;
+  const lonDelta = ((bLon - aLon) * Math.PI) / 180;
+  const lat1 = (aLat * Math.PI) / 180;
+  const lat2 = (bLat * Math.PI) / 180;
+  const haversine =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(lonDelta / 2) ** 2;
+  return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function isPlaceFavorited(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]) {
+  if (favoriteIds.includes(place.id)) return true;
+
+  const normalizedName = place.name.toLowerCase().trim();
+  const placeLat = place.lat;
+  const placeLon = place.lon;
+
+  for (const favPlace of favoritePlaces) {
+    const favName = favPlace.name.toLowerCase().trim();
+    if (favName === normalizedName) {
+      const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
+      if (distance < 100) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 const cityCenters: Record<string, [number, number]> = {
   warsaw: [52.2297, 21.0122],
   lodz: [51.7592, 19.456],
@@ -224,7 +256,7 @@ export default function FavoritesMap({
     [places]
   );
 
-  const defaultDisplayedPlaces = useMemo(() => foodOnlyPlaces.slice(0, 50), [foodOnlyPlaces]);
+  const defaultDisplayedPlaces = useMemo(() => foodOnlyPlaces.slice(0, 100), [foodOnlyPlaces]);
 
   const selectedPlace = useMemo(
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
@@ -322,7 +354,7 @@ export default function FavoritesMap({
           );
         });
 
-        const nextResults = foodOnlyResults.slice(0, 15);
+        const nextResults = foodOnlyResults.slice(0, 25);
         setSearchResults(nextResults);
         if (nextResults.length > 0 && !selectedPlaceId) {
           setSelectedPlaceId(nextResults[0].id);
@@ -336,7 +368,7 @@ export default function FavoritesMap({
       } finally {
         setSearchLoading(false);
       }
-    }, 400);
+    }, 200);
 
     return () => window.clearTimeout(timeout);
   }, [effectiveCenter, searchCityName, searchQuery, selectedPlaceId]);
@@ -433,7 +465,7 @@ export default function FavoritesMap({
             <Marker
               key={place.id}
               position={[place.lat, place.lon]}
-              icon={buildMarkerIcon(place, focusedPlace?.id === place.id, favoriteIds.includes(place.id), mutualFansByPlace[place.id] ?? [])}
+              icon={buildMarkerIcon(place, focusedPlace?.id === place.id, isPlaceFavorited(place, favoriteIds, places), mutualFansByPlace[place.id] ?? [])}
               eventHandlers={{
                 click: () => {
                   setSelectedPlaceId(place.id);
@@ -484,7 +516,7 @@ export default function FavoritesMap({
               type="button"
               onClick={() => onToggleFavorite(selectedPreviewPlace)}
               className={`mt-1 flex h-14 w-14 shrink-0 items-center justify-center self-start rounded-[20px] ${
-                favoriteIds.includes(selectedPreviewPlace.id) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
+                isPlaceFavorited(selectedPreviewPlace, favoriteIds, places) ? "bg-[#FE8A01] text-white" : "bg-[#fff0d9] text-[#d97706]"
               }`}
               aria-label={`heart ${selectedPreviewPlace.name}`}
             >

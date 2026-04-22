@@ -1735,6 +1735,18 @@ function inferCreatorPostFormat(post: AppPost): CreatorPostFormat {
   return "post";
 }
 
+function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const earthRadius = 6371000;
+  const latDelta = ((bLat - aLat) * Math.PI) / 180;
+  const lonDelta = ((bLon - aLon) * Math.PI) / 180;
+  const lat1 = (aLat * Math.PI) / 180;
+  const lat2 = (bLat * Math.PI) / 180;
+  const haversine =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(lonDelta / 2) ** 2;
+  return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
 function getFallbackFavoritePlaces(cityName: string) {
   return fallbackFavoritePlacesByCity[normalizeCityKey(cityName)] ?? [];
 }
@@ -6207,10 +6219,52 @@ export default function Page() {
       });
   };
 
+  function isPlaceFavorited(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]) {
+    if (favoriteIds.includes(place.id)) return true;
+
+    const normalizedName = place.name.toLowerCase().trim();
+    const placeLat = place.lat;
+    const placeLon = place.lon;
+
+    for (const favPlace of favoritePlaces) {
+      const favName = favPlace.name.toLowerCase().trim();
+      if (favName === normalizedName) {
+        const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
+        if (distance < 100) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function findMatchingFavoriteId(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]): string | null {
+    if (favoriteIds.includes(place.id)) return place.id;
+
+    const normalizedName = place.name.toLowerCase().trim();
+    const placeLat = place.lat;
+    const placeLon = place.lon;
+
+    for (const favPlace of favoritePlaces) {
+      const favName = favPlace.name.toLowerCase().trim();
+      if (favName === normalizedName) {
+        const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
+        if (distance < 100) {
+          return favPlace.id;
+        }
+      }
+    }
+
+    return null;
+  }
+
   const toggleFavoritePlace = (place: FavoritePlace, sourcePostId?: string) => {
-    const placeId = place.id;
-    const isRemoving = favoritePlaceIds.includes(placeId);
-    const nextFavoritePlaceIds = isRemoving ? favoritePlaceIds.filter((id) => id !== placeId) : [...favoritePlaceIds, placeId];
+    const matchingId = findMatchingFavoriteId(place, favoritePlaceIds, favoritePlaces);
+    const isRemoving = matchingId !== null;
+    const nextFavoritePlaceIds = isRemoving
+      ? favoritePlaceIds.filter((id) => id !== matchingId)
+      : [...favoritePlaceIds, place.id];
 
     void mutateAccountState({
       action: "update_favorites",

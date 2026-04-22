@@ -372,12 +372,12 @@ async function photonSearch(query: string, lat: number, lon: number, limit: numb
     normalized = sortByDistance(filterWithinRadius(normalized, lat, lon, 15000), lat, lon).slice(0, limit);
   }
 
-  return enrichPlacesWithOverpass(normalized, lat, lon);
+  return normalized;
 }
 
 async function overpassNearby(lat: number, lon: number, radius: number, limit: number) {
   const query = `
-[out:json][timeout:25];
+[out:json][timeout:15];
 (
   nwr(around:${radius},${lat},${lon})["amenity"~"restaurant|cafe|bar|fast_food|pub|ice_cream|food_court|biergarten"];
   nwr(around:${radius},${lat},${lon})["shop"~"bakery|coffee|confectionery|ice_cream|supermarket|convenience|deli|pastry"];
@@ -389,7 +389,7 @@ out center;
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     try {
       const response = await fetch(endpoint, {
@@ -459,8 +459,8 @@ export async function GET(request: Request) {
 
   try {
     let places = query
-      ? await photonSearch(query, lat, lon, 20, Math.max(radius, 8000))
-      : await overpassNearby(lat, lon, radius, 50);
+      ? await photonSearch(query, lat, lon, 25, Math.max(radius, 8000))
+      : await overpassNearby(lat, lon, radius, 100);
 
     if (city) {
       places = filterByCity(places, city);
