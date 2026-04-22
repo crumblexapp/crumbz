@@ -180,7 +180,6 @@ export default function FavoritesMap({
   language: Language;
   places: FavoritePlace[];
   favoriteIds: string[];
-  mutualFansByPlace: Record<string, unknown>;
   onToggleFavorite: (place: FavoritePlace) => void;
   onOpenDirections: (place: FavoritePlace) => void;
   onPostFromPlace?: (place: FavoritePlace) => void;
@@ -198,7 +197,7 @@ export default function FavoritesMap({
   const [searchError, setSearchError] = useState("");
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [previewedPlace, setPreviewedPlace] = useState<FavoritePlace | null>(null);
-  const defaultDisplayedPlaces = useMemo(() => places.slice(0, 50), [places]);
+  const defaultDisplayedPlaces = useMemo(() => foodOnlyPlaces.slice(0, 50), [foodOnlyPlaces]);
 
   const selectedPlace = useMemo(
     () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
@@ -211,6 +210,32 @@ export default function FavoritesMap({
     if (defaultDisplayedPlaces.some((place) => place.id === focusedPlace.id)) return defaultDisplayedPlaces;
     return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 50);
   }, [defaultDisplayedPlaces, focusedPlace, searchResults]);
+
+  const foodOnlyPlaces = useMemo(
+    () =>
+      places.filter((place) => {
+        const kind = place.kind.toLowerCase();
+        return (
+          kind.includes("restaurant") ||
+          kind.includes("cafe") ||
+          kind.includes("bar") ||
+          kind.includes("bakery") ||
+          kind.includes("fast food") ||
+          kind.includes("pizza") ||
+          kind.includes("burger") ||
+          kind.includes("ice cream") ||
+          kind.includes("dessert") ||
+          kind.includes("pub") ||
+          kind.includes("shop") ||
+          kind.includes("sandwich") ||
+          kind.includes("coffee") ||
+          kind.includes("pastry") ||
+          kind.includes("deli") ||
+          kind.includes("chocolate")
+        );
+      }),
+    [places]
+  );
 
   const mutualFansByPlace = useMemo(
     () =>
@@ -246,7 +271,7 @@ export default function FavoritesMap({
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (query.length < 2) {
+    if (query.length < 1) {
       setSearchResults([]);
       setSearchLoading(false);
       setSearchError("");
@@ -273,10 +298,35 @@ export default function FavoritesMap({
           setSearchError(payload.message);
         }
 
-        const nextResults = (payload.places ?? []).slice(0, 12);
+        const foodOnlyResults = (payload.places ?? []).filter((place) => {
+          const kind = place.kind.toLowerCase();
+          const matchesQuery = place.name.toLowerCase().includes(query.toLowerCase()) || kind.includes(query.toLowerCase());
+          return matchesQuery && (
+            kind.includes("restaurant") ||
+            kind.includes("cafe") ||
+            kind.includes("bar") ||
+            kind.includes("bakery") ||
+            kind.includes("fast food") ||
+            kind.includes("pizza") ||
+            kind.includes("burger") ||
+            kind.includes("ice cream") ||
+            kind.includes("dessert") ||
+            kind.includes("pub") ||
+            kind.includes("shop") ||
+            kind.includes("sandwich") ||
+            kind.includes("coffee") ||
+            kind.includes("pastry") ||
+            kind.includes("deli") ||
+            kind.includes("chocolate")
+          );
+        });
+
+        const nextResults = foodOnlyResults.slice(0, 15);
         setSearchResults(nextResults);
-        setSelectedPlaceId(nextResults[0]?.id ?? null);
-        setPreviewedPlace(nextResults[0] ?? null);
+        if (nextResults.length > 0 && !selectedPlaceId) {
+          setSelectedPlaceId(nextResults[0].id);
+          setPreviewedPlace(nextResults[0]);
+        }
       } catch {
         setSearchResults([]);
         setSelectedPlaceId(null);
@@ -285,10 +335,10 @@ export default function FavoritesMap({
       } finally {
         setSearchLoading(false);
       }
-    }, 600);
+    }, 400);
 
     return () => window.clearTimeout(timeout);
-  }, [effectiveCenter, searchCityName, searchQuery]);
+  }, [effectiveCenter, searchCityName, searchQuery, selectedPlaceId]);
 
   return (
     <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">

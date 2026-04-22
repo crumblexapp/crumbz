@@ -5125,7 +5125,28 @@ export default function Page() {
         }
 
         const payload = (await response.json()) as { places?: FavoritePlace[] };
-        const nextPlaces = (payload.places ?? []).filter(
+        const foodOnlyPlaces = (payload.places ?? []).filter((place) => {
+          const kind = place.kind.toLowerCase();
+          return (
+            kind.includes("restaurant") ||
+            kind.includes("cafe") ||
+            kind.includes("bar") ||
+            kind.includes("bakery") ||
+            kind.includes("fast food") ||
+            kind.includes("pizza") ||
+            kind.includes("burger") ||
+            kind.includes("ice cream") ||
+            kind.includes("dessert") ||
+            kind.includes("pub") ||
+            kind.includes("shop") ||
+            kind.includes("sandwich") ||
+            kind.includes("coffee") ||
+            kind.includes("pastry") ||
+            kind.includes("deli") ||
+            kind.includes("chocolate")
+          );
+        });
+        const nextPlaces = foodOnlyPlaces.filter(
           (place, index, list) => list.findIndex((item) => item.name === place.name) === index,
         );
 
