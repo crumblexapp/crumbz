@@ -431,7 +431,7 @@ export default function FavoritesMap({
             </button>
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className={`mt-4 grid gap-2 ${selectedPreviewPlace.priceLevel ? "sm:grid-cols-2" : ""}`}>
             <div className="rounded-[18px] bg-white/90 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.openingHours}</p>
               <p className="mt-1 text-[13px] font-medium leading-5 text-[#2b1530]">
@@ -443,12 +443,14 @@ export default function FavoritesMap({
                 </p>
               ) : null}
             </div>
-            <div className="rounded-[18px] bg-white/90 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.priceRange}</p>
-              <p className="mt-1 text-[13px] font-medium leading-5 text-[#2b1530]">
-                {formatPriceLevel(selectedPreviewPlace.priceLevel, language) || copy.map.priceUnavailable}
-              </p>
-            </div>
+            {selectedPreviewPlace.priceLevel ? (
+              <div className="rounded-[18px] bg-white/90 px-3 py-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B56D19]">{copy.map.priceRange}</p>
+                <p className="mt-1 text-[13px] font-medium leading-5 text-[#2b1530]">
+                  {formatPriceLevel(selectedPreviewPlace.priceLevel, language)}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {isNewUser && selectedReview ? (

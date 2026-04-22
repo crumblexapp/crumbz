@@ -5106,7 +5106,7 @@ export default function Page() {
     }
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 25000);
     const loadPlaces = async () => {
       setFavoritePlacesLoading(true);
       setFavoritePlacesError("");
