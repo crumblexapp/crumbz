@@ -213,6 +213,26 @@ function deduplicatePlaces(places: FavoritePlace[]): FavoritePlace[] {
   return Array.from(seen.values());
 }
 
+function createMarkerIcon(kind: string, isFavorited: boolean) {
+  const accent = getPlaceAccent(kind);
+  const bgColor = isFavorited ? "#fe8a01" : accent.bg;
+  const fgColor = accent.fg;
+  const icon = accent.icon;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+      <rect x="2" y="2" width="40" height="40" rx="18" fill="${bgColor}" stroke="white" stroke-width="3"/>
+      <text x="22" y="28" text-anchor="middle" font-size="18" fill="${fgColor}">${icon}</text>
+    </svg>
+  `.trim();
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(44, 44),
+    anchor: new google.maps.Point(22, 22),
+  };
+}
+
 export default function FavoritesMap({
   center,
   cityName,
@@ -243,6 +263,7 @@ export default function FavoritesMap({
   const copy = translations[language];
   const effectiveCenter = cityCenters[normalizeCityKey(cityName)] ?? center;
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
+  const [googleMapsError, setGoogleMapsError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<FavoritePlace[]>([]);
@@ -302,20 +323,32 @@ export default function FavoritesMap({
 
   // Initialize Google Map
   useEffect(() => {
-    if (!googleMapsLoaded || typeof window === "undefined") return;
+    if (!googleMapsLoaded || typeof window === "undefined" || !document.getElementById("google-map")) return;
 
-    const map = new google.maps.Map(document.getElementById("google-map")!, {
-      center: { lat: effectiveCenter[0], lng: effectiveCenter[1] },
-      zoom: 13,
-      disableDefaultUI: true,
-      styles: [
-        { featureType: "poi", stylers: [{ visibility: "off" }] },
-        { featureType: "transit", stylers: [{ visibility: "off" }] },
-      ],
-    });
+    try {
+      const map = new google.maps.Map(document.getElementById("google-map")!, {
+        center: { lat: effectiveCenter[0], lng: effectiveCenter[1] },
+        zoom: 13,
+        disableDefaultUI: true,
+        styles: [
+          { featureType: "poi", stylers: [{ visibility: "off" }] },
+          { featureType: "transit", stylers: [{ visibility: "off" }] },
+        ],
+      });
 
-    setMapInstance(map);
+      setMapInstance(map);
+      setGoogleMapsError("");
+    } catch (error) {
+      console.error("Failed to initialize Google Map:", error);
+      setGoogleMapsError("map failed to load");
+    }
   }, [googleMapsLoaded, effectiveCenter]);
+
+  // Handle Google Maps script load error
+  const handleGoogleMapsError = () => {
+    setGoogleMapsError("map failed to load");
+    setGoogleMapsLoaded(true);
+  };
 
   // Update markers when places change
   useEffect(() => {
@@ -328,42 +361,13 @@ export default function FavoritesMap({
     const newMarkers = new Map<string, google.maps.Marker>();
 
     foodOnlyPlaces.forEach((place) => {
-      const accent = getPlaceAccent(place.kind);
       const isFavorited = isPlaceFavorited(place, favoriteIds, places);
-      const mutualFans = mutualFansByPlace[place.id] ?? [];
-
-      const markerContent = `
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="height:44px;width:44px;border-radius:18px;border:3px solid white;background:${isFavorited ? "#fe8a01" : accent.bg};display:flex;align-items:center;justify-content:center;color:${accent.fg};font-size:18px;box-shadow:0 12px 28px rgba(43,21,48,0.18);">
-            ${accent.icon}
-          </div>
-          ${mutualFans.length > 0 ? `
-            <div style="display:flex;">
-              ${mutualFans.slice(0, 2).map((fan, i) => `
-                <div style="height:32px;width:32px;border-radius:999px;overflow:hidden;border:2px solid white;background:#fff3e1;margin-left:${i === 0 ? 0 : -8}px;">
-                  ${fan.picture
-                    ? `<img src="${fan.picture}" style="height:100%;width:100%;object-fit:cover;" />`
-                    : `<span style="display:flex;align-items:center;justify-content:center;height:100%;font-size:11px;font-weight:700;">${fan.name.slice(0, 1).toUpperCase()}</span>`
-                  }
-                </div>
-              `).join('')}
-              ${mutualFans.length > 2 ? `
-                <div style="height:32px;width:32px;border-radius:999px;border:2px solid white;background:#2b1530;color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-left:-8px;">
-                  +${mutualFans.length - 2}
-                </div>
-              ` : ''}
-            </div>
-          ` : ''}
-        </div>
-      `;
+      const icon = createMarkerIcon(place.kind, isFavorited);
 
       const marker = new google.maps.Marker({
         position: { lat: place.lat, lng: place.lon },
         map: mapInstance,
-        label: {
-          text: markerContent,
-          color: "black",
-        } as any,
+        icon: icon,
       });
 
       marker.addListener("click", () => {
@@ -376,7 +380,7 @@ export default function FavoritesMap({
     });
 
     setMarkers(newMarkers);
-  }, [foodOnlyPlaces, favoriteIds, places, mapInstance, googleMapsLoaded, mutualFansByPlace]);
+  }, [foodOnlyPlaces, favoriteIds, places, mapInstance, googleMapsLoaded]);
 
   // Handle highlighted place
   useEffect(() => {
@@ -538,12 +542,23 @@ export default function FavoritesMap({
     );
   }
 
+  if (googleMapsError) {
+    return (
+      <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
+        <div className="h-[440px] w-full flex items-center justify-center sm:h-[540px]">
+          <p className="text-sm text-[#785c42]">⚠ {googleMapsError}. please refresh.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="lazyOnload"
         onLoad={() => setGoogleMapsLoaded(true)}
+        onError={handleGoogleMapsError}
       />
 
       <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
