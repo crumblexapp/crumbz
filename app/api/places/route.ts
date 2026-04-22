@@ -124,10 +124,15 @@ function normalizePhotonPlace(feature: PhotonFeature): Place | null {
 function normalizeOverpassPlace(element: OverpassElement): Place | null {
   const tags = element.tags ?? {};
   const name = tags.name?.trim();
-  const lat = element.lat ?? element.center?.lat;
-  const lon = element.lon ?? element.center?.lon;
+  const latValue = element.lat ?? element.center?.lat;
+  const lonValue = element.lon ?? element.center?.lon;
 
-  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (!name || typeof latValue !== "number" || !Number.isFinite(latValue) || typeof lonValue !== "number" || !Number.isFinite(lonValue)) {
+    return null;
+  }
+
+  const lat = latValue;
+  const lon = lonValue;
 
   return {
     id: `osm-${element.type}-${element.id}`,
