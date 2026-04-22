@@ -505,8 +505,22 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
   );
 }
 
-async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previousInteractionsRaw: unknown) {
+async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previousInteractionsRaw: unknown, accountsRaw: unknown, postsRaw: unknown) {
   if (!webPushEnabled) return;
+
+  const accounts = normalizeObjectArray(accountsRaw);
+  const accountByEmail = new Map(
+    accounts
+      .map((account) => [normalizeEmail(account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord).email : ""), account] as const)
+      .filter(([email]) => Boolean(email)),
+  );
+
+  const posts = normalizeObjectArray(postsRaw);
+  const postOwnerByPostId = new Map(
+    posts
+      .map((post) => [String(post.id ?? ""), normalizeEmail(post.authorEmail)] as const)
+      .filter(([postId]) => Boolean(postId)),
+  );
 
   const nextInteractions = normalizeInteractionsMap(nextInteractionsRaw);
   const previousInteractions = normalizeInteractionsMap(previousInteractionsRaw);
@@ -526,6 +540,34 @@ async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previous
           if (!commentId || !commentOwnerEmail) return;
 
           const previousComment = previousCommentsById.get(commentId) ?? null;
+
+          // New first-level comment — notify post owner
+          if (!previousComment) {
+            const postOwnerEmail = postOwnerByPostId.get(postId) ?? "";
+            if (postOwnerEmail && postOwnerEmail !== commentOwnerEmail) {
+              const postOwnerAccount = accountByEmail.get(postOwnerEmail);
+              const postOwnerLanguage = getAccountPreferredLanguage(postOwnerAccount);
+              const commenterName = normalizeText(comment.authorName) || "someone";
+              const previewText = normalizeText(comment.text).slice(0, 80);
+              const title = postOwnerLanguage === "pl"
+                ? `${commenterName} skomentował_a twój post`
+                : `${commenterName} commented on your post`;
+              const notifBody = postOwnerLanguage === "pl"
+                ? previewText || "otwórz crumbz, żeby zobaczyć komentarz."
+                : previewText || "open crumbz to see the comment.";
+              await sendPushToEmails([postOwnerEmail], {
+                title,
+                body: notifBody,
+                url: `/?post=${encodeURIComponent(postId)}`,
+                tag: `new-comment-${postId}-${commentId}`,
+              });
+            }
+            return;
+          }
+
+          const commentOwnerAccount = accountByEmail.get(commentOwnerEmail);
+          const commentOwnerLanguage = getAccountPreferredLanguage(commentOwnerAccount);
+
           const previousReactions = normalizeObjectArray(previousComment?.reactions);
           const nextReactions = normalizeObjectArray(comment.reactions);
           const previousReactionKeys = new Set(
@@ -554,9 +596,17 @@ async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previous
             const latest = group[group.length - 1] ?? null;
             if (!latest) return null;
 
+            const actorNames = group.map((reaction) => normalizeText(reaction.authorName) || "someone");
+            const title = commentOwnerLanguage === "pl"
+              ? `${formatActorList(actorNames)} zareagował_a na twój komentarz`
+              : `${formatActorList(actorNames)} reacted to your comment`;
+            const body = commentOwnerLanguage === "pl"
+              ? normalizeText(comment.text) || "otwórz crumbz, żeby zobaczyć komentarz."
+              : normalizeText(comment.text) || "open crumbz to see the comment.";
+
             return sendPushToEmails([commentOwnerEmail], {
-              title: `${formatActorList(group.map((reaction) => normalizeText(reaction.authorName) || "someone"))} reacted to your comment`,
-              body: normalizeText(comment.text) || "open crumbz to see the comment.",
+              title,
+              body,
               url: `/?post=${encodeURIComponent(postId)}`,
               tag: `comment-reaction-${postId}-${commentId}-${normalizeText(latest.createdAt)}`,
             });
@@ -566,9 +616,17 @@ async function sendCommentInteractionPush(nextInteractionsRaw: unknown, previous
             const latest = group[group.length - 1] ?? null;
             if (!latest) return null;
 
+            const actorNames = group.map((reply) => normalizeText(reply.authorName) || "someone");
+            const title = commentOwnerLanguage === "pl"
+              ? `${formatActorList(actorNames)} odpowiedział_a na twój komentarz`
+              : `${formatActorList(actorNames)} replied to your comment`;
+            const body = commentOwnerLanguage === "pl"
+              ? normalizeText(comment.text) || "otwórz crumbz, żeby zobaczyć wątek."
+              : normalizeText(comment.text) || "open crumbz to see the thread.";
+
             return sendPushToEmails([commentOwnerEmail], {
-              title: `${formatActorList(group.map((reply) => normalizeText(reply.authorName) || "someone"))} replied to your comment`,
-              body: normalizeText(comment.text) || "open crumbz to see the thread.",
+              title,
+              body,
               url: `/?post=${encodeURIComponent(postId)}`,
               tag: `comment-reply-${postId}-${commentId}-${normalizeText(latest.createdAt)}`,
             });
@@ -1011,7 +1069,12 @@ export async function POST(request: Request) {
   }
 
   if ("interactions" in (body ?? {}) && !identity.isAdmin) {
-    await sendCommentInteractionPush(nextInteractions, fallbackMeta.interactions);
+    await sendCommentInteractionPush(
+      nextInteractions,
+      fallbackMeta.interactions,
+      accountState?.accounts ?? stateData?.accounts ?? [],
+      nextRow.posts,
+    );
   }
 
   if ("posts" in updates && identity.isAdmin) {

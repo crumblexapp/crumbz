@@ -355,23 +355,40 @@ export default function FavoritesMap({
     }
   }, [googleMapsLoaded, effectiveCenter]);
 
-  // Rebuild markers whenever places, favorites, friends, or map changes
+  // Diff-update markers: update icons in-place, only add/remove what actually changed.
+  // Never clears all markers at once — eliminates the blank-map flash on every re-render.
   useEffect(() => {
     if (!mapInstance || !googleMapsLoaded) return;
 
-    markersRef.current.forEach((marker) => marker.setMap(null));
-    markersRef.current.clear();
+    const nextPlaceIds = new Set(foodOnlyPlaces.map((p) => p.id));
 
+    // Remove markers for places no longer in the list
+    markersRef.current.forEach((marker, placeId) => {
+      if (!nextPlaceIds.has(placeId)) {
+        marker.setMap(null);
+        markersRef.current.delete(placeId);
+      }
+    });
+
+    // Add new markers or update icons for existing ones
     foodOnlyPlaces.forEach((place) => {
       const isFavorited = isPlaceFavorited(place, favoriteIds, places);
       const hasFriendSave = (mutualFansByPlace[place.id]?.length ?? 0) > 0;
       const icon = createMarkerIcon(place.kind, isFavorited, hasFriendSave);
+      const zIndex = isFavorited ? 10 : hasFriendSave ? 5 : 1;
+
+      const existing = markersRef.current.get(place.id);
+      if (existing) {
+        existing.setIcon(icon);
+        existing.setZIndex(zIndex);
+        return;
+      }
 
       const marker = new google.maps.Marker({
         position: { lat: place.lat, lng: place.lon },
         map: mapInstance,
         icon,
-        zIndex: isFavorited ? 10 : hasFriendSave ? 5 : 1,
+        zIndex,
       });
 
       marker.addListener("click", () => {

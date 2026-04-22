@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
-import { buildFriendRequestNotification } from "@/lib/notification-copy";
+import { buildFriendAcceptedNotification, buildFriendRequestNotification } from "@/lib/notification-copy";
 import { sendPushToEmails } from "@/lib/push-notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -438,6 +438,22 @@ export async function POST(request: Request) {
 
       return account;
     });
+
+    const acceptor = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const senderAccount = accounts.find((account) => getEmail(account) === targetEmail) ?? null;
+    const acceptedCopy = buildFriendAcceptedNotification(
+      getPublicName(acceptor),
+      acceptor?.profile.username ? `@${acceptor.profile.username}` : "@someone",
+      `${currentEmail}-${targetEmail}-accepted`,
+      senderAccount?.profile.preferredLanguage === "pl" ? "pl" : "en",
+    );
+    pendingPush = {
+      emails: [targetEmail],
+      title: acceptedCopy.title,
+      body: acceptedCopy.body,
+      url: "/?tab=social",
+      tag: `friend-accepted-${currentEmail}-${targetEmail}`,
+    };
   }
 
   if (action === "cancel_friend_request") {
@@ -641,6 +657,7 @@ export async function POST(request: Request) {
         emails: actorFriends,
         title: `${getPublicName(actor)} saved ${addedFavoritePlace}`,
         body: "check the map to see what they added.",
+        url: "/?tab=favorites",
         tag: `favorite-${currentEmail}-${Date.now()}`,
       };
     }

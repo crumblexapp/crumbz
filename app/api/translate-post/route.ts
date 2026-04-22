@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-5-mini",
+      model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       messages: [
         {

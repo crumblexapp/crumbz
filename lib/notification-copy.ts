@@ -317,6 +317,41 @@ export function buildAdminPostNotification(params: {
   ]);
 }
 
+export function buildFriendAcceptedNotification(acceptorName: string, username: string, seed: string, language: NotificationLanguage = "en"): CopyPair {
+  const name = clean(acceptorName, "someone");
+  const handle = clean(username, "someone");
+  if (language === "pl") {
+    return pickVariant(seed, [
+      {
+        title: "jesteście teraz znajomymi 🎉",
+        body: `${name} zaakceptował_a twoje zaproszenie do circle.`,
+      },
+      {
+        title: `${handle} dołączył_a do twojego circle`,
+        body: "możecie teraz zobaczyć swoje miejsca.",
+      },
+      {
+        title: "zaproszenie zaakceptowane",
+        body: `${name} jest teraz w twoim circle.`,
+      },
+    ]);
+  }
+  return pickVariant(seed, [
+    {
+      title: "you're now friends 🎉",
+      body: `${name} accepted your friend request.`,
+    },
+    {
+      title: `${handle} joined your circle`,
+      body: "you can now see each other's spots.",
+    },
+    {
+      title: "friend request accepted",
+      body: `${name} is now in your circle.`,
+    },
+  ]);
+}
+
 export function buildAnnouncementNotification(params: { title: string; body: string; seed: string; language?: NotificationLanguage }): CopyPair {
   const title = clean(params.title, "forget google. open crumbz.");
   const body = clean(params.body, "something worth opening just landed.");
