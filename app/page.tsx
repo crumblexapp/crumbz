@@ -5143,7 +5143,7 @@ export default function Page() {
     }
 
     // Load cached places immediately for home city
-    const cacheKey = `places-${cityKey}`;
+    const cacheKey = `places-v2-${cityKey}`;
     const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     let cacheIsFresh = false;
