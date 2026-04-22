@@ -212,30 +212,30 @@ function deduplicatePlaces(places: FavoritePlace[]): FavoritePlace[] {
   return Array.from(seen.values());
 }
 
-// Pin-shaped marker: type-colored by default, orange when favorited.
-// Friend badge (small heart dot) appears top-right when any friend saved this spot.
+// Rounded-square marker (like iOS app icons): type-colored background, emoji centered.
+// Orange background when the current user has favorited this spot.
+// Small heart badge at top-right when any friend has saved it.
 function createMarkerIcon(kind: string, isFavorited: boolean, hasFriendSave: boolean) {
   const accent = getPlaceAccent(kind);
   const bgColor = isFavorited ? "#fe8a01" : accent.bg;
   const icon = accent.icon;
 
   const friendBadge = hasFriendSave
-    ? `<circle cx="33" cy="11" r="7.5" fill="white"/>
-       <circle cx="33" cy="11" r="6" fill="${isFavorited ? "#ffffff" : "#fe8a01"}"/>
-       <text x="33" y="14.5" text-anchor="middle" font-size="8" fill="${isFavorited ? "#fe8a01" : "#ffffff"}">♥</text>`
+    ? `<circle cx="36" cy="8" r="7.5" fill="white"/>
+       <circle cx="36" cy="8" r="6" fill="${isFavorited ? "#fff" : "#fe8a01"}"/>
+       <text x="36" y="11.5" text-anchor="middle" font-size="8" fill="${isFavorited ? "#fe8a01" : "#fff"}">♥</text>`
     : "";
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54">
-    <ellipse cx="22" cy="52" rx="7" ry="2.5" fill="rgba(43,21,48,0.18)"/>
-    <path d="M22 2C12.6 2 5 9.6 5 19.5C5 32 22 50 22 50C22 50 39 32 39 19.5C39 9.6 31.4 2 22 2Z" fill="${bgColor}" stroke="white" stroke-width="2.5"/>
-    <text x="22" y="24" text-anchor="middle" font-size="14">${icon}</text>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+    <rect x="2" y="2" width="40" height="40" rx="16" fill="${bgColor}" stroke="white" stroke-width="2.5"/>
+    <text x="22" y="28" text-anchor="middle" font-size="20">${icon}</text>
     ${friendBadge}
   </svg>`;
 
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(44, 54),
-    anchor: new google.maps.Point(22, 52),
+    scaledSize: new google.maps.Size(44, 44),
+    anchor: new google.maps.Point(22, 22),
   };
 }
 
