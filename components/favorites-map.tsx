@@ -31,6 +31,31 @@ type FriendProfile = {
   favoritePlaceIds: string[];
 };
 
+function normalizePolishChars(text: string): string {
+  return text
+    .replace(/[ąĄ]/g, 'a')
+    .replace(/[ęĘ]/g, 'e')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[óÓ]/g, 'o')
+    .replace(/[śŚ]/g, 's')
+    .replace(/[źŹ]/g, 'z')
+    .replace(/[żŻ]/g, 'z')
+    .replace(/[ćĆ]/g, 'c')
+    .replace(/[ńŃ]/g, 'n')
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function stripPlaceNameSuffixes(name: string): string {
+  return name
+    .replace(/\s*\|\s*.*$/g, '') // Remove "| ŁÓDŹ" suffixes
+    .replace(/\s*-\s*.*$/g, '') // Remove " - location" suffixes
+    .replace(/\s*\(.*\)$/g, '') // Remove "(Polesie)" suffixes
+    .trim();
+}
+
 function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const earthRadius = 6371000;
   const latDelta = ((bLat - aLat) * Math.PI) / 180;
@@ -46,21 +71,54 @@ function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number
 function isPlaceFavorited(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]) {
   if (favoriteIds.includes(place.id)) return true;
 
-  const normalizedName = place.name.toLowerCase().trim();
+  const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
   const placeLat = place.lat;
   const placeLon = place.lon;
 
   for (const favPlace of favoritePlaces) {
-    const favName = favPlace.name.toLowerCase().trim();
-    if (favName === normalizedName) {
+    const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
+
+    // Check if names match (contains or equals)
+    const namesMatch =
+      normalizedFavName === normalizedPlaceName ||
+      normalizedFavName.includes(normalizedPlaceName) ||
+      normalizedPlaceName.includes(normalizedFavName);
+
+    if (namesMatch) {
       const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
-      if (distance < 100) {
+      if (distance < 500) {
         return true;
       }
     }
   }
 
   return false;
+}
+
+function findMatchingFavoriteId(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]): string | null {
+  if (favoriteIds.includes(place.id)) return place.id;
+
+  const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
+  const placeLat = place.lat;
+  const placeLon = place.lon;
+
+  for (const favPlace of favoritePlaces) {
+    const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
+
+    const namesMatch =
+      normalizedFavName === normalizedPlaceName ||
+      normalizedFavName.includes(normalizedPlaceName) ||
+      normalizedPlaceName.includes(normalizedFavName);
+
+    if (namesMatch) {
+      const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
+      if (distance < 500) {
+        return favPlace.id;
+      }
+    }
+  }
+
+  return null;
 }
 
 const cityCenters: Record<string, [number, number]> = {
@@ -285,12 +343,77 @@ export default function FavoritesMap({
   const selectedPreviewAccent = selectedPreviewPlace ? getPlaceAccent(selectedPreviewPlace.kind) : null;
   const selectedReview = selectedPreviewPlace ? pickDiscoveryReview(selectedPreviewPlace) : null;
   const [fansModalOpen, setFansModalOpen] = useState(false);
+  const [placeDetailsLoading, setPlaceDetailsLoading] = useState<string | null>(null);
 
   const previewPlace = (place: FavoritePlace) => {
     setSelectedPlaceId(place.id);
     setPreviewedPlace(place);
     setSearchQuery("");
     setSearchResults([]);
+
+    // Fetch enriched details from Google Places API
+    void fetchPlaceDetails(place);
+  };
+
+  const fetchPlaceDetails = async (place: FavoritePlace) => {
+    if (placeDetailsLoading === place.id) return;
+
+    const cacheKey = `google-place-${place.id}`;
+    const cacheExpiry = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+    try {
+      const cached = typeof window !== "undefined" ? window.localStorage.getItem(cacheKey) : null;
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached) as { data: FavoritePlace; timestamp: number };
+        if (Date.now() - timestamp < cacheExpiry) {
+          return;
+        }
+      }
+    } catch {
+      // Ignore cache errors
+    }
+
+    setPlaceDetailsLoading(place.id);
+
+    try {
+      const params = new URLSearchParams({
+        name: place.name,
+        lat: String(place.lat),
+        lon: String(place.lon),
+      });
+
+      const response = await fetch(`/api/place-details?${params.toString()}`, { cache: "no-store" });
+      const payload = await response.json();
+
+      if (payload.ok === true && payload.place) {
+        const enrichedPlace: FavoritePlace = {
+          ...place,
+          priceLevel: payload.place.priceLevel || place.priceLevel,
+          openingHours: payload.place.openingHours?.length ? payload.place.openingHours : place.openingHours,
+          openNow: payload.place.openNow ?? place.openNow,
+          reviews: payload.place.reviews?.length ? payload.place.reviews : place.reviews,
+        };
+
+        // Update preview with enriched data
+        setPreviewedPlace(enrichedPlace);
+
+        // Cache the result
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              cacheKey,
+              JSON.stringify({ data: enrichedPlace, timestamp: Date.now() })
+            );
+          }
+        } catch {
+          // Ignore cache errors
+        }
+      }
+    } catch {
+      // Ignore errors, fallback to OSM data
+    } finally {
+      setPlaceDetailsLoading(null);
+    }
   };
 
   useEffect(() => {

@@ -1735,6 +1735,31 @@ function inferCreatorPostFormat(post: AppPost): CreatorPostFormat {
   return "post";
 }
 
+function normalizePolishChars(text: string): string {
+  return text
+    .replace(/[ąĄ]/g, 'a')
+    .replace(/[ęĘ]/g, 'e')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[óÓ]/g, 'o')
+    .replace(/[śŚ]/g, 's')
+    .replace(/[źŹ]/g, 'z')
+    .replace(/[żŻ]/g, 'z')
+    .replace(/[ćĆ]/g, 'c')
+    .replace(/[ńŃ]/g, 'n')
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function stripPlaceNameSuffixes(name: string): string {
+  return name
+    .replace(/\s*\|\s*.*$/g, '')
+    .replace(/\s*-\s*.*$/g, '')
+    .replace(/\s*\(.*\)$/g, '')
+    .trim();
+}
+
 function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
   const earthRadius = 6371000;
   const latDelta = ((bLat - aLat) * Math.PI) / 180;
@@ -5117,6 +5142,23 @@ export default function Page() {
       return;
     }
 
+    // Load cached places immediately for home city
+    const cacheKey = `places-${cityKey}`;
+    const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    const cachedData = typeof window !== "undefined" ? window.localStorage.getItem(cacheKey) : null;
+    if (cachedData && favoriteMapMode === "home") {
+      try {
+        const { places: cachedPlaces, timestamp } = JSON.parse(cachedData) as { places: FavoritePlace[]; timestamp: number };
+        if (Date.now() - timestamp < cacheExpiry && cachedPlaces.length > 0) {
+          setFavoritePlaces(cachedPlaces);
+          setFavoritePlacesError("");
+        }
+      } catch {
+        // Ignore cache errors
+      }
+    }
+
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 12000);
     const loadPlaces = async () => {
@@ -5163,6 +5205,15 @@ export default function Page() {
         );
 
         setFavoritePlaces(nextPlaces.length ? nextPlaces : getFallbackFavoritePlaces(cityKey));
+
+        // Cache the results for home city
+        if (favoriteMapMode === "home" && nextPlaces.length > 0 && typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(cacheKey, JSON.stringify({ places: nextPlaces, timestamp: Date.now() }));
+          } catch {
+            // Ignore cache errors
+          }
+        }
       } catch {
         setFavoritePlaces(getFallbackFavoritePlaces(cityKey));
         setFavoritePlacesError("live map spots are loading from the fallback list right now.");
@@ -6222,15 +6273,21 @@ export default function Page() {
   function isPlaceFavorited(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]) {
     if (favoriteIds.includes(place.id)) return true;
 
-    const normalizedName = place.name.toLowerCase().trim();
+    const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
     const placeLat = place.lat;
     const placeLon = place.lon;
 
     for (const favPlace of favoritePlaces) {
-      const favName = favPlace.name.toLowerCase().trim();
-      if (favName === normalizedName) {
+      const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
+
+      const namesMatch =
+        normalizedFavName === normalizedPlaceName ||
+        normalizedFavName.includes(normalizedPlaceName) ||
+        normalizedPlaceName.includes(normalizedFavName);
+
+      if (namesMatch) {
         const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
-        if (distance < 100) {
+        if (distance < 500) {
           return true;
         }
       }
@@ -6242,15 +6299,21 @@ export default function Page() {
   function findMatchingFavoriteId(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]): string | null {
     if (favoriteIds.includes(place.id)) return place.id;
 
-    const normalizedName = place.name.toLowerCase().trim();
+    const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
     const placeLat = place.lat;
     const placeLon = place.lon;
 
     for (const favPlace of favoritePlaces) {
-      const favName = favPlace.name.toLowerCase().trim();
-      if (favName === normalizedName) {
+      const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
+
+      const namesMatch =
+        normalizedFavName === normalizedPlaceName ||
+        normalizedFavName.includes(normalizedPlaceName) ||
+        normalizedPlaceName.includes(normalizedFavName);
+
+      if (namesMatch) {
         const distance = distanceInMeters(placeLat, placeLon, favPlace.lat, favPlace.lon);
-        if (distance < 100) {
+        if (distance < 500) {
           return favPlace.id;
         }
       }
