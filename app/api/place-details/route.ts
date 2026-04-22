@@ -1,18 +1,39 @@
 import { NextResponse } from "next/server";
 
-const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || "";
 
 type PlaceDetailsResponse = {
+  id: string;
+  googlePlaceId?: string;
   name: string;
-  formattedAddress: string;
+  kind: string;
   lat: number;
   lon: number;
+  address: string;
   priceLevel: string;
   openingHours: string[];
   openNow: boolean | null;
   rating: number | null;
   reviews: Array<{ authorName: string; rating: number | null; text: string }>;
 };
+
+function mapGoogleKind(types: string[]): string {
+  if (types.some((t) => t.includes("bakery"))) return "bakery";
+  if (types.some((t) => t.includes("cafe") || t.includes("coffee"))) return "cafe";
+  if (types.some((t) => t.includes("bar") || t.includes("pub") || t.includes("night_club"))) return "bar";
+  if (types.some((t) => t.includes("pizza"))) return "pizza";
+  if (types.some((t) => t.includes("hamburger") || t.includes("burger"))) return "burger";
+  if (types.some((t) => t.includes("ice_cream"))) return "ice cream shop";
+  if (types.some((t) => t.includes("dessert") || t.includes("confectionery") || t.includes("chocolate"))) return "dessert shop";
+  if (types.some((t) => t.includes("fast_food") || t.includes("meal_takeaway"))) return "fast food";
+  if (types.some((t) => t.includes("restaurant"))) return "restaurant";
+  if (types.some((t) => t.includes("meal_delivery"))) return "meal delivery";
+  if (types.some((t) => t.includes("sandwich"))) return "sandwich shop";
+  if (types.some((t) => t.includes("pastry"))) return "pastry shop";
+  if (types.some((t) => t.includes("deli"))) return "deli";
+  if (types.some((t) => t.includes("shopping") || t.includes("store") || t.includes("shop"))) return "shop";
+  return "restaurant";
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -53,7 +74,7 @@ export async function GET(request: Request) {
     // Get place details
     const detailsUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
     detailsUrl.searchParams.set("place_id", placeIdToUse!);
-    detailsUrl.searchParams.set("fields", "name,formatted_address,geometry,price_level,opening_hours,current_opening_hours,rating,reviews");
+    detailsUrl.searchParams.set("fields", "name,formatted_address,geometry,price_level,opening_hours,current_opening_hours,rating,reviews,types");
     detailsUrl.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
     const detailsResponse = await fetch(detailsUrl.toString(), { cache: "no-store" });
@@ -72,8 +93,6 @@ export async function GET(request: Request) {
     if (result.price_level) {
       switch (result.price_level) {
         case 0:
-          priceLevel = "PRICE_LEVEL_INEXPENSIVE";
-          break;
         case 1:
           priceLevel = "PRICE_LEVEL_INEXPENSIVE";
           break;
@@ -90,10 +109,13 @@ export async function GET(request: Request) {
     }
 
     const response: PlaceDetailsResponse = {
+      id: result.place_id || `google-${name}-${lat}-${lon}`,
+      googlePlaceId: result.place_id,
       name: result.name || name || "",
-      formattedAddress: result.formatted_address || "",
+      kind: mapGoogleKind(result.types ?? []),
       lat: result.geometry?.location?.lat ?? parseFloat(lat || "0"),
       lon: result.geometry?.location?.lng ?? parseFloat(lon || "0"),
+      address: result.formatted_address || result.vicinity || "",
       priceLevel,
       openingHours,
       openNow,

@@ -5170,7 +5170,7 @@ export default function Page() {
           city: currentFavoriteCity,
           lat: String(activeCenter[0]),
           lon: String(activeCenter[1]),
-          radius: "7000",
+          limit: "100",
         });
         const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
 
@@ -5179,30 +5179,7 @@ export default function Page() {
         }
 
         const payload = (await response.json()) as { places?: FavoritePlace[] };
-        const foodOnlyPlaces = (payload.places ?? []).filter((place) => {
-          const kind = place.kind.toLowerCase();
-          return (
-            kind.includes("restaurant") ||
-            kind.includes("cafe") ||
-            kind.includes("bar") ||
-            kind.includes("bakery") ||
-            kind.includes("fast food") ||
-            kind.includes("pizza") ||
-            kind.includes("burger") ||
-            kind.includes("ice cream") ||
-            kind.includes("dessert") ||
-            kind.includes("pub") ||
-            kind.includes("shop") ||
-            kind.includes("sandwich") ||
-            kind.includes("coffee") ||
-            kind.includes("pastry") ||
-            kind.includes("deli") ||
-            kind.includes("chocolate")
-          );
-        });
-        const nextPlaces = foodOnlyPlaces.filter(
-          (place, index, list) => list.findIndex((item) => item.name === place.name) === index,
-        );
+        const nextPlaces = (payload.places ?? []).slice(0, 100);
 
         setFavoritePlaces(nextPlaces.length ? nextPlaces : getFallbackFavoritePlaces(cityKey));
 
