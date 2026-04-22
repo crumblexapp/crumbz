@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 const PHOTON_BASE = "https://photon.komoot.io/api";
-const OVERPASS_BASE = "https://overpass-api.de/api/interpreter";
+const OVERPASS_ENDPOINTS = [
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+] as const;
 
 type Place = {
   id: string;
@@ -47,6 +50,10 @@ type OverpassElement = {
   };
   tags?: Record<string, string>;
 };
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
 
 function clampRadius(radius: number) {
   return Math.min(Math.max(radius, 500), 10000);
@@ -162,10 +169,35 @@ function dedupePlaces(places: Place[]) {
   });
 }
 
-async function photonSearch(query: string, lat: number, lon: number, limit: number) {
+function distanceInMeters(aLat: number, aLon: number, bLat: number, bLon: number) {
+  const earthRadius = 6371000;
+  const latDelta = toRadians(bLat - aLat);
+  const lonDelta = toRadians(bLon - aLon);
+  const lat1 = toRadians(aLat);
+  const lat2 = toRadians(bLat);
+  const haversine =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(lonDelta / 2) ** 2;
+
+  return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function sortByDistance(places: Place[], lat: number, lon: number) {
+  return [...places].sort(
+    (left, right) =>
+      distanceInMeters(lat, lon, left.lat, left.lon) -
+      distanceInMeters(lat, lon, right.lat, right.lon),
+  );
+}
+
+function filterWithinRadius(places: Place[], lat: number, lon: number, radius: number) {
+  return places.filter((place) => distanceInMeters(lat, lon, place.lat, place.lon) <= radius);
+}
+
+async function photonSearch(query: string, lat: number, lon: number, limit: number, localRadius: number) {
   const url = new URL(PHOTON_BASE);
   url.searchParams.set("q", query);
-  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("limit", String(Math.max(limit * 4, 24)));
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lon));
   url.searchParams.append("osm_tag", "amenity:restaurant");
@@ -192,7 +224,12 @@ async function photonSearch(query: string, lat: number, lon: number, limit: numb
   }
 
   const payload = (await response.json()) as { features?: PhotonFeature[] };
-  return dedupePlaces((payload.features ?? []).map(normalizePhotonPlace).filter((place): place is Place => place !== null));
+  const normalized = dedupePlaces((payload.features ?? []).map(normalizePhotonPlace).filter((place): place is Place => place !== null));
+  const strictLocal = sortByDistance(filterWithinRadius(normalized, lat, lon, localRadius), lat, lon).slice(0, limit);
+  if (strictLocal.length) return strictLocal;
+
+  const widerLocal = sortByDistance(filterWithinRadius(normalized, lat, lon, 20000), lat, lon).slice(0, limit);
+  return widerLocal;
 }
 
 async function overpassNearby(lat: number, lon: number, radius: number, limit: number) {
@@ -200,28 +237,48 @@ async function overpassNearby(lat: number, lon: number, radius: number, limit: n
 [out:json][timeout:25];
 (
   nwr(around:${radius},${lat},${lon})["amenity"~"restaurant|cafe|bar|fast_food|pub|ice_cream|food_court|biergarten"];
-  nwr(around:${radius},${lat},${lon})["shop"~"bakery|coffee|confectionery|ice_cream|supermarket|convenience|deli"];
+  nwr(around:${radius},${lat},${lon})["shop"~"bakery|coffee|confectionery|ice_cream|supermarket|convenience|deli|pastry"];
 );
 out center;
 `;
 
-  const response = await fetch(OVERPASS_BASE, {
-    method: "POST",
-    body: query,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "text/plain;charset=UTF-8",
-      Accept: "application/json",
-    },
-  });
+  let lastError = "overpass request failed";
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Overpass ${response.status}: ${body.slice(0, 120)}`);
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        body: new URLSearchParams({ data: query }),
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          Accept: "application/json",
+          "User-Agent": "make-something/0.1 (local map search)",
+          Referer: "https://make-something.local",
+        },
+      });
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        lastError = `Overpass ${response.status}: ${body.slice(0, 120)}`;
+        continue;
+      }
+
+      const payload = (await response.json()) as { elements?: OverpassElement[] };
+      const normalized = dedupePlaces((payload.elements ?? []).map(normalizeOverpassPlace).filter((place): place is Place => place !== null));
+      return sortByDistance(normalized, lat, lon).slice(0, limit);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "overpass request failed";
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
-  const payload = (await response.json()) as { elements?: OverpassElement[] };
-  return dedupePlaces((payload.elements ?? []).map(normalizeOverpassPlace).filter((place): place is Place => place !== null)).slice(0, limit);
+  throw new Error(lastError);
 }
 
 export async function GET(request: Request) {
@@ -237,7 +294,7 @@ export async function GET(request: Request) {
 
   try {
     const places = query
-      ? await photonSearch(query, lat, lon, 15)
+      ? await photonSearch(query, lat, lon, 15, Math.max(radius, 8000))
       : await overpassNearby(lat, lon, radius, 50);
 
     return NextResponse.json({ ok: true, places }, { status: 200 });
