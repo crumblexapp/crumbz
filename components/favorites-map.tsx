@@ -497,18 +497,13 @@ export default function FavoritesMap({
           setSearchFallback(true);
         }
 
-        const q = query.toLowerCase();
-        const foodResults = (payload.places ?? []).filter((place) => {
-          const kind = place.kind.toLowerCase();
-          const nameMatch = place.name.toLowerCase().includes(q);
-          const kindMatch =
-            kind.includes(q) ||
-            (q === "coffee" && kind.includes("cafe")) ||
-            (q === "cafe" && kind.includes("coffee"));
-          return (nameMatch || kindMatch) && isFoodKind(kind);
-        });
+        // Google already ranked results for relevance — only gate on food category,
+        // not on whether the name/kind contains the raw query string.
+        const foodResults = (payload.places ?? []).filter((place) =>
+          isFoodKind(place.kind.toLowerCase()),
+        );
 
-        const results = deduplicatePlaces(foodResults).slice(0, 25);
+        const results = deduplicatePlaces(foodResults).slice(0, 40);
         searchCacheRef.current.set(cacheKey, results);
         setSearchResults(results);
         // Do not auto-select or auto-fetch details — user must tap a result

@@ -5146,6 +5146,7 @@ export default function Page() {
     const cacheKey = `places-${cityKey}`;
     const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+    let cacheIsFresh = false;
     const cachedData = typeof window !== "undefined" ? window.localStorage.getItem(cacheKey) : null;
     if (cachedData && favoriteMapMode === "home") {
       try {
@@ -5153,11 +5154,17 @@ export default function Page() {
         if (Date.now() - timestamp < cacheExpiry && cachedPlaces.length > 0) {
           setFavoritePlaces(cachedPlaces);
           setFavoritePlacesError("");
+          cacheIsFresh = true;
         }
       } catch {
         // Ignore cache errors
       }
     }
+
+    // Skip the API call entirely when the home-city cache is still fresh.
+    // This prevents a Places API charge on every tab visit — the call only
+    // happens once per 7 days per city, or immediately for nearby/live mode.
+    if (cacheIsFresh) return;
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 12000);

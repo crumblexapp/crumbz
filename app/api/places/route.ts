@@ -25,14 +25,23 @@ function normalizeCityKey(cityName: string) {
     .toLowerCase();
 }
 
+// English name → Polish name for cities where they differ as substrings
+const CITY_ALIASES: Record<string, string> = {
+  warsaw: "warszawa",
+  cracow: "krakow",
+  gdansk: "gdansk",
+};
+
 function filterByCity(places: Place[], city: string): Place[] {
   if (!city.trim()) return places;
 
   const normalizedCity = normalizeCityKey(city);
+  // Also check the Polish alias (e.g. "warsaw" → "warszawa")
+  const aliasCity = CITY_ALIASES[normalizedCity] ?? normalizedCity;
 
   return places.filter((place) => {
     const normalizedAddress = normalizeCityKey(place.address);
-    return normalizedAddress.includes(normalizedCity);
+    return normalizedAddress.includes(normalizedCity) || normalizedAddress.includes(aliasCity);
   });
 }
 
@@ -109,20 +118,13 @@ function dedupePlaces(places: Place[]) {
   });
 }
 
-async function googlePlacesNearby(lat: number, lon: number, radius: number, limit: number, query?: string) {
-  if (!GOOGLE_PLACES_API_KEY) {
-    throw new Error("Google Places API key not configured");
-  }
-
+// Single nearbysearch for one Google place type
+async function fetchNearbyByType(lat: number, lon: number, radius: number, type: string): Promise<Place[]> {
   const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
   url.searchParams.set("location", `${lat},${lon}`);
   url.searchParams.set("radius", String(radius));
-  url.searchParams.set("type", "restaurant");
+  url.searchParams.set("type", type);
   url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
-
-  if (query) {
-    url.searchParams.set("keyword", query);
-  }
 
   const response = await fetch(url.toString(), { cache: "no-store" });
   const data = await response.json();
@@ -131,20 +133,45 @@ async function googlePlacesNearby(lat: number, lon: number, radius: number, limi
     throw new Error(`Google Places API error: ${data.status}`);
   }
 
-  const places = (data.results ?? []).map(normalizeGooglePlace);
-  return dedupePlaces(places).slice(0, limit);
+  return (data.results ?? []).map(normalizeGooglePlace);
 }
 
-async function googlePlacesTextSearch(query: string, lat: number, lon: number, limit: number) {
+// Three parallel nearbysearch calls cover restaurant, cafe, and bakery types —
+// each type caps at 20 results, so parallel calls give up to ~60 unique markers.
+async function googlePlacesNearby(lat: number, lon: number, radius: number, limit: number) {
   if (!GOOGLE_PLACES_API_KEY) {
     throw new Error("Google Places API key not configured");
   }
 
+  const [restaurants, cafes, bakeries] = await Promise.allSettled([
+    fetchNearbyByType(lat, lon, radius, "restaurant"),
+    fetchNearbyByType(lat, lon, radius, "cafe"),
+    fetchNearbyByType(lat, lon, radius, "bakery"),
+  ]);
+
+  const allPlaces = [
+    ...(restaurants.status === "fulfilled" ? restaurants.value : []),
+    ...(cafes.status === "fulfilled" ? cafes.value : []),
+    ...(bakeries.status === "fulfilled" ? bakeries.value : []),
+  ];
+
+  return dedupePlaces(allPlaces).slice(0, limit);
+}
+
+async function googlePlacesTextSearch(query: string, lat: number, lon: number, limit: number, city?: string) {
+  if (!GOOGLE_PLACES_API_KEY) {
+    throw new Error("Google Places API key not configured");
+  }
+
+  // Including the city name in the query string anchors Google to the right city.
+  // Relying on location+radius alone is a soft bias and can surface global results
+  // for generic terms like "restaurant" or "bar".
+  const anchoredQuery = city ? `${query} ${city}` : `${query} near ${lat},${lon}`;
+
   const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
-  url.searchParams.set("query", `${query} near ${lat},${lon}`);
+  url.searchParams.set("query", anchoredQuery);
   url.searchParams.set("location", `${lat},${lon}`);
-  url.searchParams.set("radius", "10000");
-  url.searchParams.set("type", "restaurant");
+  url.searchParams.set("radius", "15000");
   url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
   const response = await fetch(url.toString(), { cache: "no-store" });
@@ -175,15 +202,15 @@ export async function GET(request: Request) {
     let places: Place[];
 
     if (query) {
-      // Search mode
-      places = await googlePlacesTextSearch(query, lat, lon, limit);
+      // Pass city into the query string so Google anchors results to the right location
+      places = await googlePlacesTextSearch(query, lat, lon, Math.min(limit, 40), city || undefined);
     } else {
-      // Nearby mode (map load)
-      places = await googlePlacesNearby(lat, lon, Math.min(radius, 10000), limit);
+      // Nearby mode (initial map load)
+      places = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), limit);
     }
 
-    // Filter by city if provided
-    if (city) {
+    // Post-filter by city address as a safety net for text search results
+    if (city && query) {
       places = filterByCity(places, city);
     }
 
