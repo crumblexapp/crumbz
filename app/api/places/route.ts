@@ -1,26 +1,7 @@
 import { NextResponse } from "next/server";
 
-const FSQ_API_KEY = process.env.FOURSQUARE_API_KEY ?? "";
-const FSQ_BASE = "https://api.foursquare.com/v3";
-const FOOD_CATEGORIES = "13000"; // Foursquare top-level Food category
-
-type FoursquarePlace = {
-  fsq_id: string;
-  name: string;
-  location?: {
-    address?: string;
-    formatted_address?: string;
-  };
-  categories?: Array<{ id: number; name: string }>;
-  geocodes?: {
-    main?: { latitude: number; longitude: number };
-  };
-  hours?: {
-    display?: string;
-    open_now?: boolean;
-  };
-  price?: number;
-};
+const PHOTON_BASE = "https://photon.komoot.io/api";
+const OVERPASS_BASE = "https://overpass-api.de/api/interpreter";
 
 type Place = {
   id: string;
@@ -35,73 +16,207 @@ type Place = {
   reviews: Array<{ authorName: string; rating: number | null; text: string }>;
 };
 
-function mapFsqCategory(categories: Array<{ name: string }> = []): string {
-  const name = (categories[0]?.name ?? "").toLowerCase();
-  if (name.includes("pizza")) return "pizza";
-  if (name.includes("burger") || name.includes("hamburger")) return "burger";
-  if (name.includes("sandwich")) return "sandwich shop";
-  if (name.includes("cafe") || name.includes("coffee") || name.includes("tea")) return "cafe";
-  if (name.includes("bakery") || name.includes("pastry")) return "bakery";
-  if (name.includes("bar") || name.includes("pub") || name.includes("brew")) return "bar";
-  if (name.includes("ice cream") || name.includes("gelato")) return "ice cream shop";
-  if (name.includes("dessert") || name.includes("confection")) return "dessert shop";
-  if (name.includes("fast food")) return "fast food";
+type PhotonFeature = {
+  geometry?: {
+    coordinates?: [number, number];
+  };
+  properties?: {
+    osm_type?: string;
+    osm_id?: number | string;
+    name?: string;
+    housenumber?: string;
+    street?: string;
+    postcode?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    type?: string;
+    osm_key?: string;
+    osm_value?: string;
+  };
+};
+
+type OverpassElement = {
+  id: number;
+  type: "node" | "way" | "relation";
+  lat?: number;
+  lon?: number;
+  center?: {
+    lat: number;
+    lon: number;
+  };
+  tags?: Record<string, string>;
+};
+
+function clampRadius(radius: number) {
+  return Math.min(Math.max(radius, 500), 10000);
+}
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function getAddress(parts: Array<string | undefined>) {
+  return normalizeWhitespace(parts.filter(Boolean).join(", ")) || "Unknown location";
+}
+
+function mapOsmKind(tags: Record<string, string>) {
+  const amenity = (tags.amenity ?? "").toLowerCase();
+  const shop = (tags.shop ?? "").toLowerCase();
+  const cuisine = (tags.cuisine ?? "").toLowerCase();
+  const tourism = (tags.tourism ?? "").toLowerCase();
+  const leisure = (tags.leisure ?? "").toLowerCase();
+  const office = (tags.office ?? "").toLowerCase();
+
+  const combined = [amenity, shop, cuisine, tourism, leisure, office].filter(Boolean).join(" ");
+
+  if (combined.includes("pizza")) return "pizza";
+  if (combined.includes("burger")) return "burger";
+  if (combined.includes("sandwich")) return "sandwich shop";
+  if (combined.includes("bakery") || combined.includes("pastry")) return "bakery";
+  if (combined.includes("cafe") || combined.includes("coffee")) return "cafe";
+  if (combined.includes("ice_cream") || combined.includes("gelato")) return "ice cream shop";
+  if (combined.includes("dessert") || combined.includes("confectionery") || combined.includes("chocolate")) return "dessert shop";
+  if (combined.includes("bar") || combined.includes("pub") || combined.includes("biergarten") || combined.includes("brew")) return "bar";
+  if (combined.includes("fast_food") || combined.includes("food_court") || combined.includes("takeaway")) return "fast food";
+  if (shop) return "shop";
   return "restaurant";
 }
 
-function mapFsqPrice(price?: number): string {
-  switch (price) {
-    case 1: return "PRICE_LEVEL_INEXPENSIVE";
-    case 2: return "PRICE_LEVEL_MODERATE";
-    case 3: return "PRICE_LEVEL_EXPENSIVE";
-    case 4: return "PRICE_LEVEL_VERY_EXPENSIVE";
-    default: return "";
-  }
+function parseOpeningHours(tags: Record<string, string>) {
+  const value = tags.opening_hours?.trim();
+  return value ? [value] : [];
 }
 
-function normalizeFsq(fsq: FoursquarePlace): Place | null {
-  if (!fsq.fsq_id || !fsq.name) return null;
-  const lat = fsq.geocodes?.main?.latitude;
-  const lon = fsq.geocodes?.main?.longitude;
-  if (!lat || !lon) return null;
+function normalizePhotonPlace(feature: PhotonFeature): Place | null {
+  const props = feature.properties;
+  const coordinates = feature.geometry?.coordinates;
+  if (!props?.name || !Array.isArray(coordinates) || coordinates.length < 2) return null;
+
+  const [lon, lat] = coordinates;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const tags: Record<string, string> = {};
+  if (props.osm_key && props.osm_value) {
+    tags[props.osm_key] = props.osm_value;
+  }
 
   return {
-    id: `fsq-${fsq.fsq_id}`,
-    name: fsq.name,
-    kind: mapFsqCategory(fsq.categories),
+    id: `photon-${props.osm_type ?? "feature"}-${props.osm_id ?? props.name}-${lat}-${lon}`,
+    name: props.name,
+    kind: mapOsmKind(tags),
     lat,
     lon,
-    address: fsq.location?.formatted_address ?? fsq.location?.address ?? "Unknown location",
-    priceLevel: mapFsqPrice(fsq.price),
-    openingHours: fsq.hours?.display ? [fsq.hours.display] : [],
-    openNow: typeof fsq.hours?.open_now === "boolean" ? fsq.hours.open_now : null,
+    address: getAddress([
+      [props.street, props.housenumber].filter(Boolean).join(" ").trim(),
+      props.postcode,
+      props.city,
+      props.state,
+      props.country,
+    ]),
+    priceLevel: "",
+    openingHours: [],
+    openNow: null,
     reviews: [],
   };
 }
 
-async function fsqSearch(params: Record<string, string>): Promise<Place[]> {
-  const url = new URL(`${FSQ_BASE}/places/search`);
-  url.searchParams.set("fields", "fsq_id,name,location,categories,geocodes,hours,price");
-  url.searchParams.set("categories", FOOD_CATEGORIES);
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
+function normalizeOverpassPlace(element: OverpassElement): Place | null {
+  const tags = element.tags ?? {};
+  const name = tags.name?.trim();
+  const lat = element.lat ?? element.center?.lat;
+  const lon = element.lon ?? element.center?.lon;
+
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  return {
+    id: `osm-${element.type}-${element.id}`,
+    name,
+    kind: mapOsmKind(tags),
+    lat,
+    lon,
+    address: getAddress([
+      [tags["addr:street"], tags["addr:housenumber"]].filter(Boolean).join(" ").trim(),
+      tags["addr:postcode"],
+      tags["addr:city"],
+    ]),
+    priceLevel: "",
+    openingHours: parseOpeningHours(tags),
+    openNow: null,
+    reviews: [],
+  };
+}
+
+function dedupePlaces(places: Place[]) {
+  const seen = new Set<string>();
+  return places.filter((place) => {
+    const key = `${place.name.toLowerCase()}|${place.lat.toFixed(5)}|${place.lon.toFixed(5)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function photonSearch(query: string, lat: number, lon: number, limit: number) {
+  const url = new URL(PHOTON_BASE);
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("lat", String(lat));
+  url.searchParams.set("lon", String(lon));
+  url.searchParams.append("osm_tag", "amenity:restaurant");
+  url.searchParams.append("osm_tag", "amenity:cafe");
+  url.searchParams.append("osm_tag", "amenity:bar");
+  url.searchParams.append("osm_tag", "amenity:fast_food");
+  url.searchParams.append("osm_tag", "shop:bakery");
+  url.searchParams.append("osm_tag", "shop:coffee");
+  url.searchParams.append("osm_tag", "shop:confectionery");
+  url.searchParams.append("osm_tag", "shop:ice_cream");
+  url.searchParams.append("osm_tag", "shop:supermarket");
+  url.searchParams.append("osm_tag", "shop:convenience");
 
   const response = await fetch(url.toString(), {
+    cache: "no-store",
     headers: {
-      Authorization: FSQ_API_KEY,
       Accept: "application/json",
     },
-    cache: "no-store",
   });
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`Foursquare ${response.status}: ${body.slice(0, 120)}`);
+    throw new Error(`Photon ${response.status}: ${body.slice(0, 120)}`);
   }
 
-  const data = (await response.json()) as { results?: FoursquarePlace[] };
-  return (data.results ?? []).map(normalizeFsq).filter((p): p is Place => p !== null);
+  const payload = (await response.json()) as { features?: PhotonFeature[] };
+  return dedupePlaces((payload.features ?? []).map(normalizePhotonPlace).filter((place): place is Place => place !== null));
+}
+
+async function overpassNearby(lat: number, lon: number, radius: number, limit: number) {
+  const query = `
+[out:json][timeout:25];
+(
+  nwr(around:${radius},${lat},${lon})["amenity"~"restaurant|cafe|bar|fast_food|pub|ice_cream|food_court|biergarten"];
+  nwr(around:${radius},${lat},${lon})["shop"~"bakery|coffee|confectionery|ice_cream|supermarket|convenience|deli"];
+);
+out center;
+`;
+
+  const response = await fetch(OVERPASS_BASE, {
+    method: "POST",
+    body: query,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "text/plain;charset=UTF-8",
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Overpass ${response.status}: ${body.slice(0, 120)}`);
+  }
+
+  const payload = (await response.json()) as { elements?: OverpassElement[] };
+  return dedupePlaces((payload.elements ?? []).map(normalizeOverpassPlace).filter((place): place is Place => place !== null)).slice(0, limit);
 }
 
 export async function GET(request: Request) {
@@ -109,22 +224,17 @@ export async function GET(request: Request) {
   const query = searchParams.get("query")?.trim() ?? "";
   const lat = Number(searchParams.get("lat"));
   const lon = Number(searchParams.get("lon"));
-  const radius = Number(searchParams.get("radius") ?? "3000");
+  const radius = clampRadius(Number(searchParams.get("radius") ?? "3000"));
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return NextResponse.json({ ok: false, message: "lat/lon required", places: [] }, { status: 400 });
   }
 
   try {
-    const params: Record<string, string> = {
-      ll: `${lat},${lon}`,
-      radius: String(Math.min(radius, 10000)),
-      limit: query ? "15" : "50",
-      sort: "DISTANCE",
-    };
-    if (query) params.query = query;
+    const places = query
+      ? await photonSearch(query, lat, lon, 15)
+      : await overpassNearby(lat, lon, radius, 50);
 
-    const places = await fsqSearch(params);
     return NextResponse.json({ ok: true, places }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
