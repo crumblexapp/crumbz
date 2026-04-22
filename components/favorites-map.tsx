@@ -532,26 +532,6 @@ export default function FavoritesMap({
     void fetchPlaceDetails(place);
   };
 
-  if (!googleMapsLoaded) {
-    return (
-      <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
-        <div className="h-[440px] w-full flex items-center justify-center sm:h-[540px]">
-          <Spinner color="warning" />
-        </div>
-      </div>
-    );
-  }
-
-  if (googleMapsError) {
-    return (
-      <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
-        <div className="h-[440px] w-full flex items-center justify-center sm:h-[540px]">
-          <p className="text-sm text-[#785c42]">⚠ {googleMapsError}. please refresh.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Script
@@ -562,6 +542,20 @@ export default function FavoritesMap({
       />
 
       <div className="relative overflow-hidden rounded-[32px] border border-[#e9dcc9] bg-[linear-gradient(180deg,_#fbf7f0_0%,_#f6efe4_100%)] shadow-[0_22px_60px_rgba(254,138,1,0.12)]">
+        {!googleMapsLoaded && !googleMapsError ? (
+          <div className="h-[440px] w-full flex items-center justify-center sm:h-[540px]">
+            <Spinner color="warning" />
+          </div>
+        ) : null}
+
+        {googleMapsError ? (
+          <div className="h-[440px] w-full flex items-center justify-center sm:h-[540px]">
+            <p className="text-sm text-[#785c42]">⚠ {googleMapsError}. please refresh.</p>
+          </div>
+        ) : null}
+
+        {googleMapsLoaded && !googleMapsError ? (
+          <>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.55),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(254,138,1,0.14),_transparent_34%)]" />
 
         <div className="absolute left-4 right-4 top-4 z-[500]">
@@ -788,6 +782,8 @@ export default function FavoritesMap({
             )}
           </ModalContent>
         </Modal>
+          </>
+        ) : null}
       </div>
     </>
   );
