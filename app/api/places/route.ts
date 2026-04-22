@@ -90,6 +90,11 @@ function mapOsmKind(tags: Record<string, string>) {
   return "restaurant";
 }
 
+function parseOpeningHours(tags: Record<string, string>) {
+  const value = tags.opening_hours?.trim();
+  return value ? [value] : [];
+}
+
 function parsePriceLevel(tags: Record<string, string>) {
   const price = tags.price_level ?? tags.cost ?? "";
   if (price.includes("$$$") || tags.price_range === "4" || tags.price_range === "5") return "PRICE_LEVEL_VERY_EXPENSIVE";

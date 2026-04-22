@@ -11599,7 +11599,6 @@ export default function Page() {
                   places={favoritePlaces}
                   favoriteIds={favoritePlaceIds}
                   isNewUser={favoritePlaceIds.length === 0 && liveProfile.friends.length === 0}
-                  mutualFansByPlace={mutualFansByPlace}
                   highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
                   onOpenDirections={openPlaceDirections}

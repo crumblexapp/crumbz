@@ -197,19 +197,6 @@ export default function FavoritesMap({
   const [searchError, setSearchError] = useState("");
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [previewedPlace, setPreviewedPlace] = useState<FavoritePlace | null>(null);
-  const defaultDisplayedPlaces = useMemo(() => foodOnlyPlaces.slice(0, 50), [foodOnlyPlaces]);
-
-  const selectedPlace = useMemo(
-    () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
-    [places, searchResults, selectedPlaceId],
-  );
-  const focusedPlace = previewedPlace ?? selectedPlace;
-  const displayedPlaces = useMemo(() => {
-    if (searchResults.length) return searchResults;
-    if (!focusedPlace) return defaultDisplayedPlaces;
-    if (defaultDisplayedPlaces.some((place) => place.id === focusedPlace.id)) return defaultDisplayedPlaces;
-    return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 50);
-  }, [defaultDisplayedPlaces, focusedPlace, searchResults]);
 
   const foodOnlyPlaces = useMemo(
     () =>
@@ -236,6 +223,20 @@ export default function FavoritesMap({
       }),
     [places]
   );
+
+  const defaultDisplayedPlaces = useMemo(() => foodOnlyPlaces.slice(0, 50), [foodOnlyPlaces]);
+
+  const selectedPlace = useMemo(
+    () => searchResults.find((place) => place.id === selectedPlaceId) ?? places.find((place) => place.id === selectedPlaceId) ?? null,
+    [places, searchResults, selectedPlaceId],
+  );
+  const focusedPlace = previewedPlace ?? selectedPlace;
+  const displayedPlaces = useMemo(() => {
+    if (searchResults.length) return searchResults;
+    if (!focusedPlace) return defaultDisplayedPlaces;
+    if (defaultDisplayedPlaces.some((place) => place.id === focusedPlace.id)) return defaultDisplayedPlaces;
+    return [focusedPlace, ...defaultDisplayedPlaces].slice(0, 50);
+  }, [defaultDisplayedPlaces, focusedPlace, searchResults]);
 
   const mutualFansByPlace = useMemo(
     () =>
