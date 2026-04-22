@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server";
 
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
+const FSQ_API_KEY = process.env.FOURSQUARE_API_KEY ?? "";
+const FSQ_BASE = "https://api.foursquare.com/v3";
+const FOOD_CATEGORIES = "13000"; // Foursquare top-level Food category
 
-type OverpassElement = {
-  type: "node" | "way" | "relation";
-  id: number;
-  lat?: number;
-  lon?: number;
-  center?: { lat: number; lon: number };
-  tags?: Record<string, string>;
+type FoursquarePlace = {
+  fsq_id: string;
+  name: string;
+  location?: {
+    address?: string;
+    formatted_address?: string;
+  };
+  categories?: Array<{ id: number; name: string }>;
+  geocodes?: {
+    main?: { latitude: number; longitude: number };
+  };
+  hours?: {
+    display?: string;
+    open_now?: boolean;
+  };
+  price?: number;
 };
 
 type Place = {
@@ -24,152 +32,76 @@ type Place = {
   priceLevel: string;
   openingHours: string[];
   openNow: boolean | null;
-  reviews: Array<{
-    authorName: string;
-    rating: number | null;
-    text: string;
-  }>;
+  reviews: Array<{ authorName: string; rating: number | null; text: string }>;
 };
 
-const FOOD_AMENITIES = "restaurant|cafe|bar|fast_food|pub|biergarten|food_court|ice_cream";
-const FOOD_SHOPS = "bakery|confectionery|ice_cream|deli|pastry";
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function mapFsqCategory(categories: Array<{ name: string }> = []): string {
+  const name = (categories[0]?.name ?? "").toLowerCase();
+  if (name.includes("pizza")) return "pizza";
+  if (name.includes("burger") || name.includes("hamburger")) return "burger";
+  if (name.includes("sandwich")) return "sandwich shop";
+  if (name.includes("cafe") || name.includes("coffee") || name.includes("tea")) return "cafe";
+  if (name.includes("bakery") || name.includes("pastry")) return "bakery";
+  if (name.includes("bar") || name.includes("pub") || name.includes("brew")) return "bar";
+  if (name.includes("ice cream") || name.includes("gelato")) return "ice cream shop";
+  if (name.includes("dessert") || name.includes("confection")) return "dessert shop";
+  if (name.includes("fast food")) return "fast food";
+  return "restaurant";
 }
 
-function mapToKind(amenity: string | undefined, shop: string | undefined, cuisine = ""): string {
-  const c = cuisine.toLowerCase();
-  if (amenity === "restaurant" || amenity === "fast_food") {
-    if (c.includes("pizza")) return "pizza";
-    if (c.includes("burger") || c.includes("hamburger")) return "burger";
-    if (c.includes("sandwich")) return "sandwich shop";
-    if (amenity === "fast_food") return "fast food";
-    return "restaurant";
+function mapFsqPrice(price?: number): string {
+  switch (price) {
+    case 1: return "PRICE_LEVEL_INEXPENSIVE";
+    case 2: return "PRICE_LEVEL_MODERATE";
+    case 3: return "PRICE_LEVEL_EXPENSIVE";
+    case 4: return "PRICE_LEVEL_VERY_EXPENSIVE";
+    default: return "";
   }
-  if (amenity === "cafe") return "cafe";
-  if (amenity === "bar" || amenity === "pub" || amenity === "biergarten") return "bar";
-  if (amenity === "food_court") return "food court";
-  if (amenity === "ice_cream") return "ice cream shop";
-  if (shop === "bakery" || shop === "pastry") return "bakery";
-  if (shop === "confectionery") return "dessert shop";
-  if (shop === "ice_cream") return "ice cream shop";
-  if (shop === "deli") return "deli";
-  return (amenity ?? shop ?? "restaurant").replace(/_/g, " ");
 }
 
-function normalizeOverpass(el: OverpassElement): Place | null {
-  const tags = el.tags ?? {};
-  const name = tags.name ?? tags["name:en"];
-  if (!name) return null;
-
-  const lat = el.lat ?? el.center?.lat;
-  const lon = el.lon ?? el.center?.lon;
-  if (lat == null || lon == null) return null;
-
-  const kind = mapToKind(tags.amenity, tags.shop, tags.cuisine ?? "");
-
-  const parts: string[] = [];
-  if (tags["addr:street"] && tags["addr:housenumber"]) parts.push(`${tags["addr:street"]} ${tags["addr:housenumber"]}`);
-  else if (tags["addr:street"]) parts.push(tags["addr:street"]);
-  const cityPart = tags["addr:city"] ?? tags["addr:suburb"];
-  if (cityPart) parts.push(cityPart);
-
-  const openingHoursRaw = tags.opening_hours;
+function normalizeFsq(fsq: FoursquarePlace): Place | null {
+  if (!fsq.fsq_id || !fsq.name) return null;
+  const lat = fsq.geocodes?.main?.latitude;
+  const lon = fsq.geocodes?.main?.longitude;
+  if (!lat || !lon) return null;
 
   return {
-    id: `osm-${el.type}-${el.id}`,
-    name,
-    kind,
+    id: `fsq-${fsq.fsq_id}`,
+    name: fsq.name,
+    kind: mapFsqCategory(fsq.categories),
     lat,
     lon,
-    address: parts.join(", ") || "Unknown location",
-    priceLevel: "",
-    openingHours: openingHoursRaw ? [openingHoursRaw] : [],
-    openNow: openingHoursRaw === "24/7" ? true : null,
+    address: fsq.location?.formatted_address ?? fsq.location?.address ?? "Unknown location",
+    priceLevel: mapFsqPrice(fsq.price),
+    openingHours: fsq.hours?.display ? [fsq.hours.display] : [],
+    openNow: typeof fsq.hours?.open_now === "boolean" ? fsq.hours.open_now : null,
     reviews: [],
   };
 }
 
-async function runOverpassQuery(ql: string): Promise<Place[]> {
-  let lastError: Error = new Error("no endpoints tried");
-
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "CrumbzApp/1.0 (contact@crumbz.app)",
-        },
-        body: `data=${encodeURIComponent(ql)}`,
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        lastError = new Error(`Overpass ${endpoint} returned ${response.status}`);
-        continue;
-      }
-
-      const data = (await response.json()) as { elements?: OverpassElement[]; remark?: string };
-
-      if (typeof data.remark === "string" && (data.remark.includes("timeout") || data.remark.includes("error"))) {
-        lastError = new Error(`Overpass: ${data.remark}`);
-        continue;
-      }
-
-      return (data.elements ?? []).map(normalizeOverpass).filter((p): p is Place => p !== null);
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error("fetch failed");
-    }
+async function fsqSearch(params: Record<string, string>): Promise<Place[]> {
+  const url = new URL(`${FSQ_BASE}/places/search`);
+  url.searchParams.set("fields", "fsq_id,name,location,categories,geocodes,hours,price");
+  url.searchParams.set("categories", FOOD_CATEGORIES);
+  for (const [k, v] of Object.entries(params)) {
+    url.searchParams.set(k, v);
   }
 
-  throw lastError;
-}
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: FSQ_API_KEY,
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
 
-async function textSearch(query: string, lat: number, lon: number): Promise<Place[]> {
-  const safe = escapeRegex(query);
-  // 10 km radius covers entire city; name filter keeps the query fast
-  const ql = `
-[out:json][timeout:12];
-(
-  node["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:10000,${lat},${lon});
-  way["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:10000,${lat},${lon});
-  node["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:10000,${lat},${lon});
-  way["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:10000,${lat},${lon});
-  node["amenity"~"${safe}"]["name"](around:10000,${lat},${lon});
-  way["amenity"~"${safe}"]["name"](around:10000,${lat},${lon});
-  node["cuisine"~"${safe}",i]["name"](around:10000,${lat},${lon});
-  way["cuisine"~"${safe}",i]["name"](around:10000,${lat},${lon});
-);
-out center tags 15;
-`;
-  const seen = new Set<string>();
-  const places: Place[] = [];
-  for (const place of await runOverpassQuery(ql)) {
-    if (!seen.has(place.id)) {
-      seen.add(place.id);
-      places.push(place);
-    }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Foursquare ${response.status}: ${body.slice(0, 120)}`);
   }
-  return places;
-}
 
-async function nearbySearch(lat: number, lon: number, radius: number): Promise<Place[]> {
-  const r = Math.min(radius, 3000);
-  const ql = `
-[out:json][timeout:12];
-(
-  node["amenity"~"${FOOD_AMENITIES}"]["name"](around:${r},${lat},${lon});
-  way["amenity"~"${FOOD_AMENITIES}"]["name"](around:${r},${lat},${lon});
-  node["shop"~"${FOOD_SHOPS}"]["name"](around:${r},${lat},${lon});
-  way["shop"~"${FOOD_SHOPS}"]["name"](around:${r},${lat},${lon});
-);
-out center tags 50;
-`;
-  const places = await runOverpassQuery(ql);
-  places.sort((a, b) => (a.lat - lat) ** 2 + (a.lon - lon) ** 2 - ((b.lat - lat) ** 2 + (b.lon - lon) ** 2));
-  return places;
+  const data = (await response.json()) as { results?: FoursquarePlace[] };
+  return (data.results ?? []).map(normalizeFsq).filter((p): p is Place => p !== null);
 }
 
 export async function GET(request: Request) {
@@ -177,17 +109,22 @@ export async function GET(request: Request) {
   const query = searchParams.get("query")?.trim() ?? "";
   const lat = Number(searchParams.get("lat"));
   const lon = Number(searchParams.get("lon"));
-  const radius = Number(searchParams.get("radius") ?? "7000");
+  const radius = Number(searchParams.get("radius") ?? "3000");
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return NextResponse.json({ ok: false, message: "lat/lon required", places: [] }, { status: 400 });
+  }
 
   try {
-    let places: Place[] = [];
+    const params: Record<string, string> = {
+      ll: `${lat},${lon}`,
+      radius: String(Math.min(radius, 10000)),
+      limit: query ? "15" : "50",
+      sort: "DISTANCE",
+    };
+    if (query) params.query = query;
 
-    if (query && Number.isFinite(lat) && Number.isFinite(lon)) {
-      places = await textSearch(query, lat, lon);
-    } else if (Number.isFinite(lat) && Number.isFinite(lon)) {
-      places = await nearbySearch(lat, lon, radius);
-    }
-
+    const places = await fsqSearch(params);
     return NextResponse.json({ ok: true, places }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
