@@ -136,23 +136,26 @@ async function fetchNearbyByType(lat: number, lon: number, radius: number, type:
   return (data.results ?? []).map(normalizeGooglePlace);
 }
 
-// Three parallel nearbysearch calls cover restaurant, cafe, and bakery types —
-// each type caps at 20 results, so parallel calls give up to ~60 unique markers.
+// Four parallel nearbysearch calls — restaurant, cafe, bakery, bar.
+// Each Google type caps at 20 results, giving up to ~80 unique markers
+// with full colour variety (orange restaurants, purple cafes, salmon bakeries, green bars).
 async function googlePlacesNearby(lat: number, lon: number, radius: number, limit: number) {
   if (!GOOGLE_PLACES_API_KEY) {
     throw new Error("Google Places API key not configured");
   }
 
-  const [restaurants, cafes, bakeries] = await Promise.allSettled([
+  const [restaurants, cafes, bakeries, bars] = await Promise.allSettled([
     fetchNearbyByType(lat, lon, radius, "restaurant"),
     fetchNearbyByType(lat, lon, radius, "cafe"),
     fetchNearbyByType(lat, lon, radius, "bakery"),
+    fetchNearbyByType(lat, lon, radius, "bar"),
   ]);
 
   const allPlaces = [
     ...(restaurants.status === "fulfilled" ? restaurants.value : []),
     ...(cafes.status === "fulfilled" ? cafes.value : []),
     ...(bakeries.status === "fulfilled" ? bakeries.value : []),
+    ...(bars.status === "fulfilled" ? bars.value : []),
   ];
 
   return dedupePlaces(allPlaces).slice(0, limit);
@@ -190,7 +193,7 @@ export async function GET(request: Request) {
   const query = searchParams.get("query")?.trim() ?? "";
   const lat = Number(searchParams.get("lat"));
   const lon = Number(searchParams.get("lon"));
-  const radius = Number(searchParams.get("radius") ?? "5000");
+  const radius = Number(searchParams.get("radius") ?? "10000");
   const city = searchParams.get("city")?.trim() ?? "";
   const limit = Number(searchParams.get("limit") ?? "100");
 
