@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
+type NominatimResult = {
+  osm_id: number;
+  osm_type: "node" | "way" | "relation";
+  lat: string;
+  lon: string;
+  class: string;
+  type: string;
+  name?: string;
+  address?: Record<string, string>;
+  extratags?: Record<string, string>;
+};
+
 type OverpassElement = {
   type: "node" | "way" | "relation";
   id: number;
@@ -30,16 +42,15 @@ type Place = {
 
 const FOOD_AMENITIES = "restaurant|cafe|bar|fast_food|pub|biergarten|food_court|ice_cream";
 const FOOD_SHOPS = "bakery|confectionery|ice_cream|deli|pastry";
+const AMENITY_FOOD_SET = new Set(["restaurant", "cafe", "bar", "fast_food", "pub", "biergarten", "food_court", "ice_cream"]);
+const SHOP_FOOD_SET = new Set(["bakery", "confectionery", "ice_cream", "deli", "pastry"]);
 
-function mapOsmToKind(tags: Record<string, string>): string {
-  const amenity = tags.amenity?.toLowerCase();
-  const shop = tags.shop?.toLowerCase();
-  const cuisine = tags.cuisine?.toLowerCase() ?? "";
-
+function mapToKind(amenity: string | undefined, shop: string | undefined, cuisine = ""): string {
+  const c = cuisine.toLowerCase();
   if (amenity === "restaurant" || amenity === "fast_food") {
-    if (cuisine.includes("pizza")) return "pizza";
-    if (cuisine.includes("burger") || cuisine.includes("hamburger")) return "burger";
-    if (cuisine.includes("sandwich")) return "sandwich shop";
+    if (c.includes("pizza")) return "pizza";
+    if (c.includes("burger") || c.includes("hamburger")) return "burger";
+    if (c.includes("sandwich")) return "sandwich shop";
     if (amenity === "fast_food") return "fast food";
     return "restaurant";
   }
@@ -51,23 +62,79 @@ function mapOsmToKind(tags: Record<string, string>): string {
   if (shop === "confectionery") return "dessert shop";
   if (shop === "ice_cream") return "ice cream shop";
   if (shop === "deli") return "deli";
-
   return (amenity ?? shop ?? "restaurant").replace(/_/g, " ");
 }
 
-function buildAddress(tags: Record<string, string>): string {
-  const parts: string[] = [];
-  if (tags["addr:street"] && tags["addr:housenumber"]) {
-    parts.push(`${tags["addr:street"]} ${tags["addr:housenumber"]}`);
-  } else if (tags["addr:street"]) {
-    parts.push(tags["addr:street"]);
-  }
-  const city = tags["addr:city"] ?? tags["addr:suburb"];
-  if (city) parts.push(city);
-  return parts.join(", ") || "Unknown location";
+// --- Nominatim: fast text search ---
+
+function isFoodNominatim(r: NominatimResult): boolean {
+  if (r.class === "amenity" && AMENITY_FOOD_SET.has(r.type)) return true;
+  if (r.class === "shop" && SHOP_FOOD_SET.has(r.type)) return true;
+  return false;
 }
 
-function normalizeElement(el: OverpassElement): Place | null {
+function normalizeNominatim(r: NominatimResult): Place | null {
+  if (!isFoodNominatim(r)) return null;
+  const name = r.name ?? r.address?.amenity ?? r.address?.shop;
+  if (!name) return null;
+  const lat = parseFloat(r.lat);
+  const lon = parseFloat(r.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+
+  const cuisine = r.extratags?.cuisine ?? "";
+  const kind = mapToKind(r.class === "amenity" ? r.type : undefined, r.class === "shop" ? r.type : undefined, cuisine);
+
+  const addr = r.address ?? {};
+  const parts: string[] = [];
+  if (addr.road && addr.house_number) parts.push(`${addr.road} ${addr.house_number}`);
+  else if (addr.road) parts.push(addr.road);
+  const cityPart = addr.city ?? addr.town ?? addr.suburb;
+  if (cityPart) parts.push(cityPart);
+
+  const openingHoursRaw = r.extratags?.opening_hours;
+
+  return {
+    id: `osm-${r.osm_id}`,
+    name,
+    kind,
+    lat,
+    lon,
+    address: parts.join(", ") || "Unknown location",
+    priceLevel: "",
+    openingHours: openingHoursRaw ? [openingHoursRaw] : [],
+    openNow: openingHoursRaw === "24/7" ? true : null,
+    reviews: [],
+  };
+}
+
+async function textSearch(query: string, lat: number, lon: number): Promise<Place[]> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "20");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("extratags", "1");
+  url.searchParams.set("dedupe", "1");
+  // viewbox as soft preference — no bounded=1 so we still get results outside it
+  url.searchParams.set("viewbox", `${lon - 0.2},${lat + 0.2},${lon + 0.2},${lat - 0.2}`);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      "User-Agent": "CrumbzApp/1.0 (contact@crumbz.app)",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) throw new Error(`Nominatim error: ${response.status}`);
+
+  const results = (await response.json()) as NominatimResult[];
+  return results.map(normalizeNominatim).filter((p): p is Place => p !== null);
+}
+
+// --- Overpass: nearby map load (returns opening_hours) ---
+
+function normalizeOverpass(el: OverpassElement): Place | null {
   const tags = el.tags ?? {};
   const name = tags.name ?? tags["name:en"];
   if (!name) return null;
@@ -76,28 +143,44 @@ function normalizeElement(el: OverpassElement): Place | null {
   const lon = el.lon ?? el.center?.lon;
   if (lat == null || lon == null) return null;
 
+  const kind = mapToKind(tags.amenity, tags.shop, tags.cuisine ?? "");
+
+  const parts: string[] = [];
+  if (tags["addr:street"] && tags["addr:housenumber"]) parts.push(`${tags["addr:street"]} ${tags["addr:housenumber"]}`);
+  else if (tags["addr:street"]) parts.push(tags["addr:street"]);
+  const cityPart = tags["addr:city"] ?? tags["addr:suburb"];
+  if (cityPart) parts.push(cityPart);
+
   const openingHoursRaw = tags.opening_hours;
-  const openNow = openingHoursRaw === "24/7" ? true : null;
 
   return {
     id: `osm-${el.type}-${el.id}`,
     name,
-    kind: mapOsmToKind(tags),
+    kind,
     lat,
     lon,
-    address: buildAddress(tags),
+    address: parts.join(", ") || "Unknown location",
     priceLevel: "",
     openingHours: openingHoursRaw ? [openingHoursRaw] : [],
-    openNow,
+    openNow: openingHoursRaw === "24/7" ? true : null,
     reviews: [],
   };
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+async function nearbySearch(lat: number, lon: number, radius: number): Promise<Place[]> {
+  // Cap radius at 3 km so the Overpass query stays fast
+  const r = Math.min(radius, 3000);
+  const ql = `
+[out:json][timeout:12];
+(
+  node["amenity"~"${FOOD_AMENITIES}"]["name"](around:${r},${lat},${lon});
+  way["amenity"~"${FOOD_AMENITIES}"]["name"](around:${r},${lat},${lon});
+  node["shop"~"${FOOD_SHOPS}"]["name"](around:${r},${lat},${lon});
+  way["shop"~"${FOOD_SHOPS}"]["name"](around:${r},${lat},${lon});
+);
+out center tags 50;
+`;
 
-async function runOverpassQuery(ql: string): Promise<Place[]> {
   const response = await fetch(OVERPASS_URL, {
     method: "POST",
     headers: {
@@ -111,52 +194,11 @@ async function runOverpassQuery(ql: string): Promise<Place[]> {
   if (!response.ok) throw new Error(`Overpass error: ${response.status}`);
 
   const data = (await response.json()) as { elements: OverpassElement[] };
-  return data.elements.map(normalizeElement).filter((p): p is Place => p !== null);
-}
+  const places = data.elements.map(normalizeOverpass).filter((p): p is Place => p !== null);
 
-async function searchByText(query: string, lat: number, lon: number, radius: number): Promise<Place[]> {
-  const safe = escapeRegex(query);
-  const ql = `
-[out:json][timeout:20];
-(
-  node["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:${radius},${lat},${lon});
-  way["amenity"~"${FOOD_AMENITIES}"]["name"~"${safe}",i](around:${radius},${lat},${lon});
-  node["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:${radius},${lat},${lon});
-  way["shop"~"${FOOD_SHOPS}"]["name"~"${safe}",i](around:${radius},${lat},${lon});
-  node["amenity"~"restaurant|fast_food"]["cuisine"~"${safe}",i](around:${radius},${lat},${lon});
-  way["amenity"~"restaurant|fast_food"]["cuisine"~"${safe}",i](around:${radius},${lat},${lon});
-);
-out center tags;
-`;
-  const seen = new Set<string>();
-  const places: Place[] = [];
-  for (const place of await runOverpassQuery(ql)) {
-    if (!seen.has(place.id)) {
-      seen.add(place.id);
-      places.push(place);
-    }
-  }
+  places.sort((a, b) => (a.lat - lat) ** 2 + (a.lon - lon) ** 2 - ((b.lat - lat) ** 2 + (b.lon - lon) ** 2));
+
   return places;
-}
-
-async function searchNearby(lat: number, lon: number, radius: number): Promise<Place[]> {
-  const ql = `
-[out:json][timeout:20];
-(
-  node["amenity"~"${FOOD_AMENITIES}"]["name"](around:${radius},${lat},${lon});
-  way["amenity"~"${FOOD_AMENITIES}"]["name"](around:${radius},${lat},${lon});
-  node["shop"~"${FOOD_SHOPS}"]["name"](around:${radius},${lat},${lon});
-  way["shop"~"${FOOD_SHOPS}"]["name"](around:${radius},${lat},${lon});
-);
-out center tags;
-`;
-  const places = await runOverpassQuery(ql);
-  places.sort((a, b) => {
-    const dA = (a.lat - lat) ** 2 + (a.lon - lon) ** 2;
-    const dB = (b.lat - lat) ** 2 + (b.lon - lon) ** 2;
-    return dA - dB;
-  });
-  return places.slice(0, 50);
 }
 
 export async function GET(request: Request) {
@@ -170,19 +212,15 @@ export async function GET(request: Request) {
     let places: Place[] = [];
 
     if (query && Number.isFinite(lat) && Number.isFinite(lon)) {
-      places = await searchByText(query, lat, lon, Math.max(radius, 10000));
+      places = await textSearch(query, lat, lon);
     } else if (Number.isFinite(lat) && Number.isFinite(lon)) {
-      places = await searchNearby(lat, lon, radius);
+      places = await nearbySearch(lat, lon, radius);
     }
 
     return NextResponse.json({ ok: true, places }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
-      {
-        ok: false,
-        message: error instanceof Error ? error.message : "places request failed",
-        places: [],
-      },
+      { ok: false, message: error instanceof Error ? error.message : "places request failed", places: [] },
       { status: 500 },
     );
   }
