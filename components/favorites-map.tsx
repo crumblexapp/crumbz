@@ -216,10 +216,31 @@ function deduplicatePlaces(places: FavoritePlace[]): FavoritePlace[] {
 // Rounded-square marker (like iOS app icons): type-colored background, emoji centered.
 // Orange background when the current user has favorited this spot.
 // Small heart badge at top-right when any friend has saved it.
-function createMarkerIcon(kind: string, isFavorited: boolean, hasFriendSave: boolean) {
+function createMarkerIcon(kind: string, isFavorited: boolean, hasFriendSave: boolean, selected = false) {
   const accent = getPlaceAccent(kind);
   const bgColor = isFavorited ? "#fe8a01" : accent.bg;
   const icon = accent.icon;
+
+  if (selected) {
+    const friendBadge = hasFriendSave
+      ? `<circle cx="48" cy="8" r="7.5" fill="white"/>
+         <circle cx="48" cy="8" r="6" fill="${isFavorited ? "#fff" : "#fe8a01"}"/>
+         <text x="48" y="11.5" text-anchor="middle" font-size="9" fill="${isFavorited ? "#fe8a01" : "#fff"}">♥</text>`
+      : "";
+    // White backing triangle gives the pointer the same white border as the rect
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="66" viewBox="0 0 56 66">
+      <rect x="2" y="2" width="52" height="52" rx="20" fill="${bgColor}" stroke="white" stroke-width="2.5"/>
+      <path d="M20 53 L28 66 L36 53 Z" fill="white"/>
+      <path d="M22 54 L28 64 L34 54 Z" fill="${bgColor}"/>
+      <text x="28" y="35" text-anchor="middle" font-size="26">${icon}</text>
+      ${friendBadge}
+    </svg>`;
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+      scaledSize: new google.maps.Size(56, 66),
+      anchor: new google.maps.Point(28, 66),
+    };
+  }
 
   const friendBadge = hasFriendSave
     ? `<circle cx="36" cy="8" r="7.5" fill="white"/>
@@ -297,6 +318,7 @@ export default function FavoritesMap({
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const searchCacheRef = useRef<Map<string, FavoritePlace[]>>(new Map());
   const detailsInFlightRef = useRef<Set<string>>(new Set());
+  const prevSelectedIdRef = useRef<string | null>(null);
 
   const foodOnlyPlaces = useMemo(() => {
     return deduplicatePlaces(places.filter((p) => isFoodKind(p.kind)));
@@ -312,6 +334,14 @@ export default function FavoritesMap({
         ]),
       ) as Record<string, FriendProfile[]>,
     [foodOnlyPlaces, friends],
+  );
+
+  // Only the places the current user has actually saved — used for correct isFavorited
+  // checks. Passing the full `places` array caused every place to match itself via
+  // the fuzzy name+distance logic, turning all markers orange.
+  const favoritedSubset = useMemo(
+    () => places.filter((p) => favoriteIds.includes(p.id) || (p.googlePlaceId ? favoriteIds.includes(p.googlePlaceId) : false)),
+    [places, favoriteIds],
   );
 
   const selectedPlace = useMemo(
@@ -378,7 +408,7 @@ export default function FavoritesMap({
 
     // Add new markers or update icons for existing ones
     foodOnlyPlaces.forEach((place) => {
-      const isFavorited = isPlaceFavorited(place, favoriteIds, places);
+      const isFavorited = isPlaceFavorited(place, favoriteIds, favoritedSubset);
       const hasFriendSave = (mutualFansByPlace[place.id]?.length ?? 0) > 0;
       const icon = createMarkerIcon(place.kind, isFavorited, hasFriendSave);
       const zIndex = isFavorited ? 10 : hasFriendSave ? 5 : 1;
@@ -422,6 +452,36 @@ export default function FavoritesMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightedPlaceId, places, mapInstance]);
+
+  // When selectedPlaceId changes: restore the previous marker to normal size and
+  // upgrade the new one to the larger selected style with a downward pointer.
+  useEffect(() => {
+    const prevId = prevSelectedIdRef.current;
+    prevSelectedIdRef.current = selectedPlaceId;
+
+    if (prevId) {
+      const prevPlace = [...places, ...searchResults].find((p) => p.id === prevId);
+      const marker = markersRef.current.get(prevId);
+      if (prevPlace && marker) {
+        const isFav = isPlaceFavorited(prevPlace, favoriteIds, favoritedSubset);
+        const hasFriendSave = (mutualFansByPlace[prevId]?.length ?? 0) > 0;
+        marker.setIcon(createMarkerIcon(prevPlace.kind, isFav, hasFriendSave, false));
+        marker.setZIndex(isFav ? 10 : hasFriendSave ? 5 : 1);
+      }
+    }
+
+    if (selectedPlaceId) {
+      const place = [...places, ...searchResults].find((p) => p.id === selectedPlaceId);
+      const marker = markersRef.current.get(selectedPlaceId);
+      if (place && marker) {
+        const isFav = isPlaceFavorited(place, favoriteIds, favoritedSubset);
+        const hasFriendSave = (mutualFansByPlace[selectedPlaceId]?.length ?? 0) > 0;
+        marker.setIcon(createMarkerIcon(place.kind, isFav, hasFriendSave, true));
+        marker.setZIndex(20);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlaceId]);
 
   // Fetches full place details (hours, price, reviews) only when the user opens a place.
   // Immediately restores from 30-day localStorage cache to avoid repeat API calls.
@@ -644,7 +704,7 @@ export default function FavoritesMap({
                     <div className="max-h-[188px] overflow-y-auto overscroll-contain">
                       {searchResults.map((place) => {
                         const accent = getPlaceAccent(place.kind);
-                        const savedByMe = isPlaceFavorited(place, favoriteIds, places);
+                        const savedByMe = isPlaceFavorited(place, favoriteIds, favoritedSubset);
                         const placeFans = friends.filter((f) => isPlaceFavoritedByFriend(place, f));
                         return (
                           <div
@@ -752,7 +812,7 @@ export default function FavoritesMap({
                       type="button"
                       onClick={() => onToggleFavorite(selectedPreviewPlace)}
                       className={`mt-1 flex h-14 w-14 shrink-0 items-center justify-center self-start rounded-[20px] transition-colors ${
-                        isPlaceFavorited(selectedPreviewPlace, favoriteIds, places)
+                        isPlaceFavorited(selectedPreviewPlace, favoriteIds, favoritedSubset)
                           ? "bg-[#FE8A01] text-white"
                           : "bg-[#fff0d9] text-[#d97706]"
                       }`}
