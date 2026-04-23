@@ -4975,6 +4975,19 @@ export default function Page() {
 
         if (subscription) {
           await syncPushSubscriptionToBackend(subscription).catch(() => undefined);
+        } else if (Notification.permission === "granted" && WEB_PUSH_PUBLIC_KEY) {
+          // Permission was already granted but the subscription was cleared (e.g. browser
+          // updated, cache wiped). Silently recreate it so the user keeps receiving pushes.
+          try {
+            const newSub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: decodeBase64Url(WEB_PUSH_PUBLIC_KEY),
+            });
+            await syncPushSubscriptionToBackend(newSub).catch(() => undefined);
+            setPushEnabled(true);
+          } catch {
+            // Best-effort — if recreating fails, leave pushEnabled false so the prompt shows
+          }
         }
       } catch {
         setPushSupported(false);

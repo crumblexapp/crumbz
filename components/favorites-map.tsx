@@ -332,6 +332,12 @@ export default function FavoritesMap({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // If the Google Maps script was already loaded (e.g. user switched tabs and
+    // this component remounted), the Script onLoad won't fire again — detect it here.
+    if (window.google?.maps) {
+      setGoogleMapsLoaded(true);
+      setGoogleMapsError("");
+    }
     window.gm_authFailure = () => {
       setGoogleMapsError("google maps rejected this browser key");
       setGoogleMapsLoaded(false);
@@ -409,9 +415,13 @@ export default function FavoritesMap({
       setSelectedPlaceId(next.id);
       setPreviewedPlace(next);
       void fetchPlaceDetails(next);
+      if (mapInstance) {
+        mapInstance.panTo({ lat: next.lat, lng: next.lon });
+        mapInstance.setZoom(15);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlightedPlaceId, places]);
+  }, [highlightedPlaceId, places, mapInstance]);
 
   // Fetches full place details (hours, price, reviews) only when the user opens a place.
   // Immediately restores from 30-day localStorage cache to avoid repeat API calls.

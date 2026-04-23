@@ -413,7 +413,16 @@ async function sendFriendPostPush(rawPosts: unknown, previousPosts: unknown, acc
       .map((post) => String(post.id ?? ""))
       .filter(Boolean),
   );
-  const accounts = normalizeObjectArray(accountsRaw);
+
+  // If the caller passed an empty accounts list (e.g. a transient DB read failure),
+  // fetch accounts directly so we never silently drop friend-post notifications.
+  let accountsRawResolved = accountsRaw;
+  if (!normalizeObjectArray(accountsRaw).length) {
+    const { data } = await supabaseServer.from("app_state").select("accounts").eq("id", ACCOUNTS_ROW_ID).maybeSingle();
+    if (data?.accounts) accountsRawResolved = (data as { accounts?: unknown }).accounts;
+  }
+
+  const accounts = normalizeObjectArray(accountsRawResolved);
   const accountByEmail = new Map(
     accounts
       .map((account) => [normalizeEmail(account.googleProfile && typeof account.googleProfile === "object" ? (account.googleProfile as JsonRecord).email : ""), account] as const)
