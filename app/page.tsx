@@ -3428,8 +3428,12 @@ export default function Page() {
     : [];
   const shouldShowFeedAnnouncementCard = user.signedIn && (liveProfile.friends.length === 0 || (friendDailyFeedPosts.length === 0 && friendWeeklyDumps.length === 0));
   const citySpotlightName = liveProfile.city || "Lodz";
+  const cityFilteredFriendPosts = [...friendDailyFeedPosts, ...friendWeeklyDumps].filter((post) => {
+    const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
+    return normalizeCityKey(account?.profile.city || "") === normalizeCityKey(liveProfile.city || "");
+  });
   const citySnapshot = {
-    mostPostedSpot: friendDailyFeedPosts[0]?.title ?? friendWeeklyDumps[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
+    mostPostedSpot: cityFilteredFriendPosts[0]?.title ?? foodSpotCounts[0]?.name ?? "community drops loading",
     mostLikedFood: foodSpotCounts[0]?.name ?? "most-liked food loading",
     hottestNeighbourhood: liveProfile.city || "Lodz",
     hiddenGem: favoritePlaces[0]?.name ?? "new hidden gem loading",
@@ -4144,9 +4148,9 @@ export default function Page() {
     try {
       const response = await fetch("/api/translate-post", {
         method: "POST",
-        headers: {
+        headers: await getAuthenticatedHeaders({
           "Content-Type": "application/json",
-        },
+        }),
         body: JSON.stringify({
           title: post.title,
           body: post.body,
@@ -4221,8 +4225,8 @@ export default function Page() {
     const isTranslatingPost = translationCacheKey ? Boolean(translatingPostIds[translationCacheKey]) : false;
     const translationButtonLabel =
       translationCacheKey && translatedPostVisibility[translationCacheKey]
-        ? "show original"
-        : `see translation (${language === "pl" ? "polish" : "english"})`;
+        ? copy.post.showOriginal
+        : copy.post.seeTranslation(copy.post.targetLanguageName);
     const feedReason = feedReasonByPostId.get(post.id) ?? null;
     const feedReasonLabel =
       feedReason === "global-influencer"
@@ -4482,12 +4486,12 @@ export default function Page() {
               onClick={() => setLikesViewerPostId(post.id)}
               className="rounded-full bg-[#FFF6E0] px-3 py-2 transition hover:bg-[#FFE8B8]"
             >
-              {bucket.likes.length} likes
+              {copy.post.likes(bucket.likes.length)}
             </button>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.views.length} views</span>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{visibleComments.length} comments</span>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.saves.length} saves</span>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{bucket.shares.length} shares</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.views(bucket.views.length)}</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.comments(visibleComments.length)}</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.saves(bucket.saves.length)}</span>
+            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.shares(bucket.shares.length)}</span>
           </div>
 
           <div className="space-y-3">
@@ -12068,30 +12072,30 @@ export default function Page() {
                     </Badge>
                   </div>
                   <div className="min-w-0 pt-2">
-                    <div className="grid grid-cols-3 gap-1.5 text-center">
+                    <div className="grid grid-cols-3 gap-2 text-center">
                       <button
                         type="button"
                         onClick={openOwnArchive}
-                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-2 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
-                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">posts</p>
+                        <p className="mt-1 break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.postLabel}</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("followers")}
-                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-2 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.followers}</p>
+                        <p className="mt-1 break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.followers}</p>
                       </button>
                       <button
                         type="button"
                         onClick={() => setProfileDrawer("favorites")}
-                        className="flex min-h-[4.5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-1 py-1 text-center"
+                        className="flex min-h-[5rem] min-w-0 flex-col items-center justify-start rounded-[18px] px-2 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                        <p className="mt-1 text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.favorites}</p>
+                        <p className="mt-1 break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.favorites}</p>
                       </button>
                     </div>
                   </div>
@@ -12880,18 +12884,18 @@ export default function Page() {
               <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0] bg-[#fffaf2]">
                 <div>
                   <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {profileDrawer === "followers" ? "followers" : "favorites"}
+                    {profileDrawer === "followers" ? copy.reactions.followersTitle : copy.reactions.favoritesTitle}
                   </p>
                   <p className="mt-2 text-sm text-[#6c7289]">
                     {profileDrawer === "followers"
                       ? selectedProfileAccount && !selectedProfileIsOwn
-                        ? "their crumbz circle lives here."
-                        : "your crumbz circle lives here."
-                      : "the spots saved on this crumbz profile."}
+                        ? copy.reactions.followersSubtitleOther
+                        : copy.reactions.followersSubtitle
+                      : copy.reactions.favoritesSubtitle}
                   </p>
                 </div>
                 <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
-                  close
+                  {copy.common.close}
                 </Button>
               </ModalHeader>
               <ModalBody className="bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
@@ -13654,19 +13658,19 @@ export default function Page() {
             <>
               <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">reactions</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.reactions.label}</p>
                   <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {likesViewerBucket?.likes.length ?? 0} likes
+                    {copy.reactions.likes(likesViewerBucket?.likes.length ?? 0)}
                   </p>
                 </div>
                 <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
-                  close
+                  {copy.common.close}
                 </Button>
               </ModalHeader>
               <ModalBody className="gap-4 bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
                 <Input
                   radius="full"
-                  placeholder="search people"
+                  placeholder={copy.reactions.searchPeople}
                   value={likesViewerSearch}
                   onValueChange={setLikesViewerSearch}
                   classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
