@@ -12079,7 +12079,7 @@ export default function Page() {
                         className="flex min-h-[5rem] w-full min-w-0 flex-col items-center justify-start overflow-hidden rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{currentUserAllPosts.length}</p>
-                        <p className="mt-1 w-full break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.postLabel}</p>
+                        <p className={`mt-1 w-full text-[0.72rem] leading-[0.95rem] text-[#6c7289] ${language === "en" ? "whitespace-nowrap" : "break-words"}`}>{copy.profile.postLabel}</p>
                       </button>
                       <button
                         type="button"
@@ -12087,7 +12087,7 @@ export default function Page() {
                         className="flex min-h-[5rem] w-full min-w-0 flex-col items-center justify-start overflow-hidden rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
-                        <p className="mt-1 w-full break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.followers}</p>
+                        <p className={`mt-1 w-full text-[0.72rem] leading-[0.95rem] text-[#6c7289] ${language === "en" ? "whitespace-nowrap" : "break-words"}`}>{copy.profile.followers}</p>
                       </button>
                       <button
                         type="button"
@@ -12095,7 +12095,7 @@ export default function Page() {
                         className="flex min-h-[5rem] w-full min-w-0 flex-col items-center justify-start overflow-hidden rounded-[18px] px-1 py-1 text-center"
                       >
                         <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{profileLikedSpots.length}</p>
-                        <p className="mt-1 w-full break-words text-[0.72rem] leading-[0.95rem] text-[#6c7289]">{copy.profile.favorites}</p>
+                        <p className={`mt-1 w-full text-[0.72rem] leading-[0.95rem] text-[#6c7289] ${language === "en" ? "whitespace-nowrap" : "break-words"}`}>{copy.profile.favorites}</p>
                       </button>
                     </div>
                   </div>
