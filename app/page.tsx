@@ -7849,9 +7849,6 @@ export default function Page() {
       if (isVideo) {
         try {
           const metadata = await readVideoMetadata(file);
-          if (!hasExactDimensions(metadata, CREATOR_POST_DIMENSIONS)) {
-            return { notice: "post videos need to be 1080 x 1080, 1080 x 1350, or 1080 x 566." };
-          }
           if (metadata.duration > 60) {
             return { notice: "video posts need to be 60 seconds or less." };
           }
@@ -7863,10 +7860,9 @@ export default function Page() {
 
       try {
         const dimensions = await readImageDimensions(file);
-        if (!hasExactDimensions(dimensions, CREATOR_POST_DIMENSIONS)) {
-          return { notice: "post images need to be 1080 x 1080, 1080 x 1350, or 1080 x 566." };
-        }
-        return { mediaKind: "photo" as MediaKind, videoRatio: "4:5" as VideoRatio };
+        const ratio = dimensions.width / dimensions.height;
+        const videoRatio: VideoRatio = ratio >= 1.5 ? "16:9" : ratio <= 0.85 ? "4:5" : "1:1";
+        return { mediaKind: "photo" as MediaKind, videoRatio };
       } catch {
         return { notice: "we couldn't read that post image. try another one." };
       }
