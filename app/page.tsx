@@ -3311,24 +3311,28 @@ export default function Page() {
     .slice(0, 5);
   const influencerChecklist = [
     {
-      label: "finish profile",
+      id: "finish-profile",
+      label: copy.influencerDashboard.checklistFinishProfile,
       done: Boolean(liveProfile.fullName && liveProfile.username && liveProfile.city && (liveProfile.bio ?? "").trim()),
-      detail: "make sure your name, city, username, and bio are all filled in.",
+      detail: copy.influencerDashboard.checklistFinishProfileDetail,
     },
     {
-      label: "publish 3 posts this week",
+      id: "publish-3-posts",
+      label: copy.influencerDashboard.checklistPublish3Posts,
       done: influencerPosts.filter((post) => Date.now() - getPostTimestamp(post) < 7 * 24 * 60 * 60 * 1000).length >= 3,
-      detail: "keep your page active so people see fresh city picks.",
+      detail: copy.influencerDashboard.checklistPublish3PostsDetail,
     },
     {
-      label: "get 10 saves",
+      id: "get-10-saves",
+      label: copy.influencerDashboard.checklistGet10Saves,
       done: influencerOverview.saves >= 10,
-      detail: "saves are the strongest signal that people want to try your spots.",
+      detail: copy.influencerDashboard.checklistGet10SavesDetail,
     },
     {
-      label: "share your referral link",
+      id: "share-referral",
+      label: copy.influencerDashboard.checklistShareReferral,
       done: influencerReferralSignups.length > 0,
-      detail: "your link is how we track who joined because of you.",
+      detail: copy.influencerDashboard.checklistShareReferralDetail,
     },
   ];
 
@@ -11246,28 +11250,28 @@ export default function Page() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[0.7rem] uppercase tracking-[0.32em] text-[#D6B68D]">creator dashboard</p>
+                <p className="text-[0.7rem] uppercase tracking-[0.32em] text-[#D6B68D]">{copy.influencerDashboard.headerLabel}</p>
                 <h1 className="mt-3 truncate font-[family-name:var(--font-young-serif)] text-[2.55rem] leading-none text-white">
                   @{liveProfile.username || "creator"}
                 </h1>
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/78">
-                  <span>{liveProfile.city || "city pending"}</span>
+                  <span>{liveProfile.city || copy.influencerDashboard.cityPending}</span>
                   <span className="text-white/35">•</span>
-                  <span>influencer access on</span>
+                  <span>{copy.influencerDashboard.influencerAccessOn}</span>
                 </div>
               </div>
               <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
-                log out
+                {copy.influencerDashboard.logOut}
               </Button>
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[#D6B68D]">creator mode</p>
-                <p className="mt-1 text-sm text-white/82">flip this off any time to jump back into normal crumbz.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[#D6B68D]">{copy.influencerDashboard.creatorMode}</p>
+                <p className="mt-1 text-sm text-white/82">{copy.influencerDashboard.creatorModeBody}</p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
-                <p className="text-sm text-white/82">{creatorDashboardOpen ? "on" : "off"}</p>
+                <p className="text-sm text-white/82">{creatorDashboardOpen ? copy.influencerDashboard.on : copy.influencerDashboard.off}</p>
                 <Switch
                   isSelected={creatorDashboardOpen}
                   onValueChange={setCreatorDashboardOpen}
@@ -11288,12 +11292,12 @@ export default function Page() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: "views", value: influencerOverview.views },
-                    { label: "saves", value: influencerOverview.saves },
-                    { label: "likes", value: influencerOverview.likes },
-                    { label: "referrals", value: influencerReferralSignups.length },
+                    { id: "views", label: copy.influencerDashboard.views, value: influencerOverview.views },
+                    { id: "saves", label: copy.influencerDashboard.saves, value: influencerOverview.saves },
+                    { id: "likes", label: copy.influencerDashboard.likes, value: influencerOverview.likes },
+                    { id: "referrals", label: copy.influencerDashboard.referrals, value: influencerReferralSignups.length },
                   ].map((item) => (
-                    <Card key={item.label} className="rounded-[24px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
+                    <Card key={item.id} className="rounded-[24px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                       <CardBody className="gap-1 p-4">
                         <p className="text-2xl font-semibold text-[#2C1A0E]">{item.value}</p>
                         <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{item.label}</p>
@@ -11305,18 +11309,18 @@ export default function Page() {
                 <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-3 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">weekly checklist</p>
-                      <p className="mt-1 text-sm text-[#2C1A0E]">the few things to stay on top of this week.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.weeklyChecklist}</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.weeklyChecklistBody}</p>
                     </div>
                     <div className="grid gap-2">
                       {influencerChecklist.map((item) => (
-                        <div key={item.label} className="flex items-start justify-between gap-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3">
+                        <div key={item.id} className="flex items-start justify-between gap-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3">
                           <div>
                             <p className="font-semibold text-[#2C1A0E]">{item.label}</p>
                             <p className="mt-1 text-sm text-[#6c7289]">{item.detail}</p>
                           </div>
                           <Chip className={item.done ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}>
-                            {item.done ? "done" : "todo"}
+                            {item.done ? copy.influencerDashboard.done : copy.influencerDashboard.todo}
                           </Chip>
                         </div>
                       ))}
@@ -11331,8 +11335,8 @@ export default function Page() {
                 <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-3 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">content performance</p>
-                      <p className="mt-1 text-sm text-[#2C1A0E]">how each post is landing right now.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.contentPerformance}</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.contentPerformanceBody}</p>
                     </div>
                     {influencerMetrics.length ? (
                       <div className="grid gap-3">
@@ -11340,26 +11344,26 @@ export default function Page() {
                           <div key={item.post.id} className="rounded-[20px] bg-[#FFF7E8] p-4">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || "untitled post"}</p>
+                                <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || copy.influencerDashboard.untitledPost}</p>
                                 <p className="mt-1 text-sm text-[#6c7289]">{item.post.taggedPlaceName || item.post.type} • {item.post.createdAt}</p>
                               </div>
-                              <Chip className="bg-white text-[#2C1A0E]">{item.views} views</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.viewsChip(item.views)}</Chip>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
-                              <Chip className="bg-white text-[#2C1A0E]">{item.likes} likes</Chip>
-                              <Chip className="bg-white text-[#2C1A0E]">{item.comments} comments</Chip>
-                              <Chip className="bg-white text-[#2C1A0E]">{item.saves} saves</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.likesChip(item.likes)}</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.commentsChip(item.comments)}</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.savesChip(item.saves)}</Chip>
                             </div>
                             {item.topCities.length ? (
                               <p className="mt-3 text-sm text-[#6c7289]">
-                                top cities: {item.topCities.map(([city, count]) => `${city} (${count})`).join(", ")}
+                                {copy.influencerDashboard.topCities} {item.topCities.map(([city, count]) => `${city} (${count})`).join(", ")}
                               </p>
                             ) : null}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-[#6c7289]">your posts will start showing here once people see and save them.</p>
+                      <p className="text-sm text-[#6c7289]">{copy.influencerDashboard.contentEmpty}</p>
                     )}
                   </CardBody>
                 </Card>
@@ -11372,27 +11376,27 @@ export default function Page() {
                   <CardBody className="gap-3 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">referral tracking</p>
-                        <p className="mt-1 text-sm text-[#2C1A0E]">everyone who joined from your link shows up here.</p>
+                        <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.referralTracking}</p>
+                        <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.referralTrackingBody}</p>
                       </div>
-                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{influencerReferralSignups.length} signups</Chip>
+                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{copy.influencerDashboard.signupsChip(influencerReferralSignups.length)}</Chip>
                     </div>
                     <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                      <p className="text-sm font-semibold text-[#2C1A0E]">your code</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{liveProfile.referralCode || "waiting for referral code"}</p>
+                      <p className="text-sm font-semibold text-[#2C1A0E]">{copy.influencerDashboard.yourCode}</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{liveProfile.referralCode || copy.influencerDashboard.waitingForCode}</p>
                       {postSignupReferralUrl ? <p className="mt-2 break-all text-sm text-[#2C1A0E]">{postSignupReferralUrl}</p> : null}
                     </div>
                     {influencerReferralSignups.length ? (
                       <div className="grid gap-2">
                         {influencerReferralSignups.map((account) => (
                           <div key={account.googleProfile?.email} className="rounded-[18px] bg-[#FFF7E8] px-4 py-3">
-                            <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || "new signup"}</p>
-                            <p className="mt-1 text-sm text-[#6c7289]">{account.profile.city || "city pending"} • @{account.profile.username || "pending"}</p>
+                            <p className="font-semibold text-[#2C1A0E]">{account.profile.fullName || account.googleProfile?.name || copy.influencerDashboard.newSignup}</p>
+                            <p className="mt-1 text-sm text-[#6c7289]">{account.profile.city || copy.influencerDashboard.cityPending} • @{account.profile.username || copy.influencerDashboard.pending}</p>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-[#6c7289]">no referral signups yet.</p>
+                      <p className="text-sm text-[#6c7289]">{copy.influencerDashboard.referralEmpty}</p>
                     )}
                   </CardBody>
                 </Card>
@@ -11404,16 +11408,16 @@ export default function Page() {
                 <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-3 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">support & resources</p>
-                      <p className="mt-1 text-sm text-[#2C1A0E]">need help, ideas, or a quick answer from the founder.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.supportResources}</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.supportBody}</p>
                     </div>
                     <a href="mailto:crumbleappco@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
-                      <p className="font-semibold text-[#2C1A0E]">message the founder</p>
+                      <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.messageFounder}</p>
                       <p className="mt-1 text-sm text-[#6c7289]">crumbleappco@gmail.com</p>
                     </a>
                     <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                      <p className="font-semibold text-[#2C1A0E]">what to post</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">best-performing posts tag a place, say why it’s worth saving, and make the city feel specific.</p>
+                      <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.whatToPost}</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{copy.influencerDashboard.whatToPostDetail}</p>
                     </div>
                   </CardBody>
                 </Card>
@@ -11425,13 +11429,13 @@ export default function Page() {
                 <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-3 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">settings & profile</p>
-                      <p className="mt-1 text-sm text-[#2C1A0E]">same login, same profile, creator access layered on top.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.settingsProfile}</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.settingsBody}</p>
                     </div>
                     <div className="grid gap-2">
-                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">email: {user.googleProfile?.email}</div>
-                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">city: {liveProfile.city || "pending"}</div>
-                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">bio: {(liveProfile.bio ?? "").trim() || "add a short creator bio in your profile"}</div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">{copy.influencerDashboard.emailLabel(user.googleProfile?.email ?? "")}</div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">{copy.influencerDashboard.cityLabel(liveProfile.city || copy.influencerDashboard.pending)}</div>
+                      <div className="rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-sm text-[#2C1A0E]">{copy.influencerDashboard.bioLabel((liveProfile.bio ?? "").trim() || copy.influencerDashboard.bioPlaceholder)}</div>
                     </div>
                   </CardBody>
                 </Card>
@@ -11443,20 +11447,20 @@ export default function Page() {
                 <Card className="rounded-[28px] border border-[#FFE7C2] bg-white shadow-[0_14px_40px_rgba(254,138,1,0.08)]">
                   <CardBody className="gap-3 p-5">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">insights & analytics</p>
-                      <p className="mt-1 text-sm text-[#2C1A0E]">the deeper read on where attention is coming from.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.insightsAnalytics}</p>
+                      <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.insightsBody}</p>
                     </div>
                     <div className="grid gap-2">
                       <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                        <p className="font-semibold text-[#2C1A0E]">top audience cities</p>
+                        <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.topAudienceCities}</p>
                         <p className="mt-2 text-sm text-[#6c7289]">
-                          {influencerTopCities.length ? influencerTopCities.slice(0, 5).map(([city, count]) => `${city} (${count})`).join(", ") : "city data will show once views come in."}
+                          {influencerTopCities.length ? influencerTopCities.slice(0, 5).map(([city, count]) => `${city} (${count})`).join(", ") : copy.influencerDashboard.cityDataEmpty}
                         </p>
                       </div>
                       <div className="rounded-[18px] bg-[#FFF7E8] p-4">
-                        <p className="font-semibold text-[#2C1A0E]">top saved spots</p>
+                        <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.topSavedSpots}</p>
                         <p className="mt-2 text-sm text-[#6c7289]">
-                          {influencerTopSavedSpots.length ? influencerTopSavedSpots.map((item) => `${item.post.taggedPlaceName} (${item.saves})`).join(", ") : "saved spots will show once people start bookmarking your recs."}
+                          {influencerTopSavedSpots.length ? influencerTopSavedSpots.map((item) => `${item.post.taggedPlaceName} (${item.saves})`).join(", ") : copy.influencerDashboard.savedSpotsEmpty}
                         </p>
                       </div>
                     </div>
@@ -11472,12 +11476,12 @@ export default function Page() {
           >
             <div className="grid grid-cols-6 gap-1 text-center">
               {[
-                { label: "overview", key: "overview" },
-                { label: "content", key: "content" },
-                { label: "referrals", key: "referrals" },
-                { label: "support", key: "support" },
-                { label: "settings", key: "settings" },
-                { label: "insights", key: "insights" },
+                { label: copy.influencerDashboard.tabOverview, key: "overview" },
+                { label: copy.influencerDashboard.tabContent, key: "content" },
+                { label: copy.influencerDashboard.tabReferrals, key: "referrals" },
+                { label: copy.influencerDashboard.tabSupport, key: "support" },
+                { label: copy.influencerDashboard.tabSettings, key: "settings" },
+                { label: copy.influencerDashboard.tabInsights, key: "insights" },
               ].map((item) => (
                 <button
                   key={item.key}
@@ -12405,15 +12409,15 @@ export default function Page() {
                 <CardBody className="gap-3 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">creator dashboard</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">flip this on when you want your creator stats.</p>
+                      <p className="text-xs uppercase tracking-[0.22em] text-[#B56D19]">{copy.influencerDashboard.profileCardLabel}</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{copy.influencerDashboard.profileCardBody}</p>
                     </div>
                     <Chip className="bg-white text-[#2C1A0E]">creator</Chip>
                   </div>
                   <div className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
                     <div>
-                      <p className="text-sm font-semibold text-[#2C1A0E]">creator mode</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{creatorDashboardOpen ? "dashboard on" : "dashboard off"}</p>
+                      <p className="text-sm font-semibold text-[#2C1A0E]">{copy.influencerDashboard.creatorModeLabel}</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{creatorDashboardOpen ? copy.influencerDashboard.dashboardOn : copy.influencerDashboard.dashboardOff}</p>
                     </div>
                     <Switch
                       isSelected={creatorDashboardOpen}
