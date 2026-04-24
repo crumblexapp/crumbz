@@ -1050,6 +1050,8 @@ function normalizePosts(posts: Partial<AppPost>[]) {
         post.priceTag === "student-friendly" || post.priceTag === "kinda-pricey" || post.priceTag === "special-occasion"
           ? post.priceTag
           : "",
+      cropOffsets: Array.isArray(post.cropOffsets) ? post.cropOffsets as { x: number; y: number }[] : undefined,
+      mediaTypes: Array.isArray(post.mediaTypes) ? post.mediaTypes as string[] : undefined,
     };
 
     return {
@@ -2271,6 +2273,7 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
             src={mediaUrls[currentIndex]}
             controls
             playsInline
+            preload="metadata"
             className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-[28rem] w-full object-cover"}
             style={!detail && cropOffset ? { objectPosition: `${cropOffset.x}% ${cropOffset.y}%` } : undefined}
           />
@@ -7989,7 +7992,12 @@ export default function Page() {
             const blob = Array.isArray(converted) ? converted[0] : converted;
             file = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
           }
-          if (slide.isVideo) return file;
+          if (slide.isVideo) {
+            // Re-wrap with explicit MIME type — iOS often leaves file.type empty for videos
+            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+            const videoMime = file.type || (ext === "mov" ? "video/quicktime" : "video/mp4");
+            return new File([file], file.name, { type: videoMime });
+          }
           const cropped = await cropImageToBlob(file, slide.cropOffset);
           return new File([cropped], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" });
         }),
@@ -8002,7 +8010,7 @@ export default function Page() {
         body: JSON.stringify({
           files: preparedFiles.map((file) => ({
             name: file.name,
-            contentType: file.type || "application/octet-stream",
+            contentType: file.type,
           })),
         }),
       });
