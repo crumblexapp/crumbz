@@ -7787,10 +7787,6 @@ export default function Page() {
           return { notice: "reels need to be mp4 or mov." };
         }
 
-        if (file.size > CREATOR_REEL_MAX_FILE_SIZE_BYTES) {
-          return { notice: `that reel is ${formatFileSize(file.size)}. keep reels under 4 gb.` };
-        }
-
         try {
           const metadata = await readVideoMetadata(file);
           if (!hasExactDimensions(metadata, CREATOR_REEL_DIMENSIONS)) {

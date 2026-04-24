@@ -21,6 +21,17 @@ function sanitizeFileName(fileName: string) {
   return fileName.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
 }
 
+async function isInfluencer(email: string): Promise<boolean> {
+  const { data } = await supabaseServer.from("app_state").select("accounts").single();
+  const accounts = Array.isArray(data?.accounts) ? (data.accounts as Array<Record<string, unknown>>) : [];
+  const account = accounts.find((a) => {
+    const gp = a.googleProfile && typeof a.googleProfile === "object" ? (a.googleProfile as Record<string, unknown>) : null;
+    return typeof gp?.email === "string" && gp.email.toLowerCase() === email;
+  });
+  const profile = account?.profile && typeof account.profile === "object" ? (account.profile as Record<string, unknown>) : null;
+  return profile?.accountRole === "influencer";
+}
+
 export async function POST(request: Request) {
   const { error: authError, identity } = await requireVerifiedIdentity(request);
   if (authError) {
@@ -43,17 +54,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Too many files at once." }, { status: 400 });
   }
 
-  // Validate total size
-  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-  if (totalSize > MAX_TOTAL_SIZE) {
-    return NextResponse.json({ ok: false, message: `Total file size exceeds ${MAX_TOTAL_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
+  const influencer = identity.isAdmin ? false : await isInfluencer(identity.email);
+
+  if (!influencer) {
+    // Validate total size
+    const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > MAX_TOTAL_SIZE) {
+      return NextResponse.json({ ok: false, message: `Total file size exceeds ${MAX_TOTAL_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
+    }
+
+    // Validate individual file size
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ ok: false, message: `File "${file.name}" exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
+      }
+    }
   }
 
-  // Validate individual file size and MIME type
+  // Validate MIME type for all users
   for (const file of files) {
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ ok: false, message: `File "${file.name}" exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit.` }, { status: 400 });
-    }
     if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
       return NextResponse.json({ ok: false, message: `File "${file.name}" has an unsupported file type.` }, { status: 400 });
     }
