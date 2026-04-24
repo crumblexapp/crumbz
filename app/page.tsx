@@ -7406,6 +7406,28 @@ export default function Page() {
     setDailyPostNotice("story deleted.");
   };
 
+  const deleteOwnPost = (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    const currentEmail = user.googleProfile?.email?.toLowerCase();
+    if (!targetPost || !currentEmail || targetPost.authorEmail.toLowerCase() !== currentEmail) return;
+
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(copy.creator.deletePostConfirm);
+      if (!confirmed) return;
+    }
+
+    const nextPosts = posts.filter((post) => post.id !== postId);
+    const nextInteractions = { ...interactions };
+    delete nextInteractions[postId];
+
+    lastSharedStateMutationAtRef.current = Date.now();
+    setPosts(nextPosts);
+    setInteractions(nextInteractions);
+    syncSharedState({ nextPosts, nextInteractions, deletePostId: postId });
+    closeOwnPost();
+    setDailyPostNotice(copy.creator.postDeleted);
+  };
+
   const deleteUserFromAdmin = async (targetEmail: string) => {
     if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the user again."))) {
       return;
@@ -12419,9 +12441,9 @@ export default function Page() {
                 <form className="space-y-4" onSubmit={submitDailyPost}>
                   {editingDailyPostId ? (
                     <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
-                      <span className="text-[#2C1A0E]">editing your post</span>
+                      <span className="text-[#2C1A0E]">{copy.creator.editingPost}</span>
                       <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingDailyPost}>
-                        cancel
+                        {copy.common.cancel}
                       </Button>
                     </div>
                   ) : null}
@@ -12628,7 +12650,7 @@ export default function Page() {
                           <div className="rounded-[18px] bg-[#fffaf2] px-4 py-3 text-sm text-[#6c7289]">
                             {dailyPostFormat === "carousel"
                               ? copy.creator.carouselSwapHint
-                              : `pick a new file any time to replace this ${dailyPostFormat}.`}
+                              : copy.creator.replaceHint(dailyPostFormat)}
                           </div>
                         ) : null}
                       </>
@@ -12639,7 +12661,7 @@ export default function Page() {
                       ref={dailyPostCaptionRef}
                       placeholder={
                         isInfluencer && dailyPostFormat === "story"
-                          ? "add to your story"
+                          ? copy.creator.storyCaption
                           : copy.profile.captionPlaceholder
                       }
                       value={dailyPostCaption}
@@ -12746,7 +12768,7 @@ export default function Page() {
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.profile.howWasIt} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">give friends the quick truth if you want.</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{copy.creator.howWasItBody}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {TASTE_TAG_OPTIONS.map((option) => (
@@ -12765,8 +12787,8 @@ export default function Page() {
                   </div>
                   <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">price vibe <span className="normal-case tracking-normal text-[#6c7289]">(optional)</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">this is where `student friendly` lives if you want to add it.</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.creator.priceVibe} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{copy.creator.priceVibeBody}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {PRICE_TAG_OPTIONS.map((option) => (
@@ -12820,7 +12842,7 @@ export default function Page() {
                         isDisabled={isUploadingDailyPost}
                         className={`h-14 ${isInfluencer ? "min-w-[7.5rem]" : "min-w-14"} bg-[#ff6a24] px-5 ${isInfluencer ? "text-sm font-semibold uppercase tracking-[0.14em]" : "text-2xl"} text-white disabled:opacity-60`}
                       >
-                        {editingDailyPostId ? "save" : isInfluencer ? `post ${dailyPostFormat}` : "→"}
+                        {editingDailyPostId ? copy.common.save : isInfluencer ? copy.creator.postButton(dailyPostFormat) : "→"}
                       </Button>
                     </div>
                   ) : (
@@ -13825,18 +13847,26 @@ export default function Page() {
                         </Chip>
                       </div>
 
-                      {selectedOwnPost.type !== "weekly-dump" ? (
-                        <div className="px-5 pt-4">
+                      <div className="flex items-center gap-2 px-5 pt-4">
+                        {selectedOwnPost.type !== "weekly-dump" ? (
                           <Button
                             radius="full"
                             variant="flat"
                             className="bg-[#FFF0D0] text-[#2C1A0E]"
                             onPress={() => startEditingDailyPost(selectedOwnPost)}
                           >
-                            edit post
+                            {copy.creator.editPost}
                           </Button>
-                        </div>
-                      ) : null}
+                        ) : null}
+                        <Button
+                          radius="full"
+                          variant="flat"
+                          className="bg-[#fff0f0] text-[#B3261E]"
+                          onPress={() => deleteOwnPost(selectedOwnPost.id)}
+                        >
+                          {copy.common.delete}
+                        </Button>
+                      </div>
 
                       <div className="mt-4">
                         <PostMediaPreview post={selectedOwnPost} detail />
