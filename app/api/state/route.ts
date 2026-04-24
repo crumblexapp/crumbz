@@ -946,8 +946,7 @@ export async function POST(request: Request) {
     const postAuthorEmail = normalizeEmail(existingPost?.authorEmail);
 
     if (!identity.isAdmin) {
-      // Non-admins may only delete their own student posts.
-      if (!existingPost || postAuthorEmail !== identity.email || existingPost.authorRole !== "student") {
+      if (!existingPost || postAuthorEmail !== identity.email) {
         return NextResponse.json({ ok: false, message: "you can only delete your own posts." }, { status: 403 });
       }
     }

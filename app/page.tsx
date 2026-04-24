@@ -7400,11 +7400,7 @@ export default function Page() {
     lastSharedStateMutationAtRef.current = Date.now();
     setPosts(nextPosts);
     setInteractions(nextInteractions);
-    syncSharedState({
-      nextPosts,
-      nextInteractions,
-      deletePostId: postId,
-    });
+    syncSharedState({ deletePostId: postId });
     setStoryActionMenuOpen(false);
     setSelectedStoryPostId(null);
     setDailyPostNotice("story deleted.");
@@ -7427,7 +7423,7 @@ export default function Page() {
     lastSharedStateMutationAtRef.current = Date.now();
     setPosts(nextPosts);
     setInteractions(nextInteractions);
-    syncSharedState({ nextPosts, nextInteractions, deletePostId: postId });
+    syncSharedState({ deletePostId: postId });
     closeOwnPost();
     setDailyPostNotice(copy.creator.postDeleted);
   };
