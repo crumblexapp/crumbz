@@ -465,6 +465,15 @@ type AppPost = {
   taggedPlaceCity: string;
   tasteTag: "" | "fire" | "solid" | "skip";
   priceTag: "" | "student-friendly" | "kinda-pricey" | "special-occasion";
+  cropOffsets?: { x: number; y: number }[];
+  mediaTypes?: string[];
+};
+
+type CarouselStagingSlide = {
+  file: File;
+  previewUrl: string;
+  isVideo: boolean;
+  cropOffset: { x: number; y: number };
 };
 
 const defaultPostFields = {
@@ -1477,6 +1486,51 @@ function matchesAcceptedType(file: File, acceptedTypes: string[]) {
   );
 }
 
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|mov|webm)(\?|$)/i.test(url);
+}
+
+async function cropImageToBlob(file: File, offset: { x: number; y: number }): Promise<Blob> {
+  const targetW = 1080;
+  const targetH = 1350;
+  const targetRatio = targetW / targetH;
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const srcW = img.naturalWidth;
+      const srcH = img.naturalHeight;
+      const srcRatio = srcW / srcH;
+      let cropW: number, cropH: number, cropX: number, cropY: number;
+      if (srcRatio > targetRatio) {
+        cropH = srcH;
+        cropW = srcH * targetRatio;
+        cropX = (srcW - cropW) * (offset.x / 100);
+        cropY = 0;
+      } else {
+        cropW = srcW;
+        cropH = srcW / targetRatio;
+        cropX = 0;
+        cropY = (srcH - cropH) * (offset.y / 100);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas unavailable")); return; }
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, targetW, targetH);
+      canvas.toBlob(
+        (blob) => { if (blob) resolve(blob); else reject(new Error("toBlob failed")); },
+        "image/jpeg",
+        0.9,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src = url;
+  });
+}
+
 function formatFileSize(bytes: number) {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
@@ -1695,31 +1749,6 @@ function getVideoRatioFromDimensions(width: number, height: number): VideoRatio 
   return "16:9";
 }
 
-function getCreatorFormatRules(format: CreatorPostFormat) {
-  switch (format) {
-    case "carousel":
-      return "2 to 10 slides. 1:1 or 4:5. best size: 1080 x 1350.";
-    case "reel":
-      return "9:16 vertical. 1080 x 1920. 3 to 90 sec. up to 4 gb.";
-    case "story":
-      return "9:16. 1080 x 1920. image or video. videos up to 15 sec.";
-    default:
-      return "single photo or video. 1:1, 4:5, or 1.91:1. videos up to 60 sec.";
-  }
-}
-
-function getCreatorUploadPrompt(format: CreatorPostFormat) {
-  switch (format) {
-    case "carousel":
-      return "add carousel slides";
-    case "reel":
-      return "add your reel";
-    case "story":
-      return "add your story";
-    default:
-      return "add your post";
-  }
-}
 
 function inferCreatorFormatFromFiles(files: File[]) {
   if (files.length > 1) return "carousel" as const;
@@ -2229,22 +2258,37 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
     );
   }
 
+  const cropOffset = post.cropOffsets?.[currentIndex];
+  const slideIsVideo =
+    (post.mediaTypes?.[currentIndex] === "video") || isVideoUrl(mediaUrls[currentIndex] ?? "");
+
   return (
     <div className="space-y-3">
       <div className="relative overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
-        {/* carousel images use the same direct storage urls as the single-photo case above. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={mediaUrls[currentIndex]}
-          alt={`${post.title} ${currentIndex + 1}`}
-          className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-[28rem] w-full object-cover"}
-          loading="lazy"
-        />
+        {slideIsVideo ? (
+          <video
+            key={mediaUrls[currentIndex]}
+            src={mediaUrls[currentIndex]}
+            controls
+            playsInline
+            className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-[28rem] w-full object-cover"}
+            style={!detail && cropOffset ? { objectPosition: `${cropOffset.x}% ${cropOffset.y}%` } : undefined}
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={mediaUrls[currentIndex]}
+            alt={`${post.title} ${currentIndex + 1}`}
+            className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-[28rem] w-full object-cover"}
+            style={!detail && cropOffset ? { objectPosition: `${cropOffset.x}% ${cropOffset.y}%` } : undefined}
+            loading="lazy"
+          />
+        )}
         {mediaUrls.length > 1 ? (
           <>
             <button
               type="button"
-              aria-label="previous photo"
+              aria-label="previous slide"
               onClick={() => setActiveIndex((current) => (current <= 0 ? mediaUrls.length - 1 : current - 1))}
               className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E] shadow-[0_10px_24px_rgba(44,26,14,0.16)]"
             >
@@ -2252,7 +2296,7 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
             </button>
             <button
               type="button"
-              aria-label="next photo"
+              aria-label="next slide"
               onClick={() => setActiveIndex((current) => (current + 1) % mediaUrls.length)}
               className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E] shadow-[0_10px_24px_rgba(44,26,14,0.16)]"
             >
@@ -2267,7 +2311,7 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
             <Fragment key={url}>
               <button
                 type="button"
-                aria-label={`show photo ${index + 1}`}
+                aria-label={`show slide ${index + 1}`}
                 onClick={() => setActiveIndex(index)}
                 className={`h-2.5 rounded-full transition-all ${index === currentIndex ? "w-6 bg-[#F5A623]" : "w-2.5 bg-[#D8DFEB]"}`}
               />
@@ -2419,6 +2463,10 @@ export default function Page() {
   const [dailyPostPriceTag, setDailyPostPriceTag] = useState<AppPost["priceTag"]>("");
   const [isUploadingDailyPost, setIsUploadingDailyPost] = useState(false);
   const [dailyPostInputKey, setDailyPostInputKey] = useState(0);
+  const [dailyPostCropOffsets, setDailyPostCropOffsets] = useState<{ x: number; y: number }[]>([]);
+  const [dailyPostMediaTypes, setDailyPostMediaTypes] = useState<string[]>([]);
+  const [carouselStaging, setCarouselStaging] = useState<CarouselStagingSlide[] | null>(null);
+  const [carouselStagingActiveIdx, setCarouselStagingActiveIdx] = useState(0);
   const [weeklyDumpNotice, setWeeklyDumpNotice] = useState("");
   const [weeklyDumpCaption, setWeeklyDumpCaption] = useState("");
   const [weeklyDumpMediaUrls, setWeeklyDumpMediaUrls] = useState<string[]>([]);
@@ -2470,6 +2518,8 @@ export default function Page() {
   const profileCameraInputRef = useRef<HTMLInputElement>(null);
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
+  const carouselStagingAddRef = useRef<HTMLInputElement>(null);
+  const carouselDragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
   const creatorStoryLibraryInputRef = useRef<HTMLInputElement>(null);
   const creatorStoryCameraInputRef = useRef<HTMLInputElement>(null);
   const weeklyDumpInputRef = useRef<HTMLInputElement>(null);
@@ -7752,31 +7802,31 @@ export default function Page() {
       return;
     }
 
+    // Carousel: enter staging mode — no upload yet
+    if (isInfluencer && creatorFormat === "carousel") {
+      const incoming = fileList.slice(0, 10).map((file) => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        isVideo: matchesAcceptedType(file, ACCEPTED_VIDEO_TYPES),
+        cropOffset: { x: 50, y: 50 },
+      }));
+      setCarouselStaging((prev) => {
+        if (prev) {
+          const revoke = incoming; // don't revoke existing, just append
+          const combined = [...prev, ...revoke].slice(0, 10);
+          return combined;
+        }
+        return incoming;
+      });
+      setCarouselStagingActiveIdx(0);
+      setDailyPostFormat("carousel");
+      setDailyPostComposerMediaKind("carousel");
+      setDailyPostNotice("");
+      setDailyPostInputKey((current) => current + 1);
+      return;
+    }
+
     const validateCreatorFiles = async (): Promise<{ notice: string } | { mediaKind: MediaKind; videoRatio: VideoRatio }> => {
-      if (creatorFormat === "carousel") {
-        if (fileList.length < 2 || fileList.length > 10) {
-          return { notice: "carousels need 2 to 10 slides." };
-        }
-
-        const invalidImage = fileList.find((file) => !matchesAcceptedType(file, ACCEPTED_IMAGE_TYPES));
-        if (invalidImage) {
-          return { notice: "carousel slides need image files." };
-        }
-
-        for (const file of fileList) {
-          try {
-            const dimensions = await readImageDimensions(file);
-            if (!hasExactDimensions(dimensions, CREATOR_CAROUSEL_DIMENSIONS)) {
-              return { notice: "carousel slides need to be 1080 x 1080 or 1080 x 1350." };
-            }
-          } catch {
-            return { notice: "we couldn't read one of those carousel slides. try again." };
-          }
-        }
-
-        return { mediaKind: "carousel" as MediaKind, videoRatio: "4:5" as VideoRatio };
-      }
-
       if (creatorFormat === "reel") {
         if (fileList.length !== 1) {
           return { notice: "reels need one video file." };
@@ -7884,36 +7934,135 @@ export default function Page() {
     }
 
     setIsUploadingDailyPost(true);
-    setDailyPostNotice(isInfluencer ? `uploading your ${creatorFormat}...` : "uploading your post...");
+    setDailyPostNotice(isInfluencer ? copy.creator.uploading(creatorFormat) : "uploading your post...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: nextMediaKind,
-        maxFiles: isInfluencer ? (creatorFormat === "carousel" ? 10 : 1) : 1,
+        maxFiles: isInfluencer ? 1 : 1,
         setNotice: setDailyPostNotice,
         skipSizeLimit: isInfluencer,
       });
 
       if (!uploadResults?.length) return;
 
-      setDailyPostMediaUrls(
-        isInfluencer && creatorFormat === "carousel" ? uploadResults.slice(0, 10) : [uploadResults[0]],
-      );
-      setDailyPostNotice(
-        isInfluencer
-          ? creatorFormat === "carousel"
-            ? `${uploadResults.length} slides are ready.`
-            : `your ${creatorFormat} is ready.`
-          : "your photo is ready.",
-      );
+      setDailyPostMediaUrls([uploadResults[0]]);
+      setDailyPostNotice(isInfluencer ? copy.creator.mediaReady(creatorFormat) : "your photo is ready.");
       setDailyPostInputKey((current) => current + 1);
     } finally {
       setIsUploadingDailyPost(false);
     }
   };
 
+  const handleCarouselStagingAddMore = (files: FileList | null) => {
+    if (!files?.length || !carouselStaging) return;
+    const remaining = 10 - carouselStaging.length;
+    if (remaining <= 0) return;
+    const incoming = Array.from(files).slice(0, remaining).map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      isVideo: matchesAcceptedType(file, ACCEPTED_VIDEO_TYPES),
+      cropOffset: { x: 50, y: 50 },
+    }));
+    setCarouselStaging((prev) => [...(prev ?? []), ...incoming].slice(0, 10));
+  };
+
+  const confirmCarouselStaging = async () => {
+    if (!carouselStaging?.length) return;
+    if (carouselStaging.length < 2) {
+      setDailyPostNotice(copy.creator.carouselMin);
+      return;
+    }
+
+    setIsUploadingDailyPost(true);
+    setDailyPostNotice(copy.creator.uploading("carousel"));
+
+    try {
+      const preparedFiles = await Promise.all(
+        carouselStaging.map(async (slide) => {
+          let file = slide.file;
+          const isHeic =
+            matchesAcceptedType(file, [".heic", ".heif"]) || ["image/heic", "image/heif"].includes(file.type.toLowerCase());
+          if (isHeic) {
+            const { default: heic2any } = await import("heic2any");
+            const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+            const blob = Array.isArray(converted) ? converted[0] : converted;
+            file = new File([blob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" });
+          }
+          if (slide.isVideo) return file;
+          const cropped = await cropImageToBlob(file, slide.cropOffset);
+          return new File([cropped], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" });
+        }),
+      );
+
+      const headers = await getAuthenticatedHeaders({ "Content-Type": "application/json" });
+      const response = await fetch("/api/upload-url", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          files: preparedFiles.map((file) => ({
+            name: file.name,
+            contentType: file.type || "application/octet-stream",
+          })),
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        uploads?: { path: string; token: string; publicUrl: string; contentType: string }[];
+        message?: string;
+      } | null;
+
+      if (!response.ok || !payload?.ok || !payload.uploads?.length) {
+        setDailyPostNotice(payload?.message ?? "upload failed. try again.");
+        return;
+      }
+
+      const uploadedUrls = await Promise.all(
+        preparedFiles.map(async (file, index) => {
+          const target = payload.uploads?.[index];
+          if (!target) throw new Error("upload target missing");
+          const { error } = await supabaseBrowser.storage
+            .from("crumbz-media")
+            .uploadToSignedUrl(target.path, target.token, file, {
+              contentType: file.type || target.contentType,
+              upsert: true,
+            });
+          if (error) throw error;
+          return target.publicUrl;
+        }),
+      ).catch((err: { message?: string }) => {
+        setDailyPostNotice(err.message ?? "upload failed while sending slides to storage.");
+        return null;
+      });
+
+      if (!uploadedUrls?.length) return;
+
+      setDailyPostMediaUrls(uploadedUrls);
+      setDailyPostCropOffsets(carouselStaging.map((s) => s.cropOffset));
+      setDailyPostMediaTypes(carouselStaging.map((s) => (s.isVideo ? "video" : "photo")));
+      setDailyPostNotice(copy.creator.slidesReady(uploadedUrls.length));
+
+      carouselStaging.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+      setCarouselStaging(null);
+      setCarouselStagingActiveIdx(0);
+      setDailyPostInputKey((c) => c + 1);
+    } catch {
+      setDailyPostNotice("upload failed. try again.");
+    } finally {
+      setIsUploadingDailyPost(false);
+    }
+  };
+
   const clearDailyPostPhoto = () => {
+    if (carouselStaging) {
+      carouselStaging.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+      setCarouselStaging(null);
+      setCarouselStagingActiveIdx(0);
+    }
     setDailyPostMediaUrls([]);
+    setDailyPostCropOffsets([]);
+    setDailyPostMediaTypes([]);
     setDailyPostNotice("");
     setDailyPostComposerMediaKind(dailyPostFormat === "reel" ? "video" : dailyPostFormat === "carousel" ? "carousel" : "photo");
     setDailyPostVideoRatio(dailyPostFormat === "reel" || dailyPostFormat === "story" ? "9:16" : "4:5");
@@ -7921,6 +8070,11 @@ export default function Page() {
   };
 
   const cancelEditingDailyPost = () => {
+    if (carouselStaging) {
+      carouselStaging.forEach((s) => URL.revokeObjectURL(s.previewUrl));
+      setCarouselStaging(null);
+      setCarouselStagingActiveIdx(0);
+    }
     setEditingDailyPostId(null);
     setDailyPostCaption("");
     setDailyPostMentionQuery("");
@@ -7929,6 +8083,8 @@ export default function Page() {
     setDailyPostComposerMediaKind("photo");
     setDailyPostVideoRatio("4:5");
     setDailyPostMediaUrls([]);
+    setDailyPostCropOffsets([]);
+    setDailyPostMediaTypes([]);
     setDailyPostTaggedPlace(null);
     setDailyPostPlaceQuery("");
     setDailyPostPlaceResults([]);
@@ -7981,17 +8137,17 @@ export default function Page() {
     if (!authorEmail) return;
 
     if (isUploadingDailyPost) {
-      setDailyPostNotice("your photos are still uploading. wait a sec, then post.");
+      setDailyPostNotice(copy.creator.stillUploading);
       return;
     }
 
     if (!dailyPostMediaUrls.length) {
-      setDailyPostNotice(isInfluencer ? `add media for this ${dailyPostFormat}.` : "add at least one photo for today’s drop.");
+      setDailyPostNotice(isInfluencer ? copy.creator.addMedia(dailyPostFormat) : "add at least one photo for today’s drop.");
       return;
     }
 
     if (isInfluencer && dailyPostFormat === "carousel" && (dailyPostMediaUrls.length < 2 || dailyPostMediaUrls.length > 10)) {
-      setDailyPostNotice("carousels need 2 to 10 slides.");
+      setDailyPostNotice(copy.creator.carouselMin);
       return;
     }
 
@@ -8027,6 +8183,8 @@ export default function Page() {
       taggedPlaceCity: dailyPostTaggedPlace ? dailyPostCity : "",
       tasteTag: dailyPostTasteTag,
       priceTag: dailyPostPriceTag,
+      cropOffsets: isInfluencer && dailyPostFormat === "carousel" && dailyPostCropOffsets.length ? dailyPostCropOffsets : undefined,
+      mediaTypes: isInfluencer && dailyPostFormat === "carousel" && dailyPostMediaTypes.length ? dailyPostMediaTypes : undefined,
     };
 
     lastSharedStateMutationAtRef.current = Date.now();
@@ -8052,6 +8210,8 @@ export default function Page() {
     setDailyPostTasteTag("");
     setDailyPostPriceTag("");
     setDailyPostNotice("");
+    setDailyPostCropOffsets([]);
+    setDailyPostMediaTypes([]);
     setDailyPostInputKey((current) => current + 1);
   };
 
@@ -12149,7 +12309,7 @@ export default function Page() {
                       </div>
                     ) : null}
                     <button type="button" onClick={() => setProfileEditModalOpen(true)} className="inline-flex items-center gap-2 pt-2 text-sm font-medium text-[#6c7289]">
-                      <span>edit</span>
+                      <span>{copy.common.edit}</span>
                       <span className="flex h-5 w-5 items-center justify-center rounded-full border border-[#D8C7A5] text-[0.95rem] leading-none text-[#2C1A0E]">+</span>
                     </button>
                     <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -12258,65 +12418,213 @@ export default function Page() {
                     </div>
                   ) : null}
                   <div className="space-y-3">
-                    <button
-                      type="button"
-                      aria-label={isInfluencer ? getCreatorUploadPrompt(dailyPostFormat) : copy.profile.addPostPhoto}
-                      disabled={isUploadingDailyPost}
-                      onClick={() => dailyPostInputRef.current?.click()}
-                      className="relative flex min-h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
-                    >
-                      {dailyPostMediaUrls.length ? (
-                        <>
-                          {dailyPostComposerMediaKind === "video" ? (
+                    {isInfluencer && carouselStaging ? (
+                      /* ── Carousel staging preview ── */
+                      <div className="space-y-3">
+                        <div
+                          className="relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded-[24px] bg-[#1a1008] select-none active:cursor-grabbing"
+                          onPointerDown={(e) => {
+                            const activeSlide = carouselStaging[carouselStagingActiveIdx];
+                            if (!activeSlide) return;
+                            (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+                            carouselDragRef.current = {
+                              startX: e.clientX,
+                              startY: e.clientY,
+                              startOffsetX: activeSlide.cropOffset.x,
+                              startOffsetY: activeSlide.cropOffset.y,
+                            };
+                          }}
+                          onPointerMove={(e) => {
+                            if (!carouselDragRef.current) return;
+                            const { startX, startY, startOffsetX, startOffsetY } = carouselDragRef.current;
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const dx = e.clientX - startX;
+                            const dy = e.clientY - startY;
+                            const newX = Math.min(100, Math.max(0, startOffsetX - (dx / rect.width) * 100 * 1.5));
+                            const newY = Math.min(100, Math.max(0, startOffsetY - (dy / rect.height) * 100 * 1.5));
+                            setCarouselStaging((prev) =>
+                              prev?.map((s, i) =>
+                                i === carouselStagingActiveIdx ? { ...s, cropOffset: { x: newX, y: newY } } : s,
+                              ) ?? null,
+                            );
+                          }}
+                          onPointerUp={() => { carouselDragRef.current = null; }}
+                          onPointerCancel={() => { carouselDragRef.current = null; }}
+                        >
+                          {carouselStaging[carouselStagingActiveIdx]?.isVideo ? (
                             <video
-                              src={dailyPostMediaUrls[0]}
-                              className="h-full w-full object-cover"
+                              key={carouselStaging[carouselStagingActiveIdx].previewUrl}
+                              src={carouselStaging[carouselStagingActiveIdx].previewUrl}
+                              className="h-full w-full object-cover pointer-events-none"
+                              style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx].cropOffset.x}% ${carouselStaging[carouselStagingActiveIdx].cropOffset.y}%` }}
                               muted
                               playsInline
+                              autoPlay
+                              loop
                             />
                           ) : (
-                            <>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={dailyPostMediaUrls[0]} alt="post preview" className="h-full w-full object-cover" loading="lazy" />
-                              {dailyPostComposerMediaKind === "carousel" ? (
-                                <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/82 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                                  {dailyPostMediaUrls.length} slides
-                                </div>
-                              ) : null}
-                            </>
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={carouselStaging[carouselStagingActiveIdx]?.previewUrl}
+                              alt={`slide ${carouselStagingActiveIdx + 1}`}
+                              className="h-full w-full object-cover pointer-events-none"
+                              style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx]?.cropOffset.x ?? 50}% ${carouselStaging[carouselStagingActiveIdx]?.cropOffset.y ?? 50}%` }}
+                            />
                           )}
+                          {/* slide counter */}
+                          <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+                            {carouselStagingActiveIdx + 1} / {carouselStaging.length}
+                          </div>
+                          {/* drag hint */}
+                          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[#2C1A0E]/70 px-3 py-1 text-xs text-white">
+                            {copy.creator.carouselDragHint}
+                          </div>
+                          {/* remove slide */}
                           <button
                             type="button"
-                            aria-label="remove selected media"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              clearDailyPostPhoto();
+                            aria-label={copy.creator.carouselRemoveSlide}
+                            onClick={() => {
+                              const next = carouselStaging.filter((_, i) => i !== carouselStagingActiveIdx);
+                              URL.revokeObjectURL(carouselStaging[carouselStagingActiveIdx].previewUrl);
+                              if (!next.length) {
+                                setCarouselStaging(null);
+                                setDailyPostFormat("post");
+                                setDailyPostComposerMediaKind("photo");
+                              } else {
+                                setCarouselStaging(next);
+                                setCarouselStagingActiveIdx(Math.min(carouselStagingActiveIdx, next.length - 1));
+                              }
                             }}
-                            className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
+                            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#2C1A0E]/80 text-xl leading-none text-white"
                           >
                             ×
                           </button>
-                        </>
-                      ) : (
-                        <div className="px-6 text-center">
-                          <div className="text-5xl leading-none">+</div>
-                          <p className="mt-3 text-sm font-medium">
-                            {isInfluencer ? getCreatorUploadPrompt(dailyPostFormat) : copy.profile.addPostPhoto}
-                          </p>
-                          {isInfluencer && dailyPostFormat === "story" ? (
-                            <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{getCreatorFormatRules(dailyPostFormat)}</p>
+                          {/* prev/next arrows */}
+                          {carouselStaging.length > 1 ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label="previous slide"
+                                onClick={() => setCarouselStagingActiveIdx((i) => (i <= 0 ? carouselStaging.length - 1 : i - 1))}
+                                className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E]"
+                              >
+                                ‹
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="next slide"
+                                onClick={() => setCarouselStagingActiveIdx((i) => (i + 1) % carouselStaging.length)}
+                                className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E]"
+                              >
+                                ›
+                              </button>
+                            </>
                           ) : null}
                         </div>
-                      )}
-                    </button>
-                    {isInfluencer && dailyPostMediaUrls.length ? (
-                      <div className="rounded-[18px] bg-[#fffaf2] px-4 py-3 text-sm text-[#6c7289]">
-                        {dailyPostFormat === "carousel"
-                          ? "you can swap the whole carousel by picking new slides."
-                          : `pick a new file any time to replace this ${dailyPostFormat}.`}
+                        {/* dot indicators */}
+                        <div className="flex items-center justify-center gap-2">
+                          {carouselStaging.map((_, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              aria-label={`slide ${i + 1}`}
+                              onClick={() => setCarouselStagingActiveIdx(i)}
+                              className={`h-2.5 rounded-full transition-all ${i === carouselStagingActiveIdx ? "w-6 bg-[#F5A623]" : "w-2.5 bg-[#D8DFEB]"}`}
+                            />
+                          ))}
+                        </div>
+                        {/* add more + upload row */}
+                        <div className="flex items-center gap-2">
+                          {carouselStaging.length < 10 ? (
+                            <button
+                              type="button"
+                              onClick={() => carouselStagingAddRef.current?.click()}
+                              className="flex-1 rounded-full border border-[#ffc6b5] bg-[#fff8f5] py-3 text-sm font-medium text-[#ff6a24]"
+                            >
+                              + {copy.creator.carouselAddMore}
+                            </button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            radius="full"
+                            isDisabled={isUploadingDailyPost}
+                            onPress={() => void confirmCarouselStaging()}
+                            className="flex-1 bg-[#ff6a24] py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-60"
+                          >
+                            {isUploadingDailyPost ? "uploading..." : copy.creator.carouselUploadSlides}
+                          </Button>
+                        </div>
                       </div>
-                    ) : null}
+                    ) : (
+                      /* ── Normal upload button ── */
+                      <>
+                        <button
+                          type="button"
+                          aria-label={isInfluencer ? copy.creator.uploadPrompt[dailyPostFormat] : copy.profile.addPostPhoto}
+                          disabled={isUploadingDailyPost}
+                          onClick={() => dailyPostInputRef.current?.click()}
+                          className="relative flex min-h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
+                        >
+                          {dailyPostMediaUrls.length ? (
+                            <>
+                              {dailyPostComposerMediaKind === "video" ? (
+                                <video
+                                  src={dailyPostMediaUrls[0]}
+                                  className="h-full w-full object-cover"
+                                  muted
+                                  playsInline
+                                />
+                              ) : (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={dailyPostMediaUrls[0]}
+                                    alt="post preview"
+                                    className="h-full w-full object-cover"
+                                    style={dailyPostCropOffsets[0] ? { objectPosition: `${dailyPostCropOffsets[0].x}% ${dailyPostCropOffsets[0].y}%` } : undefined}
+                                    loading="lazy"
+                                  />
+                                  {dailyPostComposerMediaKind === "carousel" ? (
+                                    <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/82 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+                                      {copy.creator.carouselSlideCount(dailyPostMediaUrls.length)}
+                                    </div>
+                                  ) : null}
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                aria-label="remove selected media"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  clearDailyPostPhoto();
+                                }}
+                                className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
+                              >
+                                ×
+                              </button>
+                            </>
+                          ) : (
+                            <div className="px-6 text-center">
+                              <div className="text-5xl leading-none">+</div>
+                              <p className="mt-3 text-sm font-medium">
+                                {isInfluencer ? copy.creator.uploadPrompt[dailyPostFormat] : copy.profile.addPostPhoto}
+                              </p>
+                              {isInfluencer && dailyPostFormat === "story" ? (
+                                <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{copy.creator.formatRules[dailyPostFormat]}</p>
+                              ) : null}
+                            </div>
+                          )}
+                        </button>
+                        {isInfluencer && dailyPostMediaUrls.length ? (
+                          <div className="rounded-[18px] bg-[#fffaf2] px-4 py-3 text-sm text-[#6c7289]">
+                            {dailyPostFormat === "carousel"
+                              ? copy.creator.carouselSwapHint
+                              : `pick a new file any time to replace this ${dailyPostFormat}.`}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                   <div className="relative">
                     <Textarea
@@ -12473,9 +12781,7 @@ export default function Page() {
                     type="file"
                     accept={
                       isInfluencer
-                        ? dailyPostFormat === "story"
-                          ? ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
-                          : ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                        ? ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
                         : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
                     }
                     multiple={isInfluencer && dailyPostFormat !== "story"}
@@ -12485,18 +12791,33 @@ export default function Page() {
                     }}
                     className="hidden"
                   />
-                  <div className="flex items-center gap-3">
-                    {dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : <div className="flex-1" />}
-                    <Button
-                      type="submit"
-                      radius="full"
-                      size="lg"
-                      isDisabled={isUploadingDailyPost}
-                      className={`h-14 ${isInfluencer ? "min-w-[7.5rem]" : "min-w-14"} bg-[#ff6a24] px-5 ${isInfluencer ? "text-sm font-semibold uppercase tracking-[0.14em]" : "text-2xl"} text-white disabled:opacity-60`}
-                    >
-                      {editingDailyPostId ? "save" : isInfluencer ? `post ${dailyPostFormat}` : "→"}
-                    </Button>
-                  </div>
+                  <input
+                    ref={carouselStagingAddRef}
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+                    multiple
+                    onChange={(event) => {
+                      handleCarouselStagingAddMore(event.target.files);
+                      event.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                  {!carouselStaging ? (
+                    <div className="flex items-center gap-3">
+                      {dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : <div className="flex-1" />}
+                      <Button
+                        type="submit"
+                        radius="full"
+                        size="lg"
+                        isDisabled={isUploadingDailyPost}
+                        className={`h-14 ${isInfluencer ? "min-w-[7.5rem]" : "min-w-14"} bg-[#ff6a24] px-5 ${isInfluencer ? "text-sm font-semibold uppercase tracking-[0.14em]" : "text-2xl"} text-white disabled:opacity-60`}
+                      >
+                        {editingDailyPostId ? "save" : isInfluencer ? `post ${dailyPostFormat}` : "→"}
+                      </Button>
+                    </div>
+                  ) : (
+                    dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : null
+                  )}
                 </form>
               </CardBody>
             </Card>
