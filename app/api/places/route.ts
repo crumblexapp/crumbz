@@ -118,7 +118,9 @@ function dedupePlaces(places: Place[]) {
   });
 }
 
-// Single nearbysearch for one Google place type
+// Fetches one page of nearbysearch results and optionally page 2 via next_page_token.
+// Google requires a short delay before the token is valid, so page 2 adds ~2s but
+// runs in parallel across all types — total overhead is still ~2s, not 2s × N types.
 async function fetchNearbyByType(lat: number, lon: number, radius: number, type: string): Promise<Place[]> {
   const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
   url.searchParams.set("location", `${lat},${lon}`);
@@ -133,22 +135,43 @@ async function fetchNearbyByType(lat: number, lon: number, radius: number, type:
     throw new Error(`Google Places API error: ${data.status}`);
   }
 
-  return (data.results ?? []).map(normalizeGooglePlace);
+  const results: Place[] = (data.results ?? []).map(normalizeGooglePlace);
+
+  // Fetch page 2 if Google returned a continuation token
+  if (data.next_page_token) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const page2Url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
+      page2Url.searchParams.set("pagetoken", data.next_page_token);
+      page2Url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
+      const page2Response = await fetch(page2Url.toString(), { cache: "no-store" });
+      const page2Data = await page2Response.json();
+      if (page2Data.status === "OK") {
+        results.push(...(page2Data.results ?? []).map(normalizeGooglePlace));
+      }
+    } catch {
+      // Page 2 failing is non-fatal — return what page 1 gave us
+    }
+  }
+
+  return results;
 }
 
-// Four parallel nearbysearch calls — restaurant, cafe, bakery, bar.
-// Each Google type caps at 20 results, giving up to ~80 unique markers
-// with full colour variety (orange restaurants, purple cafes, salmon bakeries, green bars).
+// Six parallel nearbysearch calls covering the main food categories.
+// Each type returns up to 40 results (20 per page × 2 pages), giving up to ~240
+// before dedup — roughly doubling map coverage compared to page-1-only fetching.
 async function googlePlacesNearby(lat: number, lon: number, radius: number, limit: number) {
   if (!GOOGLE_PLACES_API_KEY) {
     throw new Error("Google Places API key not configured");
   }
 
-  const [restaurants, cafes, bakeries, bars] = await Promise.allSettled([
+  const [restaurants, cafes, bakeries, bars, takeaway, desserts] = await Promise.allSettled([
     fetchNearbyByType(lat, lon, radius, "restaurant"),
     fetchNearbyByType(lat, lon, radius, "cafe"),
     fetchNearbyByType(lat, lon, radius, "bakery"),
     fetchNearbyByType(lat, lon, radius, "bar"),
+    fetchNearbyByType(lat, lon, radius, "meal_takeaway"),
+    fetchNearbyByType(lat, lon, radius, "ice_cream_shop"),
   ]);
 
   const allPlaces = [
@@ -156,6 +179,8 @@ async function googlePlacesNearby(lat: number, lon: number, radius: number, limi
     ...(cafes.status === "fulfilled" ? cafes.value : []),
     ...(bakeries.status === "fulfilled" ? bakeries.value : []),
     ...(bars.status === "fulfilled" ? bars.value : []),
+    ...(takeaway.status === "fulfilled" ? takeaway.value : []),
+    ...(desserts.status === "fulfilled" ? desserts.value : []),
   ];
 
   return dedupePlaces(allPlaces).slice(0, limit);

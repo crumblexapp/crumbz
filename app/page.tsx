@@ -5241,7 +5241,7 @@ export default function Page() {
     if (cacheIsFresh) return;
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 25000);
     const loadPlaces = async () => {
       setFavoritePlacesLoading(true);
       setFavoritePlacesError("");
@@ -5262,7 +5262,7 @@ export default function Page() {
         const payload = (await response.json()) as { places?: FavoritePlace[] };
         const nextPlaces = (payload.places ?? []).slice(0, 100);
 
-        setFavoritePlaces(nextPlaces.length ? nextPlaces : getFallbackFavoritePlaces(cityKey));
+        setFavoritePlaces((current) => nextPlaces.length ? nextPlaces : (current.length ? current : getFallbackFavoritePlaces(cityKey)));
 
         // Cache the results for home city
         if (favoriteMapMode === "home" && nextPlaces.length > 0 && typeof window !== "undefined") {
@@ -5273,8 +5273,7 @@ export default function Page() {
           }
         }
       } catch {
-        setFavoritePlaces(getFallbackFavoritePlaces(cityKey));
-        setFavoritePlacesError("live map spots are loading from the fallback list right now.");
+        setFavoritePlaces((current) => current.length ? current : getFallbackFavoritePlaces(cityKey));
       } finally {
         setFavoritePlacesLoading(false);
         window.clearTimeout(timeoutId);
@@ -11948,7 +11947,6 @@ export default function Page() {
                 ) : null}
 
                 {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">{copy.common.loadingSpots}</p> : null}
-                {favoritePlacesError ? <p className="text-sm text-[#2C1A0E]">{favoritePlacesError}</p> : null}
               </CardBody>
             </Card>
 
