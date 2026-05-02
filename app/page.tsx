@@ -6556,33 +6556,52 @@ export default function Page() {
       setFavoriteLocationNotice("");
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nextCenter: [number, number] = [position.coords.latitude, position.coords.longitude];
-        const nearestCity = getNearestSupportedCity(position.coords.latitude, position.coords.longitude);
-        const nextCity = nearestCity?.city ?? liveProfile.city;
+    const doGetPosition = () => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextCenter: [number, number] = [position.coords.latitude, position.coords.longitude];
+          const nearestCity = getNearestSupportedCity(position.coords.latitude, position.coords.longitude);
+          const nextCity = nearestCity?.city ?? liveProfile.city;
 
-        setFavoriteNearbyCenter(nextCenter);
-        setFavoriteNearbyCity(nextCity);
-        setFavoriteMapMode("nearby");
-        persistFavoriteLocationPreference("nearby", nextCity, nextCenter);
-        setFavoriteLocationNotice(
-          options?.silent ? "" : nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.",
-        );
-        setFavoriteLocationLoading(false);
-      },
-      () => {
-        setFavoriteLocationLoading(false);
-        if (!options?.silent) {
-          setFavoriteLocationNotice("location permission didn’t come through, so the map is still on home city.");
+          setFavoriteNearbyCenter(nextCenter);
+          setFavoriteNearbyCity(nextCity);
+          setFavoriteMapMode("nearby");
+          persistFavoriteLocationPreference("nearby", nextCity, nextCenter);
+          setFavoriteLocationNotice(
+            options?.silent ? "" : nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.",
+          );
+          setFavoriteLocationLoading(false);
+        },
+        () => {
+          setFavoriteLocationLoading(false);
+          if (!options?.silent) {
+            setFavoriteLocationNotice("location blocked. to fix this, go to your browser settings and allow location for this site, then try again.");
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        },
+      );
+    };
+
+    if (typeof navigator.permissions !== "undefined") {
+      navigator.permissions.query({ name: "geolocation" }).then((result) => {
+        if (result.state === "denied") {
+          setFavoriteLocationLoading(false);
+          if (!options?.silent) {
+            setFavoriteLocationNotice("location blocked. to fix this, go to your browser settings and allow location for this site, then try again.");
+          }
+        } else {
+          doGetPosition();
         }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 8000,
-        maximumAge: 300000,
-      },
-    );
+      }).catch(() => {
+        doGetPosition();
+      });
+    } else {
+      doGetPosition();
+    }
   };
 
   const useCurrentLocationForFavorites = () => {
@@ -11888,7 +11907,11 @@ export default function Page() {
                   ) : null}
                 </div>
 
-                {favoriteLocationNotice ? <p className="text-sm text-[#6c7289]">{favoriteLocationNotice}</p> : null}
+                {favoriteLocationNotice ? (
+                  <p className={`text-sm ${favoriteLocationNotice.includes("blocked") ? "font-medium text-[#b93535]" : "text-[#6c7289]"}`}>
+                    {favoriteLocationNotice}
+                  </p>
+                ) : null}
 
                 <FavoritesMap
                   language={language}
