@@ -2517,6 +2517,7 @@ export default function Page() {
     videoRatio: "9:16" as VideoRatio,
   });
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const didTriggerPostGPS = useRef(false);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const profileCameraInputRef = useRef<HTMLInputElement>(null);
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -5217,7 +5218,7 @@ export default function Page() {
     }
 
     // Load cached places immediately for home city
-    const cacheKey = `places-v3-${cityKey}`;
+    const cacheKey = `places-v4-${cityKey}`;
     const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     let cacheIsFresh = false;
@@ -5350,6 +5351,20 @@ export default function Page() {
       }
     }
   }, [currentFavoriteCity, favoritePlaces.length, favoritePlacesLoading, isAdmin, user.signedIn]);
+
+  // When a user starts searching for a place while creating a post in "home" mode,
+  // silently switch to their GPS location so results reflect where they actually are.
+  useEffect(() => {
+    if (!dailyPostPlaceQuery.trim() || favoriteMapMode !== "home") {
+      if (!dailyPostPlaceQuery.trim()) didTriggerPostGPS.current = false;
+      return;
+    }
+    if (didTriggerPostGPS.current) return;
+    didTriggerPostGPS.current = true;
+    refreshFavoriteLocationFromDevice({ silent: true });
+    // refreshFavoriteLocationFromDevice is stable in behaviour; omitted from deps intentionally
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyPostPlaceQuery, favoriteMapMode]);
 
   useEffect(() => {
     const query = dailyPostPlaceQuery.trim();

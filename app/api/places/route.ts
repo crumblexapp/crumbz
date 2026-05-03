@@ -218,7 +218,7 @@ export async function GET(request: Request) {
   const query = searchParams.get("query")?.trim() ?? "";
   const lat = Number(searchParams.get("lat"));
   const lon = Number(searchParams.get("lon"));
-  const radius = Number(searchParams.get("radius") ?? "10000");
+  const radius = Number(searchParams.get("radius") ?? "15000");
   const city = searchParams.get("city")?.trim() ?? "";
   const limit = Number(searchParams.get("limit") ?? "100");
 
