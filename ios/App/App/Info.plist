@@ -62,9 +62,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>WKAppBoundDomains</key>
-	<array>
-		<string>app.crumbz.pl</string>
-	</array>
 </dict>
 </plist>
