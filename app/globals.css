@@ -36,6 +36,53 @@ body {
   color: var(--deep-brown);
 }
 
+/* ─── Mobile / Capacitor WebView polish ─────────────────────── */
+
+/* Remove the blue tap flash on every tap — biggest "this feels webby" tell */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent the whole page from bouncing/overscrolling in the WebView */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Momentum scrolling on all scrollable containers */
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-auto,
+.overflow-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * Prevent iOS from zooming the page when an input is focused.
+ * iOS zooms whenever font-size < 16px. max() keeps anything already
+ * larger than 16px untouched, only lifts smaller sizes to the threshold.
+ */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+textarea,
+select {
+  font-size: max(16px, 1em) !important;
+}
+
+/* Prevent accidental text selection on all interactive elements */
+button,
+[role="button"],
+[role="tab"],
+[role="option"],
+[role="menuitem"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .leaflet-container {
   z-index: 0;
 }

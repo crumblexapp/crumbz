@@ -35,6 +35,7 @@ import {
   buildTaggedPostNotification,
 } from "@/lib/notification-copy";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { haptic } from "@/lib/haptics";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
 
@@ -5628,8 +5629,12 @@ export default function Page() {
 
     syncFromServer();
     const interval = window.setInterval(syncFromServer, 5000);
+    window.addEventListener("crumbz-refresh", syncFromServer);
 
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("crumbz-refresh", syncFromServer);
+    };
   }, [announcements, user.signedIn]);
 
   useEffect(() => {
@@ -6222,6 +6227,7 @@ export default function Page() {
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
+    void haptic("medium");
     void mutateAccountState({
       action: "send_friend_request",
       currentEmail: user.googleProfile?.email ?? "",
@@ -6273,6 +6279,7 @@ export default function Page() {
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
 
+    void haptic("heavy");
     void mutateAccountState({
       action: "accept_friend_request",
       currentEmail,
@@ -6395,6 +6402,7 @@ export default function Page() {
   }
 
   const toggleFavoritePlace = (place: FavoritePlace, sourcePostId?: string) => {
+    void haptic("medium");
     const matchingId = findMatchingFavoriteId(place, favoritePlaceIds, favoritePlaces);
     const isRemoving = matchingId !== null;
     const nextFavoritePlaceIds = isRemoving
@@ -9045,6 +9053,7 @@ export default function Page() {
   const toggleLike = (postId: string) => {
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
+    void haptic("light");
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
