@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     files.map(async (file) => {
       const buffer = Buffer.from(await file.arrayBuffer());
       const contentType = file.type || "application/octet-stream";
-      const path = `${Date.now()}-${sanitizeFileName(file.name)}`;
+      const path = `${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
 
       const { error } = await supabaseServer.storage
         .from("crumbz-media")

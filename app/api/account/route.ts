@@ -288,6 +288,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "you can only update your own account." }, { status: 403 });
     }
 
+    const rawFullName = (account.profile.fullName ?? "").trim();
+    const rawBio = (account.profile.bio ?? "").trim();
+    const rawSchoolName = (account.profile.schoolName ?? "").trim();
+
+    if (rawFullName.length > 100) {
+      return NextResponse.json({ ok: false, message: "full name must be 100 characters or fewer." }, { status: 400 });
+    }
+    if (rawBio.length > 500) {
+      return NextResponse.json({ ok: false, message: "bio must be 500 characters or fewer." }, { status: 400 });
+    }
+    if (rawSchoolName.length > 200) {
+      return NextResponse.json({ ok: false, message: "school name must be 200 characters or fewer." }, { status: 400 });
+    }
+
     const existingAccount = accounts.find((item) => getEmail(item) === email) ?? null;
     const mergedAccount = mergeAccountForUpsert(existingAccount, account);
     const existingReferralCode = existingAccount?.profile.referralCode?.trim().toUpperCase() ?? "";
@@ -307,6 +321,13 @@ export async function POST(request: Request) {
 
     const normalizedUsername = mergedAccount.profile.username.trim().toLowerCase();
     if (normalizedUsername) {
+      if (normalizedUsername.length > 30) {
+        return NextResponse.json({ ok: false, message: "username must be 30 characters or fewer." }, { status: 400 });
+      }
+      if (!/^[a-z0-9._-]+$/.test(normalizedUsername)) {
+        return NextResponse.json({ ok: false, message: "username can only contain letters, numbers, dots, dashes, and underscores." }, { status: 400 });
+      }
+
       const usernameOwner = accounts.find(
         (item) => item.profile.username.trim().toLowerCase() === normalizedUsername && getEmail(item) !== email,
       );

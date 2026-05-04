@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   const uploads = await Promise.all(
     files.map(async (file, index) => {
-      const path = `${Date.now()}-${index}-${sanitizeFileName(file.name)}`;
+      const path = `${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
       const { data, error } = await supabaseServer.storage
         .from("crumbz-media")
         .createSignedUploadUrl(path, {

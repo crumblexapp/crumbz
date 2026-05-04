@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
         },
         {
           key: "Permissions-Policy",
-          value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+          value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
         },
         {
           key: "Content-Security-Policy",
@@ -38,13 +38,21 @@ const nextConfig: NextConfig = {
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "img-src 'self' data: https: blob:",
             "font-src 'self' data: https://fonts.gstatic.com https://maps.gstatic.com",
-            "connect-src 'self' https://aqbnaeouedkkwntigppt.supabase.co https://accounts.google.com https://api.openai.com https://maps.googleapis.com https://maps.gstatic.com",
+            "connect-src 'self' https://aqbnaeouedkkwntigppt.supabase.co https://accounts.google.com https://maps.googleapis.com https://maps.gstatic.com",
             "frame-src https://accounts.google.com",
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",
             "frame-ancestors 'none'",
           ].join("; "),
+        },
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains",
+        },
+        {
+          key: "Cross-Origin-Opener-Policy",
+          value: "same-origin-allow-popups",
         },
       ],
     },

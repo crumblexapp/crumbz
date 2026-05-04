@@ -707,6 +707,24 @@ async function sendAdminPostPush(rawPosts: unknown, previousPosts: unknown) {
   );
 }
 
+function validateStudentContent(body: { posts?: unknown; interactions?: unknown } | null): string | null {
+  for (const post of normalizeObjectArray(body?.posts)) {
+    if (normalizeText(post.title).length > 300) return "post title is too long (max 300 characters).";
+    if (normalizeText(post.body).length > 5000) return "post body is too long (max 5000 characters).";
+    if (normalizeText(post.cta).length > 200) return "post CTA is too long (max 200 characters).";
+  }
+  const interactions = normalizeInteractionsMap(body?.interactions);
+  for (const bucket of Object.values(interactions)) {
+    for (const comment of bucket.comments) {
+      if (normalizeText(comment.text).length > 1000) return "comment is too long (max 1000 characters).";
+      for (const reply of normalizeObjectArray(comment.replies)) {
+        if (normalizeText(reply.text).length > 1000) return "reply is too long (max 1000 characters).";
+      }
+    }
+  }
+  return null;
+}
+
 function mergePostsForUser(currentPostsRaw: unknown, proposedPostsRaw: unknown, verifiedEmail: string) {
   const currentPosts = normalizeObjectArray(currentPostsRaw);
   const proposedPosts = normalizeObjectArray(proposedPostsRaw);
@@ -923,6 +941,11 @@ export async function POST(request: Request) {
       if (!interactionLimit.ok) {
         return NextResponse.json({ ok: false, message: interactionLimit.message }, { status: 429, headers: { "Retry-After": String(interactionLimit.retryAfter ?? 60) } });
       }
+    }
+
+    const contentError = validateStudentContent(body);
+    if (contentError) {
+      return NextResponse.json({ ok: false, message: contentError }, { status: 400 });
     }
   }
 

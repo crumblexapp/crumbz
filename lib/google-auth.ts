@@ -43,6 +43,7 @@ async function verifyGoogleIdToken(idToken: string) {
     expiresAt,
   };
 
+  if (tokenCache.size > 500) tokenCache.clear();
   tokenCache.set(idToken, verifiedIdentity);
   return verifiedIdentity;
 }
