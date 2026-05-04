@@ -1,15 +1,29 @@
-import { Capacitor } from '@capacitor/core';
-
 export function isNative() {
-  return Capacitor.isNativePlatform();
+  if (typeof window === 'undefined') return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Capacitor } = require('@capacitor/core');
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
 }
 
-export function platform() {
-  return Capacitor.getPlatform(); // 'ios' | 'android' | 'web'
+export function platform(): 'ios' | 'android' | 'web' {
+  if (typeof window === 'undefined') return 'web';
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Capacitor } = require('@capacitor/core');
+    return Capacitor.getPlatform();
+  } catch {
+    return 'web';
+  }
 }
 
 export async function initCapacitor() {
   if (typeof window === 'undefined') return;
+
+  const { Capacitor } = await import('@capacitor/core');
   if (!Capacitor.isNativePlatform()) return;
 
   const [{ StatusBar, Style }, { SplashScreen }, { Keyboard, KeyboardResize }] = await Promise.all([
@@ -37,6 +51,8 @@ export async function initCapacitor() {
 
 export async function initAppUrlHandler(onUrl: (url: string) => void) {
   if (typeof window === 'undefined') return;
+
+  const { Capacitor } = await import('@capacitor/core');
   if (!Capacitor.isNativePlatform()) return;
 
   try {
@@ -49,6 +65,8 @@ export async function initAppUrlHandler(onUrl: (url: string) => void) {
 
 export async function initBackButtonHandler(onBack: () => void) {
   if (typeof window === 'undefined') return;
+
+  const { Capacitor } = await import('@capacitor/core');
   if (Capacitor.getPlatform() !== 'android') return;
 
   try {
