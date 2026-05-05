@@ -5663,6 +5663,21 @@ export default function Page() {
     return () => window.clearTimeout(timer);
   }, [isNativePlatform, nativeSplashDone]);
 
+  // Lock body scroll while splash is showing
+  useEffect(() => {
+    const showing = isNativePlatform && !nativeSplashDone;
+    if (!showing) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = prev;
+      document.body.style.position = "";
+      document.body.style.width = "";
+    };
+  }, [isNativePlatform, nativeSplashDone]);
+
   // Detect native Capacitor platform and handle native OAuth callbacks
   useEffect(() => {
     import("@/lib/capacitor").then(({ isNative }) => {
@@ -9388,7 +9403,9 @@ export default function Page() {
         <main
           className="flex flex-col items-center justify-end font-[family-name:var(--font-manrope)]"
           style={{
-            minHeight: "100dvh",
+            height: "100dvh",
+            maxHeight: "100dvh",
+            overflow: "hidden",
             backgroundColor: "#fb8803",
             paddingTop: "env(safe-area-inset-top)",
             paddingBottom: "calc(env(safe-area-inset-bottom) + 3rem)",
