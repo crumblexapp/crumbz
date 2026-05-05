@@ -10,19 +10,19 @@ const config: CapacitorConfig = {
     cleartext: false,
   },
   ios: {
-    contentInset: 'always',
-    backgroundColor: '#ffffff',
+    contentInset: 'never',
+    backgroundColor: '#fb8803',
     scrollEnabled: true,
   },
   android: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fb8803',
     allowMixedContent: false,
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 1800,
       launchAutoHide: true,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#fb8803',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
@@ -33,8 +33,8 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'Dark',
-      backgroundColor: '#ffffff',
-      overlaysWebView: false,
+      backgroundColor: '#fb8803',
+      overlaysWebView: true,
     },
     Keyboard: {
       resize: KeyboardResize.Body,
