@@ -9386,9 +9386,10 @@ export default function Page() {
     if (isNativePlatform && !nativeSplashDone) {
       return (
         <main
-          className="flex flex-col items-center justify-end bg-[#F5A623] font-[family-name:var(--font-manrope)]"
+          className="flex flex-col items-center justify-end font-[family-name:var(--font-manrope)]"
           style={{
             minHeight: "100dvh",
+            backgroundColor: "#fb8803",
             paddingTop: "env(safe-area-inset-top)",
             paddingBottom: "calc(env(safe-area-inset-bottom) + 3rem)",
           }}
@@ -9410,7 +9411,8 @@ export default function Page() {
             <button
               onClick={() => setNativeSplashDone(true)}
               disabled={!nativeButtonVisible}
-              className="w-full rounded-full bg-white py-4 text-center text-lg font-bold text-[#F5A623] shadow-[0_8px_30px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
+              className="w-full rounded-full bg-white py-4 text-center text-lg font-bold shadow-[0_8px_30px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
+              style={{ color: "#fb8803" }}
             >
               continue
             </button>

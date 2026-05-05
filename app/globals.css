@@ -17,6 +17,10 @@
   --font-young-serif: var(--font-young-serif), Georgia, serif;
 }
 
+html, body {
+  background-color: #fb8803;
+}
+
 :root {
   --crumbz-orange: #F5A623;
   --deep-brown: #2C1A0E;
