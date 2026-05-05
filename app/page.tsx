@@ -9423,21 +9423,21 @@ export default function Page() {
 
     return (
       <main
-        className={`text-[#2C1A0E] ${isNativePlatform ? "bg-[#F5A623]" : "bg-[#FFF0D0]"}`}
-        style={{ minHeight: "100dvh" }}
+        className={`text-[#2C1A0E] ${isNativePlatform ? "" : "bg-[#FFF0D0]"}`}
+        style={{ minHeight: "100dvh", backgroundColor: isNativePlatform ? "#fb8803" : undefined }}
       >
         <div
           className="mx-auto flex w-full max-w-md flex-col px-4 pb-5 font-[family-name:var(--font-manrope)]"
           style={{
             minHeight: "100dvh",
-            paddingTop: isNativePlatform ? "env(safe-area-inset-top)" : "1.25rem",
+            paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1rem)" : "1.25rem",
           }}
         >
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] bg-[#F5A623] shadow-[0_24px_70px_rgba(255,150,11,0.24)]"
+            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] shadow-[0_24px_70px_rgba(255,150,11,0.24)]" style={{ backgroundColor: "#fb8803" }}
           >
             <Image
               src="/brand/onboarding-page-exact.png"

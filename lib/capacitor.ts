@@ -34,9 +34,8 @@ export async function initCapacitor() {
 
   try {
     await StatusBar.setStyle({ style: Style.Dark });
-    if (Capacitor.getPlatform() === 'android') {
-      await StatusBar.setBackgroundColor({ color: '#ffffff' });
-    }
+    await StatusBar.setBackgroundColor({ color: '#fb8803' });
+    await StatusBar.setOverlaysWebView({ overlay: true });
   } catch {}
 
   try {

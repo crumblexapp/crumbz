@@ -16,6 +16,8 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		84B2C3532FAAAFE5003278E5 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 84B2C3522FAAAFE5003278E5 /* CapApp-SPM */; };
 		84B2C3562FAAB09A003278E5 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 84B2C3552FAAB09A003278E5 /* CapApp-SPM */; };
+		84B2C3592FAAB3B2003278E5 /* SignInWithApplePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B2C3582FAAB3B1003278E5 /* SignInWithApplePlugin.swift */; };
+		84B2C35A2FAAB3B2003278E5 /* SignInWithApplePlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 84B2C3572FAAB3B1003278E5 /* SignInWithApplePlugin.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +30,9 @@
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
+		84B2C3572FAAB3B1003278E5 /* SignInWithApplePlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SignInWithApplePlugin.m; sourceTree = "<group>"; };
+		84B2C3582FAAB3B1003278E5 /* SignInWithApplePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApplePlugin.swift; sourceTree = "<group>"; };
+		84B2C35B2FAAB3B5003278E5 /* App-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "App-Bridging-Header.h"; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -47,9 +52,12 @@
 		504EC2FB1FED79650016851F = {
 			isa = PBXGroup;
 			children = (
+				84B2C3572FAAB3B1003278E5 /* SignInWithApplePlugin.m */,
+				84B2C3582FAAB3B1003278E5 /* SignInWithApplePlugin.swift */,
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				504EC3051FED79650016851F /* Products */,
+				84B2C35B2FAAB3B5003278E5 /* App-Bridging-Header.h */,
 			);
 			sourceTree = "<group>";
 		};
@@ -112,7 +120,7 @@
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
-						LastSwiftMigration = 1100;
+						LastSwiftMigration = 2640;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -159,6 +167,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84B2C3592FAAB3B2003278E5 /* SignInWithApplePlugin.swift in Sources */,
+				84B2C35A2FAAB3B2003278E5 /* SignInWithApplePlugin.m in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -311,6 +321,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -324,6 +335,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.crumbz.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OBJC_BRIDGING_HEADER = "App-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -333,8 +346,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = H49GG2V6D4;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -345,6 +360,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.crumbz.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
