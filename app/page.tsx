@@ -9399,7 +9399,7 @@ export default function Page() {
               alt="crumbz"
               width={340}
               height={340}
-              className="h-auto w-72 object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.18)]"
+              className="h-auto w-72 object-contain"
               priority
             />
           </div>
@@ -11760,7 +11760,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-white text-[#2C1A0E]">
-      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-40 pt-5 font-[family-name:var(--font-manrope)]">
+      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-40 font-[family-name:var(--font-manrope)]" style={{ paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1.25rem)" : "1.25rem" }}>
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
