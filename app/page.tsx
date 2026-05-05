@@ -2444,6 +2444,7 @@ export default function Page() {
   const [googleInitError, setGoogleInitError] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const [nativeSplashDone, setNativeSplashDone] = useState(false);
+  const [nativeButtonVisible, setNativeButtonVisible] = useState(false);
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -5165,13 +5166,13 @@ export default function Page() {
       return;
     }
 
-    if (isStandaloneDisplayMode()) {
+    if (isNativePlatform || isStandaloneDisplayMode()) {
       setShowWelcomeScreen(false);
       return;
     }
 
     setShowWelcomeScreen(isIosDevice() || isAndroidDevice());
-  }, [user.signedIn]);
+  }, [user.signedIn, isNativePlatform]);
 
   useEffect(() => {
     if (typeof window === "undefined" || user.signedIn) {
@@ -5181,7 +5182,7 @@ export default function Page() {
     }
 
     const dismissed = window.localStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY) === "true";
-    if (dismissed || isStandaloneDisplayMode()) {
+    if (dismissed || isNativePlatform || isStandaloneDisplayMode()) {
       setShowInstallPrompt(false);
       setInstallPromptMode(null);
       return;
@@ -5205,7 +5206,7 @@ export default function Page() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
-  }, [user.signedIn]);
+  }, [user.signedIn, isNativePlatform]);
 
   useEffect(() => {
     if (!user.signedIn || isAdmin) return;
@@ -5654,6 +5655,13 @@ export default function Page() {
 
     return () => window.clearTimeout(timeout);
   }, [selectedStoryPost, selectedStoryPostIndex, selectedStorySequence]);
+
+  // Show the "continue" button on native splash after 2 s
+  useEffect(() => {
+    if (!isNativePlatform || nativeSplashDone) return;
+    const timer = window.setTimeout(() => setNativeButtonVisible(true), 2000);
+    return () => window.clearTimeout(timer);
+  }, [isNativePlatform, nativeSplashDone]);
 
   // Detect native Capacitor platform and handle native OAuth callbacks
   useEffect(() => {
@@ -9377,37 +9385,52 @@ export default function Page() {
     // Native app: show branded splash before auth screen
     if (isNativePlatform && !nativeSplashDone) {
       return (
-        <main className="flex min-h-screen flex-col items-center justify-between bg-[#F5A623] px-8 pb-16 pt-24 font-[family-name:var(--font-manrope)]">
-          <div className="flex flex-1 flex-col items-center justify-center gap-6">
+        <main
+          className="flex flex-col items-center justify-end bg-[#F5A623] font-[family-name:var(--font-manrope)]"
+          style={{
+            minHeight: "100dvh",
+            paddingTop: "env(safe-area-inset-top)",
+            paddingBottom: "calc(env(safe-area-inset-bottom) + 3rem)",
+          }}
+        >
+          <div className="flex flex-1 flex-col items-center justify-center gap-0">
             <Image
-              src="/brand/crumbz-app-icon.png"
+              src="/brand/crumbz-opening-exact.png"
               alt="crumbz"
-              width={120}
-              height={120}
-              className="rounded-[28px] shadow-[0_20px_60px_rgba(0,0,0,0.2)]"
+              width={340}
+              height={340}
+              className="h-auto w-72 object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.18)]"
+              priority
             />
-            <div className="flex flex-col items-center gap-2 text-center">
-              <h1 className="font-[family-name:var(--font-young-serif)] text-5xl font-bold text-white drop-shadow-sm">
-                crumbz
-              </h1>
-              <p className="text-lg font-semibold text-white/80">
-                the feed that keeps you hungry.
-              </p>
-            </div>
           </div>
-          <button
-            onClick={() => setNativeSplashDone(true)}
-            className="w-full max-w-xs rounded-full bg-white py-4 text-center text-lg font-bold text-[#F5A623] shadow-[0_8px_30px_rgba(0,0,0,0.15)] active:scale-95 transition-transform"
+          <div
+            className="w-full max-w-xs px-4 transition-all duration-500"
+            style={{ opacity: nativeButtonVisible ? 1 : 0, transform: nativeButtonVisible ? "translateY(0)" : "translateY(16px)" }}
           >
-            get started
-          </button>
+            <button
+              onClick={() => setNativeSplashDone(true)}
+              disabled={!nativeButtonVisible}
+              className="w-full rounded-full bg-white py-4 text-center text-lg font-bold text-[#F5A623] shadow-[0_8px_30px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
+            >
+              continue
+            </button>
+          </div>
         </main>
       );
     }
 
     return (
-      <main className="min-h-screen bg-[#FFF0D0] text-[#2C1A0E]">
-        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-4 py-5 font-[family-name:var(--font-manrope)]">
+      <main
+        className={`text-[#2C1A0E] ${isNativePlatform ? "bg-[#F5A623]" : "bg-[#FFF0D0]"}`}
+        style={{ minHeight: "100dvh" }}
+      >
+        <div
+          className="mx-auto flex w-full max-w-md flex-col px-4 pb-5 font-[family-name:var(--font-manrope)]"
+          style={{
+            minHeight: "100dvh",
+            paddingTop: isNativePlatform ? "env(safe-area-inset-top)" : "1.25rem",
+          }}
+        >
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
