@@ -13,11 +13,13 @@ export async function POST(request: Request) {
     postId?: unknown;
     saved?: unknown;
     authorName?: unknown;
+    placeId?: unknown;
   } | null;
 
   const postId = typeof body?.postId === "string" ? body.postId.trim() : "";
   const saved = Boolean(body?.saved);
   const authorName = typeof body?.authorName === "string" ? body.authorName.trim() : "";
+  const placeId = typeof body?.placeId === "string" ? body.placeId.trim() : "";
 
   if (!postId) {
     return NextResponse.json({ ok: false, message: "postId is required." }, { status: 400 });
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
       interaction_type: "save",
       author_email: identity.email,
       author_name: authorName,
-      payload: {},
+      payload: placeId ? { placeId } : {},
       deleted_at: saved ? null : now,
       updated_at: now,
     },

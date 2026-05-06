@@ -84,6 +84,7 @@ export async function GET() {
           authorEmail: row.author_email,
           authorName: row.author_name,
           createdAt: row.created_at,
+          ...(typeof row.payload === "object" ? row.payload : {}),
         });
         break;
     }

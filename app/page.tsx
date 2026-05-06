@@ -6785,6 +6785,7 @@ export default function Page() {
               postId: sourcePostId,
               saved: !isRemoving,
               authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+              placeId: place.id,
             });
           } else {
             lastSharedStateMutationAtRef.current = Date.now();
