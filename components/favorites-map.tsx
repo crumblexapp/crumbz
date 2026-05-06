@@ -909,7 +909,7 @@ export default function FavoritesMap({
             ) : null}
 
             {/* Fans modal */}
-            <Modal isOpen={fansModalOpen} onOpenChange={setFansModalOpen} placement="bottom-center" scrollBehavior="inside">
+            <Modal isOpen={fansModalOpen} onOpenChange={setFansModalOpen} placement="bottom-center" scrollBehavior="inside" classNames={{ wrapper: "pb-20" }}>
               <ModalContent className="bg-[#fffaf2]">
                 {(onClose) => (
                   <>

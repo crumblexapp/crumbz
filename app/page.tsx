@@ -2324,7 +2324,7 @@ function getVideoAspectClass(ratio: VideoRatio) {
   }
 }
 
-function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: boolean }) {
+function PostMediaPreview({ post, detail = false, onView }: { post: AppPost; detail?: boolean; onView?: () => void }) {
   const mediaUrls = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
   const [activeIndex, setActiveIndex] = useState(0);
   const currentIndex = Math.min(activeIndex, mediaUrls.length - 1);
@@ -2359,7 +2359,27 @@ function PostMediaPreview({ post, detail = false }: { post: AppPost; detail?: bo
   if (effectiveMediaKind === "video") {
     return (
       <div className={`${detail ? "overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]" : `${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}`}>
-        <video src={mediaUrls[0]} controls className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-full w-full object-cover"} />
+        <video
+          src={mediaUrls[0]}
+          controls
+          className={detail ? "max-h-[70vh] w-full object-contain bg-black" : "h-full w-full object-cover"}
+          onPlay={(e) => {
+            if (!onView) return;
+            const vid = e.currentTarget;
+            const timer = window.setTimeout(() => {
+              if (!vid.paused && !vid.ended) onView();
+            }, 3000);
+            vid.dataset.viewTimer = String(timer);
+          }}
+          onPause={(e) => {
+            const timer = Number(e.currentTarget.dataset.viewTimer);
+            if (timer) window.clearTimeout(timer);
+          }}
+          onEnded={(e) => {
+            const timer = Number(e.currentTarget.dataset.viewTimer);
+            if (timer) window.clearTimeout(timer);
+          }}
+        />
       </div>
     );
   }
@@ -2967,6 +2987,21 @@ export default function Page() {
     .filter((place) => place.saves > 0)
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 6);
+  // Per-place breakdown: which creator post drove how many unique savers
+  const foodSpotAttribution = foodSpotCounts.map((place) => {
+    const postBreakdown: { postId: string; creatorHandle: string; format: string; uniqueSavers: number }[] = [];
+    for (const post of posts) {
+      const bucket = getInteractionBucket(interactions, post.id);
+      const savers = [...new Set(
+        bucket.saves.filter((s) => s.placeId === place.id).map((s) => s.authorEmail.toLowerCase()),
+      )];
+      if (!savers.length) continue;
+      const creatorAccount = accountByEmail.get(post.authorEmail.toLowerCase());
+      const handle = creatorAccount?.profile.username || post.authorEmail.split("@")[0];
+      postBreakdown.push({ postId: post.id, creatorHandle: handle, format: inferCreatorPostFormat(post), uniqueSavers: savers.length });
+    }
+    return { placeId: place.id, posts: postBreakdown.sort((a, b) => b.uniqueSavers - a.uniqueSavers) };
+  });
   const latestAnnouncement = announcements[0] ?? null;
   const latestAnnouncementContent = getLocalizedAnnouncementContent(latestAnnouncement, language);
   const selectedAnnouncement =
@@ -3382,7 +3417,7 @@ export default function Page() {
   const influencerMetrics = influencerPosts.map((post) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const uniqueViews = [...new Set(bucket.views.map((view) => view.authorEmail.toLowerCase()))];
-    const uniqueSaves = [...new Set(bucket.saves.map((save) => save.authorEmail.toLowerCase()))];
+    const uniqueSaves = [...new Set(bucket.saves.filter((s) => s.placeId).map((save) => save.authorEmail.toLowerCase()))];
     const cityCounts = uniqueViews.reduce<Record<string, number>>((acc, viewerEmail) => {
       const viewerCity = accountByEmail.get(viewerEmail)?.profile.city?.trim() || "unknown";
       acc[viewerCity] = (acc[viewerCity] ?? 0) + 1;
@@ -3390,6 +3425,7 @@ export default function Page() {
     }, {});
     return {
       post,
+      format: inferCreatorPostFormat(post),
       views: uniqueViews.length,
       likes: bucket.likes.length,
       comments: bucket.comments.filter((comment) => !comment.hidden).length,
@@ -3450,39 +3486,59 @@ export default function Page() {
     const viewerEmail = user.googleProfile?.email?.toLowerCase();
     if (!viewerEmail || !mixedHomeFeedPosts.length) return;
 
+    // Only carousel/photo feed posts — reels use a 3s timer, stories use their own effect
     const postsNeedingViews = mixedHomeFeedPosts.filter((post) => {
+      const format = inferCreatorPostFormat(post);
+      if (format === "reel" || format === "story") return false;
       const bucket = getInteractionBucket(interactions, post.id);
       return !bucket.views.some((view) => view.authorEmail.toLowerCase() === viewerEmail);
     });
 
     if (!postsNeedingViews.length) return;
 
-    lastSharedStateMutationAtRef.current = Date.now();
-    setInteractions((current) => {
-      const createdAt = formatNow();
-      let changed = false;
-      const nextInteractions = { ...current };
+    const createdAt = formatNow();
 
+    if (USE_INTERACTIONS_TABLE) {
       postsNeedingViews.forEach((post) => {
-        const bucket = getInteractionBucket(nextInteractions, post.id);
-        if (bucket.views.some((view) => view.authorEmail.toLowerCase() === viewerEmail)) return;
-        changed = true;
-        nextInteractions[post.id] = {
-          ...bucket,
-          views: [...bucket.views, { authorEmail: viewerEmail, createdAt }],
-        };
-      });
-
-      if (changed) {
-        syncSharedState({
-          nextPosts: posts,
-          nextInteractions,
-          source: "auto",
+        void callInteractionApi("/api/interactions/view", {
+          postId: post.id,
+          viewId: `${Date.now()}-${post.id}-view`,
         });
-      }
-
-      return changed ? nextInteractions : current;
-    });
+      });
+      setInteractions((current) => {
+        let changed = false;
+        const nextInteractions = { ...current };
+        postsNeedingViews.forEach((post) => {
+          const bucket = getInteractionBucket(nextInteractions, post.id);
+          if (bucket.views.some((v) => v.authorEmail.toLowerCase() === viewerEmail)) return;
+          changed = true;
+          nextInteractions[post.id] = {
+            ...bucket,
+            views: [...bucket.views, { authorEmail: viewerEmail, createdAt }],
+          };
+        });
+        return changed ? nextInteractions : current;
+      });
+    } else {
+      lastSharedStateMutationAtRef.current = Date.now();
+      setInteractions((current) => {
+        let changed = false;
+        const nextInteractions = { ...current };
+        postsNeedingViews.forEach((post) => {
+          const bucket = getInteractionBucket(nextInteractions, post.id);
+          if (bucket.views.some((view) => view.authorEmail.toLowerCase() === viewerEmail)) return;
+          changed = true;
+          nextInteractions[post.id] = {
+            ...bucket,
+            views: [...bucket.views, { authorEmail: viewerEmail, createdAt }],
+          };
+        });
+        if (changed) {
+          syncSharedState({ nextPosts: posts, nextInteractions, source: "auto" });
+        }
+        return changed ? nextInteractions : current;
+      });
+    }
   }, [interactions, isAdmin, isInfluencer, mixedHomeFeedPosts, posts, studentTab, user.googleProfile?.email, user.signedIn]);
   const normalizedFriendQuery = friendQuery.trim().replace(/^@+/, "").toLowerCase();
   const exactFriendMatch = accounts.find((account) => {
@@ -4491,26 +4547,28 @@ export default function Page() {
                       <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
                     </button>
                     <div className="mt-3 flex gap-2">
-                      <Button
-                        radius="full"
-                        size="sm"
-                        className="bg-[#2C1A0E] text-white"
-                        onPress={() =>
-                          toggleFavoritePlace(
-                            {
-                              id: post.taggedPlaceId,
-                              name: post.taggedPlaceName,
-                              kind: post.taggedPlaceKind || "food spot",
-                              lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
-                              lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
-                              address: post.taggedPlaceAddress,
-                            },
-                            post.id,
-                          )
-                        }
-                      >
-                        {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
-                      </Button>
+                      {post.type !== "story" ? (
+                        <Button
+                          radius="full"
+                          size="sm"
+                          className="bg-[#2C1A0E] text-white"
+                          onPress={() =>
+                            toggleFavoritePlace(
+                              {
+                                id: post.taggedPlaceId,
+                                name: post.taggedPlaceName,
+                                kind: post.taggedPlaceKind || "food spot",
+                                lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
+                                lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
+                                address: post.taggedPlaceAddress,
+                              },
+                              post.id,
+                            )
+                          }
+                        >
+                          {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
+                        </Button>
+                      ) : null}
                       <Button radius="full" size="sm" variant="flat" className="bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => openPostPlace(post)}>
                         view map
                       </Button>
@@ -4528,7 +4586,11 @@ export default function Page() {
             )}
 
             {post.mediaUrls.length ? (
-              <PostMediaPreview post={post} detail={detail} />
+              <PostMediaPreview
+                post={post}
+                detail={detail}
+                onView={inferCreatorPostFormat(post) === "reel" && user.signedIn && !isAdmin ? () => recordPostView(post.id) : undefined}
+              />
             ) : post.mediaKind !== "none" ? (
               <div className="rounded-[18px] border border-dashed border-[#FFF0D0] bg-white px-3 py-4 text-sm text-[#2C1A0E]">
                 this post’s media needs one re-upload from the admin side.
@@ -4568,28 +4630,30 @@ export default function Page() {
                   </div>
                   <span className="rounded-full bg-[#FFF0D0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#F5A623]">map</span>
                 </button>
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    radius="full"
-                    size="sm"
-                    className="bg-[#2C1A0E] text-white"
-                    onPress={() =>
-                      toggleFavoritePlace(
-                        {
-                          id: post.taggedPlaceId,
-                          name: post.taggedPlaceName,
-                          kind: post.taggedPlaceKind || "food spot",
-                          lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
-                          lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
-                          address: post.taggedPlaceAddress,
-                        },
-                        post.id,
-                      )
-                    }
-                  >
-                    {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
-                  </Button>
-                </div>
+                {post.type !== "story" ? (
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      radius="full"
+                      size="sm"
+                      className="bg-[#2C1A0E] text-white"
+                      onPress={() =>
+                        toggleFavoritePlace(
+                          {
+                            id: post.taggedPlaceId,
+                            name: post.taggedPlaceName,
+                            kind: post.taggedPlaceKind || "food spot",
+                            lat: post.taggedPlaceLat ?? favoriteCityCenter[0],
+                            lon: post.taggedPlaceLon ?? favoriteCityCenter[1],
+                            address: post.taggedPlaceAddress,
+                          },
+                          post.id,
+                        )
+                      }
+                    >
+                      {favoritePlaceIds.includes(post.taggedPlaceId) ? "saved" : "save place"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -4658,9 +4722,7 @@ export default function Page() {
             >
               {copy.post.likes(bucket.likes.length)}
             </button>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.views(bucket.views.length)}</span>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.comments(visibleComments.length)}</span>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.saves(bucket.saves.length)}</span>
             <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.shares(bucket.shares.length)}</span>
           </div>
 
@@ -5799,6 +5861,28 @@ export default function Page() {
     return () => window.clearTimeout(timeout);
   }, [selectedStoryPost, selectedStoryPostIndex, selectedStorySequence]);
 
+  // Story view: count instantly when a story is opened (one view per person, no replays)
+  useEffect(() => {
+    if (!selectedStoryPost || !user.signedIn || isAdmin) return;
+    const viewerEmail = user.googleProfile?.email?.toLowerCase();
+    if (!viewerEmail) return;
+    const postId = selectedStoryPost.id;
+    const bucket = getInteractionBucket(interactionsRef.current, postId);
+    if (bucket.views.some((v) => v.authorEmail.toLowerCase() === viewerEmail)) return;
+    const createdAt = formatNow();
+    setInteractions((current) => {
+      const b = getInteractionBucket(current, postId);
+      if (b.views.some((v) => v.authorEmail.toLowerCase() === viewerEmail)) return current;
+      return { ...current, [postId]: { ...b, views: [...b.views, { authorEmail: viewerEmail, createdAt }] } };
+    });
+    if (USE_INTERACTIONS_TABLE) {
+      void callInteractionApi("/api/interactions/view", { postId, viewId: `${Date.now()}-story-view` });
+    } else {
+      lastSharedStateMutationAtRef.current = Date.now();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStoryPost?.id]);
+
   // Show the "continue" button on native splash after 2 s
   useEffect(() => {
     if (nativeSplashDone) return;
@@ -6675,7 +6759,6 @@ export default function Page() {
         if (!sourcePostId || !user.googleProfile?.email) return;
 
         const authorEmail = user.googleProfile.email.toLowerCase();
-        lastSharedStateMutationAtRef.current = Date.now();
         setInteractions((current) => {
           const bucket = getInteractionBucket(current, sourcePostId);
           const nextSaves = isRemoving
@@ -6697,10 +6780,19 @@ export default function Page() {
             },
           };
 
-          syncSharedState({
-            nextPosts: posts,
-            nextInteractions,
-          });
+          if (USE_INTERACTIONS_TABLE) {
+            void callInteractionApi("/api/interactions/save", {
+              postId: sourcePostId,
+              saved: !isRemoving,
+              authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+            });
+          } else {
+            lastSharedStateMutationAtRef.current = Date.now();
+            syncSharedState({
+              nextPosts: posts,
+              nextInteractions,
+            });
+          }
 
           return nextInteractions;
         });
@@ -8971,6 +9063,34 @@ export default function Page() {
     }
   };
 
+  const recordPostView = (postId: string) => {
+    const authorEmail = user.googleProfile?.email?.toLowerCase();
+    if (!authorEmail) return;
+
+    const bucket = getInteractionBucket(interactionsRef.current, postId);
+    if (bucket.views.some((v) => v.authorEmail.toLowerCase() === authorEmail)) return;
+
+    const createdAt = formatNow();
+
+    setInteractions((current) => {
+      const b = getInteractionBucket(current, postId);
+      if (b.views.some((v) => v.authorEmail.toLowerCase() === authorEmail)) return current;
+      return {
+        ...current,
+        [postId]: { ...b, views: [...b.views, { authorEmail, createdAt }] },
+      };
+    });
+
+    if (USE_INTERACTIONS_TABLE) {
+      void callInteractionApi("/api/interactions/view", {
+        postId,
+        viewId: `${Date.now()}-view`,
+      });
+    } else {
+      lastSharedStateMutationAtRef.current = Date.now();
+    }
+  };
+
   const readBlobAsDataUrl = (blob: Blob) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -10583,15 +10703,29 @@ export default function Page() {
                       </div>
                       <div className="grid gap-2">
                         {foodSpotCounts.length ? (
-                          foodSpotCounts.map((place) => (
-                            <div key={place.id} className="flex items-center justify-between rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
-                              <div>
-                                <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
-                                <p className="text-[#2C1A0E]">{place.address}</p>
+                          foodSpotCounts.map((place) => {
+                            const attribution = foodSpotAttribution.find((a) => a.placeId === place.id);
+                            return (
+                              <div key={place.id} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="font-semibold text-[#2C1A0E]">{place.name}</p>
+                                    <p className="text-[#2C1A0E]">{place.address}</p>
+                                  </div>
+                                  <Chip className="bg-white text-[#2C1A0E]">{place.saves} saves</Chip>
+                                </div>
+                                {attribution && attribution.posts.length > 0 ? (
+                                  <div className="mt-2 grid gap-1">
+                                    {attribution.posts.map((item) => (
+                                      <p key={item.postId} className="text-xs text-[#6c7289]">
+                                        @{item.creatorHandle} ({item.format}): {item.uniqueSavers} {item.uniqueSavers === 1 ? "saver" : "savers"}
+                                      </p>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
-                              <Chip className="bg-white text-[#2C1A0E]">{place.saves} saves</Chip>
-                            </div>
-                          ))
+                            );
+                          })
                         ) : (
                           <p className="text-sm text-[#2C1A0E]">no food spots saved yet.</p>
                         )}
@@ -11928,14 +12062,14 @@ export default function Page() {
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <p className="font-semibold text-[#2C1A0E]">{item.post.title || item.post.taggedPlaceName || copy.influencerDashboard.untitledPost}</p>
-                                <p className="mt-1 text-sm text-[#6c7289]">{item.post.taggedPlaceName || item.post.type} • {item.post.createdAt}</p>
+                                <p className="mt-1 text-sm text-[#6c7289]">{item.format} • {item.post.taggedPlaceName || ""}{item.post.taggedPlaceName ? " • " : ""}{item.post.createdAt}</p>
                               </div>
                               <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.viewsChip(item.views)}</Chip>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.likesChip(item.likes)}</Chip>
                               <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.commentsChip(item.comments)}</Chip>
-                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.savesChip(item.saves)}</Chip>
+                              <Chip className="bg-white text-[#2C1A0E]">{copy.influencerDashboard.locationSavesChip(item.saves)}</Chip>
                             </div>
                             {item.topCities.length ? (
                               <p className="mt-3 text-sm text-[#6c7289]">
