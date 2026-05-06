@@ -13544,11 +13544,8 @@ export default function Page() {
                     variant="light"
                     className="text-xs text-[#b56d19]"
                     onPress={() => {
-                      const email = user.googleProfile?.email ?? "";
-                      const ts = Date.now();
-                      writeNotifClearedAt(email, ts);
-                      setNotifClearedAt(ts);
-                      setSeenNotificationIds([]);
+                      const idsToMark = unreadNotificationItems.map((i) => i.id);
+                      setSeenNotificationIds((current) => [...new Set([...current, ...idsToMark])]);
                     }}
                   >
                     clear all
