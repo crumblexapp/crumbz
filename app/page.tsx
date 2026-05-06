@@ -51,6 +51,7 @@ const POST_TRANSLATIONS_KEY = "crumbz-post-translations-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
+const NOTIFICATIONS_CLEARED_AT_PREFIX = "crumbz-notif-cleared-at-v1";
 const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
 const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
 const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
@@ -1283,6 +1284,26 @@ function readSeenNotifications() {
   return readJson<string[]>(SEEN_NOTIFICATIONS_KEY, []);
 }
 
+function getNotifClearedAtKey(email: string) {
+  return `${NOTIFICATIONS_CLEARED_AT_PREFIX}:${email.toLowerCase()}`;
+}
+
+function readNotifClearedAt(email: string): number {
+  if (typeof window === "undefined" || !email) return 0;
+  try {
+    return Number(window.localStorage.getItem(getNotifClearedAtKey(email))) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeNotifClearedAt(email: string, timestamp: number) {
+  if (typeof window === "undefined" || !email) return;
+  try {
+    window.localStorage.setItem(getNotifClearedAtKey(email), String(timestamp));
+  } catch { /* ignore */ }
+}
+
 function getPushPromptAskedKey(email: string) {
   return `${PUSH_PROMPT_ASKED_PREFIX}:${email.toLowerCase()}`;
 }
@@ -2402,6 +2423,7 @@ export default function Page() {
   const [dareHydrated, setDareHydrated] = useState(false);
   const [announcements, setAnnouncements] = useState<AppAnnouncement[]>([]);
   const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
+  const [notifClearedAt, setNotifClearedAt] = useState<number>(0);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -3896,7 +3918,11 @@ export default function Page() {
     | { id: string; kind: "friend_favorite"; title: string; detail: string; picture?: string; createdAt: string; city: string; place: FavoritePlace; sortTime: number }
     | { id: string; kind: "admin_post" | "friend_dump" | "tagged_post"; title: string; detail: string; postId: string; picture?: string; sortTime: number }
   >;
-  const unreadNotificationItems = notificationItems.filter((item) => !seenNotificationIds.includes(item.id));
+  const unreadNotificationItems = notificationItems.filter(
+    (item) =>
+      !seenNotificationIds.includes(item.id) &&
+      (item.kind === "friend_request" || !notifClearedAt || item.sortTime > notifClearedAt),
+  );
   const notificationCount = unreadNotificationItems.length;
 
   const openProfileByUsername = (username: string, profilePostTab: ProfilePostTab = "all") => {
@@ -4030,12 +4056,12 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => openProfileByEmail(commentAuthorAccount?.googleProfile?.email ?? "")}
-                className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]"
+                className="block max-w-full truncate text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]"
               >
                 {commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}
               </button>
             ) : (
-              <p className="text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
+              <p className="truncate text-[0.78rem] font-semibold leading-4 text-[#2C1A0E]">{commentAuthorUsername ? `@${commentAuthorUsername}` : comment.authorName}</p>
             )}
             {renderCaptionWithTags(comment.text, "mt-0.5 text-[0.84rem] leading-[1.2rem] text-[#2C1A0E]")}
           </div>
@@ -4060,7 +4086,7 @@ export default function Page() {
           <button
             type="button"
             onClick={() => setOpenCommentReactionPickerId((current) => (current === reactionPickerId ? null : reactionPickerId))}
-            className="text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+            className="min-h-[44px] px-1 text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
           >
             react
           </button>
@@ -4068,7 +4094,7 @@ export default function Page() {
             <button
               type="button"
               onClick={() => openCommentReplyComposer(postId, comment.id, commentAuthorUsername)}
-              className="text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+              className="min-h-[44px] px-1 text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
             >
               reply
             </button>
@@ -4126,12 +4152,12 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => openProfileByEmail(replyAccount?.googleProfile?.email ?? "")}
-                        className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]"
+                        className="block max-w-full truncate text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]"
                       >
                         {replyUsername ? `@${replyUsername}` : reply.authorName}
                       </button>
                     ) : (
-                      <p className="text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
+                      <p className="truncate text-[0.72rem] font-semibold leading-4 text-[#2C1A0E]">{replyUsername ? `@${replyUsername}` : reply.authorName}</p>
                     )}
                     {renderCaptionWithTags(reply.text, "mt-0.5 text-[0.8rem] leading-[1.1rem] text-[#2C1A0E]")}
                     {replyReactionSummary.length ? (
@@ -4152,7 +4178,7 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => setOpenCommentReactionPickerId((current) => (current === replyReactionPickerId ? null : replyReactionPickerId))}
-                        className="text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+                        className="min-h-[44px] px-1 text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
                       >
                         react
                       </button>
@@ -4160,7 +4186,7 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => openCommentReplyComposer(postId, comment.id, replyUsername)}
-                        className="mt-1 text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+                        className="min-h-[44px] px-1 text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
                       >
                         reply
                       </button>
@@ -4897,6 +4923,8 @@ export default function Page() {
         setDareHydrated(true);
         setAnnouncements([]);
         setSeenNotificationIds(readSeenNotifications());
+        const savedEmail = nextUser.googleProfile?.email ?? "";
+        if (savedEmail) setNotifClearedAt(readNotifClearedAt(savedEmail));
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
         hasLoadedDataRef.current = true;
       });
@@ -5894,6 +5922,10 @@ export default function Page() {
           }
           persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
           if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
+          // New users start with a clean notification slate — only show notifs from after sign-up
+          const signUpTs = Date.now();
+          writeNotifClearedAt(profile.email, signUpTs);
+          setNotifClearedAt(signUpTs);
           if (typeof window !== "undefined") {
             window.localStorage.setItem(getPostSignupOnboardingDoneKey(profile.email), "true");
             window.localStorage.removeItem(getPostSignupOnboardingPendingKey(profile.email));
@@ -13293,9 +13325,27 @@ export default function Page() {
                   what’s new
                 </h2>
               </div>
-              <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setNotificationsOpen(false)}>
-                close
-              </Button>
+              <div className="flex items-center gap-1">
+                {unreadNotificationItems.length > 0 ? (
+                  <Button
+                    radius="full"
+                    variant="light"
+                    className="text-xs text-[#b56d19]"
+                    onPress={() => {
+                      const email = user.googleProfile?.email ?? "";
+                      const ts = Date.now();
+                      writeNotifClearedAt(email, ts);
+                      setNotifClearedAt(ts);
+                      setSeenNotificationIds([]);
+                    }}
+                  >
+                    clear all
+                  </Button>
+                ) : null}
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setNotificationsOpen(false)}>
+                  close
+                </Button>
+              </div>
             </div>
 
             <div className="mt-6 max-h-[70vh] space-y-3 overflow-y-auto pr-1">
