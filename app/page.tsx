@@ -74,7 +74,7 @@ const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 // Flip to true after running scripts/backfill-interactions.ts
-const USE_INTERACTIONS_TABLE = false;
+const USE_INTERACTIONS_TABLE = true;
 const MAX_IMAGE_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 const STORY_MAX_VIDEO_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 const STORY_MAX_IMAGE_FILE_SIZE_BYTES = 30 * 1024 * 1024;

@@ -10,10 +10,17 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { config } from "dotenv";
+import { readFileSync } from "fs";
 import { resolve } from "path";
 
-config({ path: resolve(process.cwd(), ".env.local") });
+// Load .env.local manually without needing the dotenv package
+try {
+  const envFile = readFileSync(resolve(process.cwd(), ".env.local"), "utf8");
+  for (const line of envFile.split("\n")) {
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match) process.env[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, "");
+  }
+} catch { /* .env.local not found, rely on existing env */ }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -31,6 +38,31 @@ type JsonRecord = Record<string, unknown>;
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" ? value.toLowerCase() : "";
+}
+
+// Converts display timestamps like "9 Apr at 21:45" or "9 Apr, 21:45" to ISO string.
+// Falls back to `now` if unparseable.
+function safeIso(value: unknown, now: string): string {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return now;
+
+  // Try native parse first (handles ISO strings)
+  const direct = Date.parse(text);
+  if (!Number.isNaN(direct)) return new Date(direct).toISOString();
+
+  // "9 Apr, 21:45" or "9 Apr at 21:45"
+  const match = text.match(/^(\d{1,2})\s+([A-Za-z]{3})(?:,|\s+at)\s+(\d{1,2}):(\d{2})$/);
+  if (match) {
+    const months: Record<string, number> = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+    const monthIndex = months[match[2].toLowerCase()];
+    if (monthIndex !== undefined) {
+      const year = new Date().getFullYear();
+      const d = new Date(year, monthIndex, Number(match[1]), Number(match[3]), Number(match[4]));
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+  }
+
+  return now;
 }
 
 function normalizeText(value: unknown) {
@@ -95,7 +127,7 @@ async function main() {
         author_name: normalizeText(like.authorName),
         payload: {},
         deleted_at: null,
-        created_at: normalizeText(like.createdAt) || now,
+        created_at: safeIso(like.createdAt, now),
         updated_at: now,
       });
     }
@@ -119,7 +151,7 @@ async function main() {
           hidden: Boolean(comment.hidden),
         },
         deleted_at: null,
-        created_at: normalizeText(comment.createdAt) || now,
+        created_at: safeIso(comment.createdAt, now),
         updated_at: now,
       });
     }
@@ -138,7 +170,7 @@ async function main() {
         author_name: normalizeText(share.authorName),
         payload: { platform: normalizeText(share.platform) },
         deleted_at: null,
-        created_at: normalizeText(share.createdAt) || now,
+        created_at: safeIso(share.createdAt, now),
         updated_at: now,
       });
     }
@@ -157,7 +189,7 @@ async function main() {
         author_name: "",
         payload: {},
         deleted_at: null,
-        created_at: normalizeText(view.createdAt) || now,
+        created_at: safeIso(view.createdAt, now),
         updated_at: now,
       });
     }
@@ -174,7 +206,7 @@ async function main() {
         author_name: normalizeText(save.authorName),
         payload: {},
         deleted_at: null,
-        created_at: normalizeText(save.createdAt) || now,
+        created_at: safeIso(save.createdAt, now),
         updated_at: now,
       });
     }
