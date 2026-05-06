@@ -1564,8 +1564,47 @@ function formatProfileMeta(cityName: string, schoolName: string) {
   return cityName || schoolName || "";
 }
 
+function getPictureCacheKey(email: string) {
+  return `crumbz-pic-${email.toLowerCase()}`;
+}
+
+function getCachedPicture(email: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(getPictureCacheKey(email)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+async function fetchAndCachePicture(email: string, url: string): Promise<void> {
+  if (typeof window === "undefined" || !url || !email) return;
+  // Skip if already cached or if it's already a data URL
+  if (url.startsWith("data:")) return;
+  const key = getPictureCacheKey(email);
+  if (window.localStorage.getItem(key)) return;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        if (typeof reader.result === "string") {
+          window.localStorage.setItem(key, reader.result);
+          window.dispatchEvent(new Event("crumbz-user-change"));
+        }
+      } catch { /* quota exceeded — skip */ }
+    };
+    reader.readAsDataURL(blob);
+  } catch { /* network error — fall back to remote URL */ }
+}
+
 function getAccountPicture(account: Pick<StoredUser, "googleProfile" | "profile"> | null | undefined) {
   if (!account) return "";
+  const email = account.googleProfile?.email?.toLowerCase() ?? "";
+  const cached = email ? getCachedPicture(email) : "";
+  if (cached) return cached;
   return account.profile.picture?.trim() || account.googleProfile?.picture?.trim() || "";
 }
 
@@ -4921,6 +4960,15 @@ export default function Page() {
     persistUser(syncedUser);
   }, [liveAccount, user]);
 
+  // Backfill picture cache for existing users who logged in before this was added
+  useEffect(() => {
+    const email = user.googleProfile?.email;
+    const pictureUrl = user.googleProfile?.picture;
+    if (user.signedIn && email && pictureUrl) {
+      void fetchAndCachePicture(email, pictureUrl);
+    }
+  }, [user.signedIn, user.googleProfile?.email, user.googleProfile?.picture]);
+
   useEffect(() => {
     if (lastDraftSyncedDareIdRef.current === dare.id) return;
 
@@ -5725,6 +5773,7 @@ export default function Page() {
         persistUser((result?.user as StoredUser | null) ?? nextSignedInAccount);
         if (result?.accounts?.length) setAccounts(result.accounts);
         else if (sharedAccounts?.length) setAccounts(sharedAccounts);
+        if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
         setFullName(null); setUsername(null); setCity(null); setIsStudent(null); setSchoolName(null);
         return;
       }
@@ -5806,6 +5855,7 @@ export default function Page() {
             } else if (sharedAccounts?.length) {
               setAccounts(sharedAccounts);
             }
+            if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
             setFullName(null);
             setUsername(null);
             setCity(null);
@@ -5843,6 +5893,7 @@ export default function Page() {
             setAccounts(sharedAccounts);
           }
           persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
+          if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
           if (typeof window !== "undefined") {
             window.localStorage.setItem(getPostSignupOnboardingDoneKey(profile.email), "true");
             window.localStorage.removeItem(getPostSignupOnboardingPendingKey(profile.email));
@@ -6499,6 +6550,17 @@ export default function Page() {
       ? favoritePlaceIds.filter((id) => id !== matchingId)
       : [...favoritePlaceIds, place.id];
 
+    // Optimistic update so the heart responds immediately without waiting for the API
+    const previousAccounts = accounts;
+    const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+    setAccounts((current) =>
+      current.map((account) =>
+        account.googleProfile?.email?.toLowerCase() === currentEmail
+          ? { ...account, profile: { ...account.profile, favoritePlaceIds: nextFavoritePlaceIds } }
+          : account,
+      ),
+    );
+
     void mutateAccountState({
       action: "update_favorites",
       currentEmail: user.googleProfile?.email ?? "",
@@ -6545,6 +6607,7 @@ export default function Page() {
         });
       })
       .catch((error) => {
+        setAccounts(previousAccounts);
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
       });
   };
@@ -7841,6 +7904,11 @@ export default function Page() {
 
     setIsSavingProfilePhoto(true);
     setProfilePhotoNotice("");
+
+    const photoEmail = nextUser.googleProfile?.email?.toLowerCase() ?? "";
+    if (photoEmail && typeof window !== "undefined") {
+      try { window.localStorage.removeItem(getPictureCacheKey(photoEmail)); } catch { /* ignore */ }
+    }
 
     void mutateAccountState({
       action: "upsert_account",
@@ -12227,6 +12295,7 @@ export default function Page() {
                 ) : null}
 
                 {favoritePlacesLoading ? <p className="text-sm text-[#2C1A0E]">{copy.common.loadingSpots}</p> : null}
+                {favoritePlacesError ? <p className="text-sm text-red-500">{favoritePlacesError}</p> : null}
               </CardBody>
             </Card>
 
