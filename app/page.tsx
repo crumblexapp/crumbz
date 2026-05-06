@@ -5658,10 +5658,10 @@ export default function Page() {
 
   // Show the "continue" button on native splash after 2 s
   useEffect(() => {
-    if (!isNativePlatform || nativeSplashDone) return;
+    if (nativeSplashDone) return;
     const timer = window.setTimeout(() => setNativeButtonVisible(true), 2000);
     return () => window.clearTimeout(timer);
-  }, [isNativePlatform, nativeSplashDone]);
+  }, [nativeSplashDone]);
 
   // Lock body scroll while splash is showing
   useEffect(() => {
@@ -9398,7 +9398,8 @@ export default function Page() {
     }
 
     // Native app: show branded splash before auth screen
-    if (isNativePlatform && !nativeSplashDone) {
+    const isSplashPreview = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview") === "splash";
+    if ((isNativePlatform && !nativeSplashDone) || isSplashPreview) {
       return (
         <main
           className="flex flex-col items-center justify-end font-[family-name:var(--font-manrope)]"
@@ -9423,11 +9424,10 @@ export default function Page() {
           </div>
           <div
             className="w-full max-w-xs px-4 transition-all duration-500"
-            style={{ opacity: nativeButtonVisible ? 1 : 0, transform: nativeButtonVisible ? "translateY(0)" : "translateY(16px)" }}
+            style={{ opacity: nativeButtonVisible ? 1 : 0, transform: nativeButtonVisible ? "translateY(0)" : "translateY(16px)", pointerEvents: nativeButtonVisible ? "auto" : "none" }}
           >
             <button
               onClick={() => setNativeSplashDone(true)}
-              disabled={!nativeButtonVisible}
               className="w-full rounded-full bg-white py-4 text-center text-lg font-bold shadow-[0_8px_30px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
               style={{ color: "#fb8803" }}
             >
