@@ -73,6 +73,8 @@ const ADMIN_POST_IMAGE_SHARE_USERNAMES = new Set(["josheats"]);
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+// Flip to true after running scripts/backfill-interactions.ts
+const USE_INTERACTIONS_TABLE = false;
 const MAX_IMAGE_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 const STORY_MAX_VIDEO_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 const STORY_MAX_IMAGE_FILE_SIZE_BYTES = 30 * 1024 * 1024;
@@ -1127,13 +1129,54 @@ function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, server
     ...new Set([...Object.keys(serverInteractions), ...Object.keys(localInteractions)]),
   ].map((id) => ({ id }));
 
-  return pruneInteractionsToKnownPosts(
-    mergedPostIds,
-    {
-      ...serverInteractions,
-      ...localInteractions,
-    },
-  );
+  const merged: InteractionsMap = {};
+
+  for (const { id: postId } of mergedPostIds) {
+    const local = localInteractions[postId];
+    const server = serverInteractions[postId];
+
+    if (!local) { merged[postId] = server!; continue; }
+    if (!server) { merged[postId] = local; continue; }
+
+    // Union-merge each array so neither side loses data.
+    // For likes/shares/saves/views: dedup by authorEmail — server wins for existing,
+    // local-only entries are recent optimistic updates.
+    const mergedLikes = [
+      ...server.likes,
+      ...local.likes.filter((l) => !server.likes.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+    ];
+    const mergedShares = [
+      ...server.shares,
+      ...local.shares.filter((l) => !server.shares.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+    ];
+    const mergedSaves = [
+      ...server.saves,
+      ...local.saves.filter((l) => !server.saves.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+    ];
+    const mergedViews = [
+      ...server.views,
+      ...local.views.filter((l) => !server.views.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+    ];
+    // For comments: union by ID. For shared IDs prefer local (preserves hidden/reaction edits).
+    const serverCommentIds = new Set(server.comments.map((c) => c.id));
+    const mergedComments = [
+      ...server.comments.map((sc) => {
+        const lc = local.comments.find((c) => c.id === sc.id);
+        return lc ?? sc;
+      }),
+      ...local.comments.filter((c) => !serverCommentIds.has(c.id)),
+    ];
+
+    merged[postId] = {
+      likes: mergedLikes,
+      shares: mergedShares,
+      saves: mergedSaves,
+      views: mergedViews,
+      comments: mergedComments,
+    };
+  }
+
+  return pruneInteractionsToKnownPosts(mergedPostIds, merged);
 }
 
 function getInteractionTotals(interactions: InteractionsMap) {
@@ -4884,10 +4927,27 @@ export default function Page() {
 
     void syncSharedState({
       nextPosts,
-      nextInteractions,
+      ...(USE_INTERACTIONS_TABLE ? {} : { nextInteractions }),
       nextDare,
       source: "auto",
     });
+  };
+
+  const callInteractionApi = async (path: string, body: Record<string, unknown>) => {
+    try {
+      if (!(await ensureAuthenticatedSession())) return;
+      const headers = await getAuthenticatedHeaders({ "Content-Type": "application/json" });
+      const response = await fetch(path, {
+        method: "POST",
+        cache: "no-store",
+        headers,
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        if (response.status === 401) dispatchAuthExpired(payload?.message);
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -5607,7 +5667,7 @@ export default function Page() {
     const timeout = window.setTimeout(() => {
       void syncSharedState({
         nextPosts: posts,
-        nextInteractions: interactions,
+        ...(USE_INTERACTIONS_TABLE ? {} : { nextInteractions: interactions }),
         nextDare: dare,
         source: "auto",
       });
@@ -5635,75 +5695,82 @@ export default function Page() {
     if (!user.signedIn) return;
 
     const syncFromServer = () => {
-      void fetch("/api/state", { cache: "no-store" })
-        .then((response) => response.json())
-        .then((payload) => {
-          if (!payload?.ok) return;
+      const stateFetch = fetch("/api/state", { cache: "no-store" }).then((r) => r.json()).catch(() => null);
+      const interactionsFetch = USE_INTERACTIONS_TABLE
+        ? fetch("/api/interactions", { cache: "no-store" }).then((r) => r.json()).catch(() => null)
+        : Promise.resolve(null);
 
-          const serverHasState = hasAnySharedState(payload);
+      void Promise.all([stateFetch, interactionsFetch]).then(([payload, interactionsPayload]) => {
+        if (!payload?.ok) return;
 
-          if (!serverHasState) {
-            const localAccounts = readAccounts();
-            void seedAccountsToBackend(localAccounts).catch(() => undefined);
-            const currentPosts = postsRef.current;
-            const currentInteractions = interactionsRef.current;
-            const currentDare = dare;
-            setPosts((current) => current);
-            setInteractions((current) => current);
-            setDare(normalizeDareState(payload.dare));
-            setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
-            recoverSharedState({
-              nextPosts: currentPosts,
-              nextInteractions: currentInteractions,
-              nextDare: currentDare,
-            });
-            return;
-          }
+        const serverHasState = hasAnySharedState(payload);
 
-          setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current));
-          const now = Date.now();
-          const recentDeletedPostIds = new Set(
-            Array.from(recentlyDeletedPostIdsRef.current.entries())
-              .filter(([, deletedAt]) => now - deletedAt < 5000)
-              .map(([postId]) => postId),
-          );
-          recentlyDeletedPostIdsRef.current = new Map(
-            Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
-          );
-          const baseServerPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
-          const serverInteractions = pruneInteractionsToKnownPosts(
-            baseServerPosts,
-            filterRecentDeletedInteractions(normalizeInteractions(payload.interactions), recentDeletedPostIds),
-          );
-          const shouldPreserveLocalPosts = now - lastSharedStateMutationAtRef.current < 5000;
+        if (!serverHasState) {
+          const localAccounts = readAccounts();
+          void seedAccountsToBackend(localAccounts).catch(() => undefined);
           const currentPosts = postsRef.current;
-          const currentInteractions = pruneInteractionsToKnownPosts(currentPosts, interactionsRef.current);
-          const mergedPosts = mergePostsPreferLocal(currentPosts, preserveLocalMedia(currentPosts, baseServerPosts));
-          const mergedInteractions = pruneInteractionsToKnownPosts(
-            mergedPosts,
-            mergeInteractionsPreferLocal(currentInteractions, serverInteractions),
-          );
-          setPosts((current) => {
-            const serverPosts = preserveLocalMedia(current, baseServerPosts);
-            return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
-          });
-          setInteractions((current) => {
-            const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
-            return shouldPreserveLocalPosts
-              ? pruneInteractionsToKnownPosts(mergedPosts, mergeInteractionsPreferLocal(safeCurrent, serverInteractions))
-              : serverInteractions;
-          });
+          const currentInteractions = interactionsRef.current;
+          const currentDare = dare;
+          setPosts((current) => current);
+          setInteractions((current) => current);
           setDare(normalizeDareState(payload.dare));
           setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
-          if (shouldPreserveLocalPosts) {
-            recoverSharedState({
-              nextPosts: mergedPosts,
-              nextInteractions: mergedInteractions,
-              nextDare: dare,
+          recoverSharedState({
+            nextPosts: currentPosts,
+            nextInteractions: currentInteractions,
+            nextDare: currentDare,
+          });
+          return;
+        }
+
+        setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current));
+        const now = Date.now();
+        const recentDeletedPostIds = new Set(
+          Array.from(recentlyDeletedPostIdsRef.current.entries())
+            .filter(([, deletedAt]) => now - deletedAt < 5000)
+            .map(([postId]) => postId),
+        );
+        recentlyDeletedPostIdsRef.current = new Map(
+          Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
+        );
+        const baseServerPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
+        const rawInteractions = USE_INTERACTIONS_TABLE && interactionsPayload?.ok
+          ? interactionsPayload.interactions
+          : payload.interactions;
+        const serverInteractions = pruneInteractionsToKnownPosts(
+          baseServerPosts,
+          filterRecentDeletedInteractions(normalizeInteractions(rawInteractions), recentDeletedPostIds),
+        );
+        const shouldPreserveLocalPosts = now - lastSharedStateMutationAtRef.current < 5000;
+        const currentPosts = postsRef.current;
+        const currentInteractions = pruneInteractionsToKnownPosts(currentPosts, interactionsRef.current);
+        const mergedPosts = mergePostsPreferLocal(currentPosts, preserveLocalMedia(currentPosts, baseServerPosts));
+        const mergedInteractions = pruneInteractionsToKnownPosts(
+          mergedPosts,
+          USE_INTERACTIONS_TABLE ? serverInteractions : mergeInteractionsPreferLocal(currentInteractions, serverInteractions),
+        );
+        setPosts((current) => {
+          const serverPosts = preserveLocalMedia(current, baseServerPosts);
+          return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
+        });
+        setInteractions(USE_INTERACTIONS_TABLE
+          ? () => serverInteractions
+          : (current) => {
+              const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
+              return shouldPreserveLocalPosts
+                ? pruneInteractionsToKnownPosts(mergedPosts, mergeInteractionsPreferLocal(safeCurrent, serverInteractions))
+                : serverInteractions;
             });
-          }
-        })
-        .catch(() => undefined);
+        setDare(normalizeDareState(payload.dare));
+        setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
+        if (!USE_INTERACTIONS_TABLE && shouldPreserveLocalPosts) {
+          recoverSharedState({
+            nextPosts: mergedPosts,
+            nextInteractions: mergedInteractions,
+            nextDare: dare,
+          });
+        }
+      });
     };
 
     syncFromServer();
@@ -8484,7 +8551,9 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email;
     if (!draft || !authorEmail) return;
 
-    lastSharedStateMutationAtRef.current = Date.now();
+    const commentId = `${Date.now()}-${postId}`;
+    const createdAt = formatNow();
+
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
@@ -8494,27 +8563,68 @@ export default function Page() {
           comments: [
             ...bucket.comments,
             {
-              id: `${Date.now()}-${postId}`,
+              id: commentId,
               authorEmail,
               authorName: user.profile.fullName,
               schoolName: user.profile.schoolName,
               text: draft,
-              createdAt: formatNow(),
+              createdAt,
             },
           ],
         },
       };
     });
 
-    setCommentDrafts((current) => ({
-      ...current,
-      [postId]: "",
-    }));
+    setCommentDrafts((current) => ({ ...current, [postId]: "" }));
+
+    if (USE_INTERACTIONS_TABLE) {
+      void callInteractionApi("/api/interactions/comment", {
+        postId,
+        commentId,
+        text: draft,
+        authorName: user.profile.fullName,
+        schoolName: user.profile.schoolName ?? "",
+        createdAt,
+      });
+    } else {
+      lastSharedStateMutationAtRef.current = Date.now();
+    }
   };
 
   const toggleCommentReaction = (postId: string, commentId: string, emoji: string) => {
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
+
+    if (USE_INTERACTIONS_TABLE) {
+      const bucket = getInteractionBucket(interactionsRef.current, postId);
+      const comment = bucket.comments.find((c) => c.id === commentId);
+      if (!comment) return;
+      const reactions = comment.reactions ?? [];
+      const alreadyReacted = reactions.some(
+        (r) => r.authorEmail.toLowerCase() === authorEmail && r.emoji === emoji,
+      );
+      const nextReactions = alreadyReacted
+        ? reactions.filter((r) => !(r.authorEmail.toLowerCase() === authorEmail && r.emoji === emoji))
+        : [...reactions.filter((r) => r.authorEmail.toLowerCase() !== authorEmail), { emoji, authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }];
+
+      setInteractions((current) => {
+        const b = getInteractionBucket(current, postId);
+        return {
+          ...current,
+          [postId]: {
+            ...b,
+            comments: b.comments.map((c) => c.id === commentId ? { ...c, reactions: nextReactions } : c),
+          },
+        };
+      });
+
+      void callInteractionApi("/api/interactions/comment/update", {
+        postId,
+        commentId,
+        reactions: nextReactions,
+      });
+      return;
+    }
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
@@ -8563,6 +8673,43 @@ export default function Page() {
   const toggleReplyReaction = (postId: string, commentId: string, replyId: string, emoji: string) => {
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
+
+    if (USE_INTERACTIONS_TABLE) {
+      const bucket = getInteractionBucket(interactionsRef.current, postId);
+      const comment = bucket.comments.find((c) => c.id === commentId);
+      if (!comment) return;
+      const nextReplies = (comment.replies ?? []).map((reply) => {
+        if (reply.id !== replyId) return reply;
+        const reactions = reply.reactions ?? [];
+        const alreadyReacted = reactions.some(
+          (r) => r.authorEmail.toLowerCase() === authorEmail && r.emoji === emoji,
+        );
+        return {
+          ...reply,
+          reactions: alreadyReacted
+            ? reactions.filter((r) => !(r.authorEmail.toLowerCase() === authorEmail && r.emoji === emoji))
+            : [...reactions.filter((r) => r.authorEmail.toLowerCase() !== authorEmail), { emoji, authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
+        };
+      });
+
+      setInteractions((current) => {
+        const b = getInteractionBucket(current, postId);
+        return {
+          ...current,
+          [postId]: {
+            ...b,
+            comments: b.comments.map((c) => c.id === commentId ? { ...c, replies: nextReplies } : c),
+          },
+        };
+      });
+
+      void callInteractionApi("/api/interactions/comment/update", {
+        postId,
+        commentId,
+        replies: nextReplies,
+      });
+      return;
+    }
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
@@ -8621,6 +8768,38 @@ export default function Page() {
     const draft = commentReplyDrafts[draftKey]?.trim();
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!draft || !authorEmail) return;
+
+    if (USE_INTERACTIONS_TABLE) {
+      const bucket = getInteractionBucket(interactionsRef.current, postId);
+      const comment = bucket.comments.find((c) => c.id === commentId);
+      if (!comment) return;
+      const replyId = `${Date.now()}-${commentId}`;
+      const createdAt = formatNow();
+      const newReply = { id: replyId, authorEmail, authorName: user.profile.fullName, text: draft, createdAt };
+      const nextReplies = [...(comment.replies ?? []), newReply];
+
+      setInteractions((current) => {
+        const b = getInteractionBucket(current, postId);
+        return {
+          ...current,
+          [postId]: {
+            ...b,
+            comments: b.comments.map((c) => c.id === commentId ? { ...c, replies: nextReplies } : c),
+          },
+        };
+      });
+
+      void callInteractionApi("/api/interactions/comment/update", {
+        postId,
+        commentId,
+        replies: nextReplies,
+      });
+
+      setCommentReplyDrafts((current) => ({ ...current, [draftKey]: "" }));
+      setOpenReplyComposerId(null);
+      setOpenReplyComposerLabel(null);
+      return;
+    }
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
@@ -8763,7 +8942,9 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email;
     if (!authorEmail) return;
 
-    lastSharedStateMutationAtRef.current = Date.now();
+    const shareId = `${Date.now()}-${platform}`;
+    const createdAt = formatNow();
+
     setInteractions((current) => {
       const bucket = getInteractionBucket(current, postId);
       return {
@@ -8772,17 +8953,22 @@ export default function Page() {
           ...bucket,
           shares: [
             ...bucket.shares,
-            {
-              id: `${Date.now()}-${platform}`,
-              authorEmail,
-              authorName: user.profile.fullName,
-              platform,
-              createdAt: formatNow(),
-            },
+            { id: shareId, authorEmail, authorName: user.profile.fullName, platform, createdAt },
           ],
         },
       };
     });
+
+    if (USE_INTERACTIONS_TABLE) {
+      void callInteractionApi("/api/interactions/share", {
+        postId,
+        shareId,
+        platform,
+        authorName: user.profile.fullName,
+      });
+    } else {
+      lastSharedStateMutationAtRef.current = Date.now();
+    }
   };
 
   const readBlobAsDataUrl = (blob: Blob) =>
@@ -9244,6 +9430,32 @@ export default function Page() {
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
     void haptic("light");
+
+    if (USE_INTERACTIONS_TABLE) {
+      const bucket = getInteractionBucket(interactionsRef.current, postId);
+      const alreadyLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === authorEmail);
+      const nowLiked = !alreadyLiked;
+
+      setInteractions((current) => {
+        const b = getInteractionBucket(current, postId);
+        return {
+          ...current,
+          [postId]: {
+            ...b,
+            likes: nowLiked
+              ? [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }]
+              : b.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail),
+          },
+        };
+      });
+
+      void callInteractionApi("/api/interactions/like", {
+        postId,
+        liked: nowLiked,
+        authorName: user.profile.fullName,
+      });
+      return;
+    }
 
     lastSharedStateMutationAtRef.current = Date.now();
     setInteractions((current) => {
