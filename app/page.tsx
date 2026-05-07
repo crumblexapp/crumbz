@@ -5465,7 +5465,7 @@ export default function Page() {
         const payload = (await response.json()) as { places?: FavoritePlace[] };
         const nextPlaces = (payload.places ?? []).slice(0, 100);
 
-        setFavoritePlaces((current) => nextPlaces.length ? nextPlaces : (current.length ? current : getFallbackFavoritePlaces(cityKey)));
+        setFavoritePlaces((current) => nextPlaces.length ? nextPlaces : (favoriteMapMode === "home" && current.length ? current : getFallbackFavoritePlaces(cityKey)));
 
         // Cache the results for home city
         if (favoriteMapMode === "home" && nextPlaces.length > 0 && typeof window !== "undefined") {
@@ -5476,7 +5476,7 @@ export default function Page() {
           }
         }
       } catch {
-        setFavoritePlaces((current) => current.length ? current : getFallbackFavoritePlaces(cityKey));
+        setFavoritePlaces((current) => favoriteMapMode === "home" && current.length ? current : getFallbackFavoritePlaces(cityKey));
       } finally {
         setFavoritePlacesLoading(false);
         window.clearTimeout(timeoutId);
@@ -6934,6 +6934,7 @@ export default function Page() {
           setFavoriteNearbyCenter(nextCenter);
           setFavoriteNearbyCity(nextCity);
           setFavoriteMapMode("nearby");
+          setFavoritePlaces(getFallbackFavoritePlaces(normalizeCityKey(nextCity)));
           persistFavoriteLocationPreference("nearby", nextCity, nextCenter);
           setFavoriteLocationNotice(
             options?.silent ? "" : nearestCity ? `map switched to spots near ${nearestCity.city}.` : "map switched to spots near you.",
