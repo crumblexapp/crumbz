@@ -9901,33 +9901,7 @@ export default function Page() {
                   <h1 className="mt-4 font-[family-name:var(--font-young-serif)] text-[2.1rem] leading-[1.02] text-[#2C1A0E]">
                     {copy.auth.signUpOrLogIn}
                   </h1>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      radius="full"
-                      className={authMode === "signup" ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
-                      onPress={() => {
-                        setAuthMode("signup");
-                        setError("");
-                      }}
-                    >
-                      {copy.auth.signUpWithGoogle}
-                    </Button>
-                    <Button
-                      radius="full"
-                      className={authMode === "login" ? "bg-[#F5A623] text-white" : "bg-[#FFF0D0] text-[#2C1A0E]"}
-                      onPress={() => {
-                        setAuthMode("login");
-                        setError("");
-                      }}
-                    >
-                      {copy.auth.logInWithGoogle}
-                    </Button>
-                  </div>
-                  <p className="mt-4 text-sm leading-7 text-[#2C1A0E]">
-                    {authMode === "signup"
-                      ? copy.auth.signupBody
-                      : copy.auth.loginBody}
-                  </p>
+                  <p className="mt-4 text-sm leading-7 text-[#2C1A0E]">{copy.auth.signupBody}</p>
                 </div>
 
                 {GOOGLE_CLIENT_ID ? (
