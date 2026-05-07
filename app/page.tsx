@@ -5928,7 +5928,6 @@ export default function Page() {
         return;
       }
 
-      const currentMode = authModeRef.current;
       const sharedAccounts = await fetch("/api/state", { cache: "no-store" })
         .then((r) => r.json())
         .then((p) => (p?.ok ? (p.accounts as StoredUser[]) : null))
@@ -5941,11 +5940,7 @@ export default function Page() {
 
       setError("");
 
-      if (currentMode === "login") {
-        if (!existingAccount) {
-          setError("that google account hasn't signed up yet. use sign up first.");
-          return;
-        }
+      if (existingAccount) {
         const nextSignedInAccount = { ...existingAccount, signedIn: true };
         const result = await mutateAccountState({ action: "upsert_account", account: nextSignedInAccount }).catch(() => null);
         persistUser((result?.user as StoredUser | null) ?? nextSignedInAccount);
@@ -5953,11 +5948,6 @@ export default function Page() {
         else if (sharedAccounts?.length) setAccounts(sharedAccounts);
         if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
         setFullName(null); setUsername(null); setCity(null); setIsStudent(null); setSchoolName(null);
-        return;
-      }
-
-      if (existingAccount) {
-        setError("that google account already exists. use log in instead.");
         return;
       }
 
@@ -6002,7 +5992,6 @@ export default function Page() {
             return;
           }
 
-          const currentMode = authModeRef.current;
           const sharedAccounts = await fetch("/api/state", { cache: "no-store" })
             .then((result) => result.json())
             .then((payload) => (payload?.ok ? (payload.accounts as StoredUser[]) : null))
@@ -6015,12 +6004,7 @@ export default function Page() {
 
           setError("");
 
-          if (currentMode === "login") {
-            if (!existingAccount) {
-              setError("that google account hasn’t signed up yet. use sign up first.");
-              return;
-            }
-
+          if (existingAccount) {
             const nextSignedInAccount = { ...existingAccount, signedIn: true };
             const result = await mutateAccountState({
               action: "upsert_account",
@@ -6039,11 +6023,6 @@ export default function Page() {
             setCity(null);
             setIsStudent(null);
             setSchoolName(null);
-            return;
-          }
-
-          if (existingAccount) {
-            setError("that google account already exists. use log in instead.");
             return;
           }
 
