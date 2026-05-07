@@ -48,6 +48,7 @@ type StoredUser = {
     referredByCode?: string;
     referredByEmail?: string;
     referralCompletedAt?: string | null;
+    seenNotificationIds?: string[];
   };
 };
 
@@ -77,6 +78,7 @@ function normalizeAccount(account: StoredUser) {
       referredByCode: account.profile.referredByCode?.trim().toUpperCase() ?? "",
       referredByEmail: account.profile.referredByEmail?.trim().toLowerCase() ?? "",
       referralCompletedAt: account.profile.referralCompletedAt ?? null,
+      seenNotificationIds: Array.isArray(account.profile.seenNotificationIds) ? account.profile.seenNotificationIds : [],
     },
   } satisfies StoredUser;
 }
@@ -113,6 +115,12 @@ function mergeAccountForUpsert(existingAccount: StoredUser | null, incomingAccou
       outgoingFriendRequests: existingAccount.profile.outgoingFriendRequests,
       favoritePlaceIds: existingAccount.profile.favoritePlaceIds,
       favoriteActivities: existingAccount.profile.favoriteActivities ?? [],
+      seenNotificationIds: [
+        ...new Set([
+          ...(existingAccount.profile.seenNotificationIds ?? []),
+          ...(incomingAccount.profile.seenNotificationIds ?? []),
+        ]),
+      ],
     },
   });
 }

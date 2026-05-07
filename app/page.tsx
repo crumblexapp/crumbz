@@ -383,6 +383,7 @@ type StoredUser = {
     referredByCode?: string;
     referredByEmail?: string;
     referralCompletedAt?: string | null;
+    seenNotificationIds?: string[];
   };
 };
 
@@ -2669,6 +2670,7 @@ export default function Page() {
   const hasAdminBackfilledReferralCodesRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
+  const seenNotifSyncTimerRef = useRef<number | null>(null);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
@@ -5109,6 +5111,19 @@ export default function Page() {
     persistUser(syncedUser);
   }, [liveAccount, user]);
 
+  // Merge seenNotificationIds from server profile so native and web stay in sync
+  useEffect(() => {
+    const email = user.googleProfile?.email?.toLowerCase();
+    if (!email || !user.signedIn) return;
+    const serverAccount = accounts.find((a) => a.googleProfile?.email?.toLowerCase() === email);
+    const serverIds = serverAccount?.profile.seenNotificationIds;
+    if (!Array.isArray(serverIds) || !serverIds.length) return;
+    setSeenNotificationIds((current) => {
+      const merged = [...new Set([...current, ...serverIds])];
+      return merged.length === current.length ? current : merged;
+    });
+  }, [accounts, user.signedIn, user.googleProfile?.email]);
+
   // Backfill picture cache for existing users who logged in before this was added
   useEffect(() => {
     const email = user.googleProfile?.email;
@@ -5689,7 +5704,19 @@ export default function Page() {
   useEffect(() => {
     if (!hasLoadedDataRef.current || typeof window === "undefined") return;
     window.localStorage.setItem(SEEN_NOTIFICATIONS_KEY, JSON.stringify(seenNotificationIds));
-  }, [seenNotificationIds]);
+    if (!user.signedIn || !seenNotificationIds.length) return;
+    if (seenNotifSyncTimerRef.current !== null) window.clearTimeout(seenNotifSyncTimerRef.current);
+    seenNotifSyncTimerRef.current = window.setTimeout(() => {
+      seenNotifSyncTimerRef.current = null;
+      const currentUser = userRef.current;
+      if (!currentUser.signedIn) return;
+      const ids = JSON.parse(window.localStorage.getItem(SEEN_NOTIFICATIONS_KEY) ?? "[]") as string[];
+      void mutateAccountState({
+        action: "upsert_account",
+        account: { ...currentUser, profile: { ...currentUser.profile, seenNotificationIds: ids } },
+      }).catch(() => undefined);
+    }, 3000);
+  }, [seenNotificationIds, user.signedIn]);
 
   useEffect(() => {
     if (selectedOwnArchiveOpen || !pendingOwnArchivePost) return;
@@ -12167,7 +12194,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-white text-[#2C1A0E]">
-      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-40 font-[family-name:var(--font-manrope)]" style={{ paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1.25rem)" : "1.25rem" }}>
+      <div className="mx-auto min-h-screen w-full max-w-md bg-white px-4 pb-40 font-[family-name:var(--font-manrope)]" style={{ paddingTop: isNativePlatform ? "env(safe-area-inset-top)" : "1.25rem" }}>
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -13604,7 +13631,8 @@ export default function Page() {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.25 }}
-            className="absolute right-0 top-0 h-full w-full border-l border-[#FFF0D0] bg-white px-5 pb-6 pt-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)] sm:max-w-sm"
+            className="absolute right-0 top-0 h-full w-full border-l border-[#FFF0D0] bg-white px-5 pb-6 shadow-[-24px_0_60px_rgba(43,21,48,0.12)] sm:max-w-sm"
+            style={{ paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1.5rem)" : "1.5rem" }}
           >
             <div className="flex items-center justify-between">
               <div>
