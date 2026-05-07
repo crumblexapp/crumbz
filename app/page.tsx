@@ -2568,7 +2568,6 @@ export default function Page() {
   const [googleInitError, setGoogleInitError] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const [nativeSplashDone, setNativeSplashDone] = useState(false);
-  const [nativeButtonVisible, setNativeButtonVisible] = useState(false);
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -5883,10 +5882,10 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStoryPost?.id]);
 
-  // Show the "continue" button on native splash after 2 s
+  // Auto-advance from native splash after 2 s
   useEffect(() => {
     if (nativeSplashDone) return;
-    const timer = window.setTimeout(() => setNativeButtonVisible(true), 2000);
+    const timer = window.setTimeout(() => setNativeSplashDone(true), 2000);
     return () => window.clearTimeout(timer);
   }, [nativeSplashDone]);
 
@@ -9855,18 +9854,6 @@ export default function Page() {
               className="h-auto w-72 object-contain"
               priority
             />
-          </div>
-          <div
-            className="w-full max-w-xs px-4 transition-all duration-500"
-            style={{ opacity: nativeButtonVisible ? 1 : 0, transform: nativeButtonVisible ? "translateY(0)" : "translateY(16px)", pointerEvents: nativeButtonVisible ? "auto" : "none" }}
-          >
-            <button
-              onClick={() => setNativeSplashDone(true)}
-              className="w-full rounded-full bg-white py-4 text-center text-lg font-bold shadow-[0_8px_30px_rgba(0,0,0,0.18)] active:scale-95 transition-transform"
-              style={{ color: "#fb8803" }}
-            >
-              continue
-            </button>
           </div>
         </main>
       );
