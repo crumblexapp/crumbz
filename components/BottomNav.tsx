@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { StudentTab } from "@/lib/app-types";
 
 function TabIcon({ tabKey, className }: { tabKey: StudentTab; className: string }) {
@@ -67,10 +68,40 @@ const NAV_TABS: { key: StudentTab }[] = [
 ];
 
 export default function BottomNav({ studentTab, onTabChange, tabLabels }: BottomNavProps) {
+  const [visible, setVisible] = useState(true);
+  const lastScrollYRef = useRef(0);
+  const ticking = useRef(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (ticking.current) return;
+      ticking.current = true;
+      requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+        const delta = currentY - lastScrollYRef.current;
+        if (currentY < 80) {
+          setVisible(true);
+        } else if (delta > 6) {
+          setVisible(false);
+        } else if (delta < -4) {
+          setVisible(true);
+        }
+        lastScrollYRef.current = currentY;
+        ticking.current = false;
+      });
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <nav
-      className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-4 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur"
-      style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+      className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-3 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur transition-transform duration-300 ease-in-out"
+      style={{
+        bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))",
+        transform: `translateX(-50%) translateY(${visible ? "0" : "calc(100% + 1.5rem)"})`,
+      }}
     >
       <div className="grid grid-cols-5 gap-1 text-center">
         {NAV_TABS.map((item) => (
@@ -83,9 +114,9 @@ export default function BottomNav({ studentTab, onTabChange, tabLabels }: Bottom
             onClick={() => onTabChange(item.key)}
           >
             <span className={`leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
-              <TabIcon tabKey={item.key} className="h-6 w-6" />
+              <TabIcon tabKey={item.key} className="h-5 w-5" />
             </span>
-            <span className={`text-[11px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
+            <span className={`text-[10px] font-medium leading-none ${studentTab === item.key ? "text-[#2C1A0E]" : "text-[#FFF0D0]"}`}>
               {tabLabels[item.key]}
             </span>
           </button>

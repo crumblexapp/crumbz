@@ -12069,6 +12069,21 @@ export default function Page() {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              aria-label="make a post"
+              onClick={() => {
+                setStudentTab("profile");
+                window.setTimeout(() => {
+                  document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 120);
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2C1A0E] text-white shadow-[0_8px_20px_rgba(44,26,14,0.18)]"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={() => setNotificationsOpen(true)}
               className="rounded-full bg-[#fff7ea] p-2.5 text-[#2C1A0E] shadow-[0_8px_20px_rgba(44,26,14,0.06)]"
             >
@@ -13373,34 +13388,17 @@ export default function Page() {
               </CardBody>
             </Card>
 
-            <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-              <CardBody className="gap-4 p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <button type="button" onClick={openOwnArchive} className="text-left">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
-                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      your archive
-                    </h2>
-                  </button>
-                  <button type="button" onClick={openOwnArchive}>
-                    <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserAllPosts.length}</Chip>
-                  </button>
-                </div>
-
-                {currentUserAllPosts.length ? (
-                  <button
-                    type="button"
-                    onClick={openOwnArchive}
-                    className="block w-full rounded-[24px] bg-[#FFF7E8] p-3 text-left"
-                  >
-                    {renderArchivePostGrid(currentUserAllPosts.slice(0, 6), () => undefined, { interactive: false, labelSize: "compact" })}
-                    <p className="mt-3 text-sm font-medium text-[#6c7289]">tap to open your full archive grid.</p>
-                  </button>
-                ) : (
-                  <p className="text-sm text-[#6c7289]">post your first photo and it’ll live here as your personal archive.</p>
-                )}
-              </CardBody>
-            </Card>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
+                <Chip className="bg-[#FFF0D0] text-[#F5A623]">{currentUserAllPosts.length}</Chip>
+              </div>
+              {currentUserAllPosts.length ? (
+                renderArchivePostGrid(currentUserAllPosts, openOwnArchivePost, { tileClassName: "rounded-[16px]" })
+              ) : (
+                <p className="py-6 text-center text-sm text-[#6c7289]">your posts will show up here once you share something.</p>
+              )}
+            </div>
 
           </section>
         ) : null}
