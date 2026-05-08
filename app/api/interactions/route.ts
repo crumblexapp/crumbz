@@ -23,12 +23,32 @@ type InteractionBucket = {
   saves: unknown[];
 };
 
+const PAGE_SIZE = 1000;
+const MAX_INTERACTION_ROWS = 100_000;
+
+async function readAllInteractionRows() {
+  const rows: InteractionRow[] = [];
+
+  for (let from = 0; from < MAX_INTERACTION_ROWS; from += PAGE_SIZE) {
+    const to = from + PAGE_SIZE - 1;
+    const { data, error } = await supabaseServer
+      .from("post_interactions")
+      .select("id, post_id, interaction_type, author_email, author_name, payload, deleted_at, created_at")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .range(from, to);
+
+    if (error) return { data: rows, error };
+
+    rows.push(...(((data as InteractionRow[] | null) ?? [])));
+    if (!data || data.length < PAGE_SIZE) return { data: rows, error: null };
+  }
+
+  return { data: rows, error: null };
+}
+
 export async function GET() {
-  const { data, error } = await supabaseServer
-    .from("post_interactions")
-    .select("id, post_id, interaction_type, author_email, author_name, payload, deleted_at, created_at")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
+  const { data, error } = await readAllInteractionRows();
 
   if (error) {
     if (error.message.includes('relation "public.post_interactions" does not exist')) {
@@ -38,8 +58,9 @@ export async function GET() {
   }
 
   const interactions: Record<string, InteractionBucket> = {};
+  const seenViews = new Set<string>();
 
-  for (const row of (data as InteractionRow[]) ?? []) {
+  for (const row of data) {
     if (!interactions[row.post_id]) {
       interactions[row.post_id] = { likes: [], comments: [], shares: [], views: [], saves: [] };
     }
@@ -72,6 +93,11 @@ export async function GET() {
         });
         break;
       case "view":
+        {
+          const viewKey = `${row.post_id}:${row.author_email.toLowerCase()}`;
+          if (seenViews.has(viewKey)) break;
+          seenViews.add(viewKey);
+        }
         bucket.views.push({
           id: row.id,
           authorEmail: row.author_email,
