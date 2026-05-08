@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_SERVER_API_KEY || "";
+const PLACES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const MAX_PLACES_CACHE_ENTRIES = 250;
 
 type Place = {
   id: string;
@@ -47,6 +49,84 @@ type GooglePlacesResponse = {
   results?: GooglePlace[];
   next_page_token?: string;
 };
+
+type PlacesCacheEntry = {
+  expiresAt: number;
+  places?: Place[];
+  pending?: Promise<Place[]>;
+};
+
+const placesCache = new Map<string, PlacesCacheEntry>();
+
+function prunePlacesCache() {
+  if (placesCache.size <= MAX_PLACES_CACHE_ENTRIES) return;
+  const now = Date.now();
+  for (const [key, entry] of placesCache.entries()) {
+    if (entry.expiresAt <= now && !entry.pending) placesCache.delete(key);
+  }
+
+  while (placesCache.size > MAX_PLACES_CACHE_ENTRIES) {
+    const oldestKey = placesCache.keys().next().value;
+    if (!oldestKey) return;
+    placesCache.delete(oldestKey);
+  }
+}
+
+function cacheCoordinate(value: number) {
+  return value.toFixed(3);
+}
+
+function getPlacesCacheKey({
+  query,
+  city,
+  lat,
+  lon,
+  radius,
+  limit,
+}: {
+  query: string;
+  city: string;
+  lat: number;
+  lon: number;
+  radius: number;
+  limit: number;
+}) {
+  return [
+    query ? "text" : "nearby",
+    query.trim().toLowerCase(),
+    normalizeCityKey(city),
+    cacheCoordinate(lat),
+    cacheCoordinate(lon),
+    Math.min(radius, 15000),
+    Math.min(limit, query ? 40 : 100),
+  ].join("|");
+}
+
+async function getCachedPlaces(cacheKey: string, loadPlaces: () => Promise<Place[]>) {
+  const now = Date.now();
+  const cached = placesCache.get(cacheKey);
+
+  if (cached?.places && cached.expiresAt > now) {
+    return cached.places;
+  }
+
+  if (cached?.pending) {
+    return cached.pending;
+  }
+
+  const pending = loadPlaces();
+  placesCache.set(cacheKey, { expiresAt: now + PLACES_CACHE_TTL_MS, pending });
+
+  try {
+    const places = await pending;
+    placesCache.set(cacheKey, { expiresAt: Date.now() + PLACES_CACHE_TTL_MS, places });
+    prunePlacesCache();
+    return places;
+  } catch (error) {
+    placesCache.delete(cacheKey);
+    throw error;
+  }
+}
 
 function normalizeCityKey(cityName: string) {
   return cityName
@@ -235,7 +315,7 @@ async function googlePlacesTextSearch(query: string, lat: number, lon: number, l
   url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
   const response = await fetch(url.toString(), { cache: "no-store" });
-  const data = await response.json();
+  const data = (await response.json()) as GooglePlacesResponse;
 
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
     throw new Error(`Google Places API error: ${data.status}`);
@@ -259,22 +339,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    let places: Place[];
+    const cacheKey = getPlacesCacheKey({ query, city, lat, lon, radius, limit });
+    const places = await getCachedPlaces(cacheKey, async () => {
+      let nextPlaces: Place[];
 
-    if (query) {
-      // Pass city into the query string so Google anchors results to the right location
-      places = await googlePlacesTextSearch(query, lat, lon, Math.min(limit, 40), city || undefined);
-    } else {
-      // Nearby mode (initial map load)
-      places = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), limit);
-    }
+      if (query) {
+        // Pass city into the query string so Google anchors results to the right location.
+        nextPlaces = await googlePlacesTextSearch(query, lat, lon, Math.min(limit, 40), city || undefined);
+      } else {
+        // Nearby mode (initial map load)
+        nextPlaces = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), limit);
+      }
 
-    // Post-filter by city address as a safety net for text search results
-    if (city && query) {
-      places = filterByCity(places, city);
-    }
+      return city && query ? filterByCity(nextPlaces, city) : nextPlaces;
+    });
 
-    return NextResponse.json({ ok: true, places }, { status: 200 });
+    return NextResponse.json(
+      { ok: true, places },
+      { status: 200, headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=21600" } },
+    );
   } catch (error) {
     return NextResponse.json(
       { ok: false, message: error instanceof Error ? error.message : "places request failed", places: [] },
