@@ -2529,8 +2529,10 @@ export default function Page() {
   const hasBackfilledReferralCodeRef = useRef(false);
   const hasAdminBackfilledReferralCodesRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
-  const lastInteractionMutationAtRef = useRef(0);
-  const lastFavoriteMutationAtRef = useRef(0);
+  // Posts currently being mutated locally (like/save). Sync skips these — local state wins until the API completes.
+  const pendingInteractionPostIdsRef = useRef<Set<string>>(new Set());
+  // Count of in-flight favorite mutations. While > 0, sync preserves the current user's favoritePlaceIds.
+  const pendingFavoriteCountRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
   const seenNotifSyncTimerRef = useRef<number | null>(null);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
@@ -5664,8 +5666,8 @@ export default function Page() {
 
         const now = Date.now();
         const currentUserEmail = userRef.current.googleProfile?.email?.toLowerCase() ?? undefined;
-        const shouldPreserveFavorites = now - lastFavoriteMutationAtRef.current < 10000;
-        setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current, shouldPreserveFavorites ? currentUserEmail : undefined));
+        const hasPendingFavorite = pendingFavoriteCountRef.current > 0;
+        setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current, hasPendingFavorite ? currentUserEmail : undefined));
         const recentDeletedPostIds = new Set(
           Array.from(recentlyDeletedPostIdsRef.current.entries())
             .filter(([, deletedAt]) => now - deletedAt < 5000)
@@ -5694,13 +5696,17 @@ export default function Page() {
           const serverPosts = preserveLocalMedia(current, baseServerPosts);
           return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
         });
-        const shouldPreserveLocalInteractions = now - lastInteractionMutationAtRef.current < 10000;
+        // Sync interactions: server is the source of truth EXCEPT for posts the user is currently mutating locally.
+        // Pending posts keep their local bucket until the API completes (or fails and reverts).
+        const pendingPostIds = new Set(pendingInteractionPostIdsRef.current);
         setInteractions(USE_INTERACTIONS_TABLE
           ? (current) => {
-              if (shouldPreserveLocalInteractions) {
-                return mergeInteractionsPreferLocal(pruneInteractionsToKnownPosts(mergedPosts, current), serverInteractions, currentUserEmail);
-              }
-              return serverInteractions;
+              if (pendingPostIds.size === 0) return serverInteractions;
+              const result: InteractionsMap = { ...serverInteractions };
+              pendingPostIds.forEach((postId) => {
+                if (current[postId]) result[postId] = current[postId];
+              });
+              return result;
             }
           : (current) => {
               const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
@@ -6738,17 +6744,18 @@ export default function Page() {
 
   const toggleFavoritePlace = (place: FavoritePlace, sourcePostId?: string) => {
     void haptic("medium");
-    lastFavoriteMutationAtRef.current = Date.now();
     const matchingId = findMatchingFavoriteId(place, favoritePlaceIds, favoritePlaces);
     const isRemoving = matchingId !== null;
     const nextFavoritePlaceIds = isRemoving
       ? favoritePlaceIds.filter((id) => id !== matchingId)
       : [...favoritePlaceIds, place.id];
 
-    // Optimistic update so the heart responds immediately without waiting for the API
+    // Snapshot for revert
     const previousAccounts = accounts;
     const previousUser = user;
     const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+
+    // 1. Optimistic UI: update both `accounts` (normal case) and `user.profile` (fallback when liveAccount is missing)
     setAccounts((current) =>
       current.map((account) =>
         account.googleProfile?.email?.toLowerCase() === currentEmail
@@ -6756,9 +6763,45 @@ export default function Page() {
           : account,
       ),
     );
-    // Also update `user.profile` so the liveProfile fallback (when accounts doesn't include the user yet) reflects the change
     persistUser({ ...user, profile: { ...user.profile, favoritePlaceIds: nextFavoritePlaceIds } });
 
+    // 2. Mark a favorite mutation in flight — sync will preserve current user's favoritePlaceIds while > 0
+    pendingFavoriteCountRef.current += 1;
+
+    // 3. If this came from a post (save heart on a post card), also do an optimistic save-interaction update
+    //    and queue an API call. Track that postId in pendingInteractionPostIdsRef so sync skips its bucket.
+    if (sourcePostId && user.googleProfile?.email) {
+      const authorEmail = user.googleProfile.email.toLowerCase();
+      setInteractions((current) => {
+        const bucket = getInteractionBucket(current, sourcePostId);
+        const nextSaves = isRemoving
+          ? bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail)
+          : [
+              ...bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail),
+              {
+                authorEmail,
+                authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+                placeId: place.id,
+                createdAt: formatNow(),
+              },
+            ];
+        return { ...current, [sourcePostId]: { ...bucket, saves: nextSaves } };
+      });
+      pendingInteractionPostIdsRef.current.add(sourcePostId);
+      void (async () => {
+        if (USE_INTERACTIONS_TABLE) {
+          await callInteractionApi("/api/interactions/save", {
+            postId: sourcePostId,
+            saved: !isRemoving,
+            authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+            placeId: place.id,
+          });
+        }
+        pendingInteractionPostIdsRef.current.delete(sourcePostId);
+      })();
+    }
+
+    // 4. Update the user's account on the server. On failure, revert.
     void mutateAccountState({
       action: "update_favorites",
       currentEmail: user.googleProfile?.email ?? "",
@@ -6770,55 +6813,15 @@ export default function Page() {
         if (result.user) {
           persistUser(result.user as StoredUser);
         }
-
-        if (!sourcePostId || !user.googleProfile?.email) return;
-
-        lastInteractionMutationAtRef.current = Date.now();
-        const authorEmail = user.googleProfile.email.toLowerCase();
-        setInteractions((current) => {
-          const bucket = getInteractionBucket(current, sourcePostId);
-          const nextSaves = isRemoving
-            ? bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail)
-            : [
-                ...bucket.saves.filter((save) => save.authorEmail.toLowerCase() !== authorEmail),
-                {
-                  authorEmail,
-                  authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
-                  placeId: place.id,
-                  createdAt: formatNow(),
-                },
-              ];
-          const nextInteractions = {
-            ...current,
-            [sourcePostId]: {
-              ...bucket,
-              saves: nextSaves,
-            },
-          };
-
-          if (USE_INTERACTIONS_TABLE) {
-            void callInteractionApi("/api/interactions/save", {
-              postId: sourcePostId,
-              saved: !isRemoving,
-              authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
-              placeId: place.id,
-            });
-          } else {
-            lastSharedStateMutationAtRef.current = Date.now();
-            syncSharedState({
-              nextPosts: posts,
-              nextInteractions,
-            });
-          }
-
-          return nextInteractions;
-        });
       })
       .catch((error) => {
         console.error("[favorites] update_favorites failed", error);
         setAccounts(previousAccounts);
         persistUser(previousUser);
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
+      })
+      .finally(() => {
+        pendingFavoriteCountRef.current -= 1;
       });
   };
 
@@ -9573,11 +9576,12 @@ export default function Page() {
     void haptic("light");
 
     if (USE_INTERACTIONS_TABLE) {
+      // 1. Read current state, decide what we're toggling to
       const bucket = getInteractionBucket(interactionsRef.current, postId);
       const alreadyLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === authorEmail);
       const nowLiked = !alreadyLiked;
 
-      lastInteractionMutationAtRef.current = Date.now();
+      // 2. Optimistic UI update
       setInteractions((current) => {
         const b = getInteractionBucket(current, postId);
         return {
@@ -9591,28 +9595,27 @@ export default function Page() {
         };
       });
 
+      // 3. Mark this post as pending — sync will not overwrite its bucket while we're mid-flight
+      pendingInteractionPostIdsRef.current.add(postId);
+
+      // 4. Fire the API. On failure, revert. On success, do nothing — local state is already correct.
       void (async () => {
         const ok = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
-        if (ok) return;
-
-        // First attempt failed — wait 1s and retry once
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
-        const retryOk = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
-        if (retryOk) return;
-
-        // Both failed — silently revert the optimistic update
-        setInteractions((current) => {
-          const b = getInteractionBucket(current, postId);
-          return {
-            ...current,
-            [postId]: {
-              ...b,
-              likes: nowLiked
-                ? b.likes.filter((l) => l.authorEmail.toLowerCase() !== authorEmail)
-                : [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
-            },
-          };
-        });
+        if (!ok) {
+          setInteractions((current) => {
+            const b = getInteractionBucket(current, postId);
+            return {
+              ...current,
+              [postId]: {
+                ...b,
+                likes: nowLiked
+                  ? b.likes.filter((l) => l.authorEmail.toLowerCase() !== authorEmail)
+                  : [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
+              },
+            };
+          });
+        }
+        pendingInteractionPostIdsRef.current.delete(postId);
       })();
       return;
     }
