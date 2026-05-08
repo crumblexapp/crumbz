@@ -4837,9 +4837,9 @@ export default function Page() {
     });
   };
 
-  const callInteractionApi = async (path: string, body: Record<string, unknown>) => {
+  const callInteractionApi = async (path: string, body: Record<string, unknown>): Promise<boolean> => {
     try {
-      if (!(await ensureAuthenticatedSession())) return;
+      if (!(await ensureAuthenticatedSession())) return false;
       const headers = await getAuthenticatedHeaders({ "Content-Type": "application/json" });
       const response = await fetch(path, {
         method: "POST",
@@ -4850,8 +4850,12 @@ export default function Page() {
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
         if (response.status === 401) dispatchAuthExpired(payload?.message);
+        return false;
       }
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -9431,11 +9435,29 @@ export default function Page() {
         };
       });
 
-      void callInteractionApi("/api/interactions/like", {
-        postId,
-        liked: nowLiked,
-        authorName: user.profile.fullName,
-      });
+      void (async () => {
+        const ok = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
+        if (ok) return;
+
+        // First attempt failed — wait 1s and retry once
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
+        const retryOk = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
+        if (retryOk) return;
+
+        // Both failed — silently revert the optimistic update
+        setInteractions((current) => {
+          const b = getInteractionBucket(current, postId);
+          return {
+            ...current,
+            [postId]: {
+              ...b,
+              likes: nowLiked
+                ? b.likes.filter((l) => l.authorEmail.toLowerCase() !== authorEmail)
+                : [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
+            },
+          };
+        });
+      })();
       return;
     }
 
