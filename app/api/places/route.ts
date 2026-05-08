@@ -98,7 +98,7 @@ function getPlacesCacheKey({
     cacheCoordinate(lat),
     cacheCoordinate(lon),
     Math.min(radius, 15000),
-    Math.min(limit, query ? 40 : 100),
+    Math.min(limit, query ? 40 : 160),
   ].join("|");
 }
 
@@ -269,31 +269,32 @@ async function fetchNearbyByType(lat: number, lon: number, radius: number, type:
   return results;
 }
 
-// Six parallel nearbysearch calls covering the main food categories.
-// Each type returns up to 40 results (20 per page × 2 pages), giving up to ~240
-// before dedup — roughly doubling map coverage compared to page-1-only fetching.
+const nearbyFoodTypes = [
+  "restaurant",
+  "cafe",
+  "bakery",
+  "bar",
+  "meal_takeaway",
+  "meal_delivery",
+  "food",
+  "ice_cream_shop",
+  "convenience_store",
+  "supermarket",
+] as const;
+
+// Parallel nearbysearch calls covering the main food categories and food shops.
+// Results are cached server-side, so this widens city coverage without repeating
+// the same Google work on every map visit.
 async function googlePlacesNearby(lat: number, lon: number, radius: number, limit: number) {
   if (!GOOGLE_PLACES_API_KEY) {
     throw new Error("Google Places API key not configured");
   }
 
-  const [restaurants, cafes, bakeries, bars, takeaway, desserts] = await Promise.allSettled([
-    fetchNearbyByType(lat, lon, radius, "restaurant"),
-    fetchNearbyByType(lat, lon, radius, "cafe"),
-    fetchNearbyByType(lat, lon, radius, "bakery"),
-    fetchNearbyByType(lat, lon, radius, "bar"),
-    fetchNearbyByType(lat, lon, radius, "meal_takeaway"),
-    fetchNearbyByType(lat, lon, radius, "ice_cream_shop"),
-  ]);
+  const results = await Promise.allSettled(
+    nearbyFoodTypes.map((type) => fetchNearbyByType(lat, lon, radius, type)),
+  );
 
-  const allPlaces = [
-    ...(restaurants.status === "fulfilled" ? restaurants.value : []),
-    ...(cafes.status === "fulfilled" ? cafes.value : []),
-    ...(bakeries.status === "fulfilled" ? bakeries.value : []),
-    ...(bars.status === "fulfilled" ? bars.value : []),
-    ...(takeaway.status === "fulfilled" ? takeaway.value : []),
-    ...(desserts.status === "fulfilled" ? desserts.value : []),
-  ];
+  const allPlaces = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
   return dedupePlaces(allPlaces).slice(0, limit);
 }
@@ -348,7 +349,7 @@ export async function GET(request: Request) {
         nextPlaces = await googlePlacesTextSearch(query, lat, lon, Math.min(limit, 40), city || undefined);
       } else {
         // Nearby mode (initial map load)
-        nextPlaces = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), limit);
+        nextPlaces = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), Math.min(limit, 160));
       }
 
       return city && query ? filterByCity(nextPlaces, city) : nextPlaces;

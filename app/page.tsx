@@ -5303,7 +5303,7 @@ export default function Page() {
     }
 
     // Load cached places immediately for home city
-    const cacheKey = `places-v4-${cityKey}`;
+    const cacheKey = `places-v5-${cityKey}`;
     const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     let cacheIsFresh = false;
@@ -5337,7 +5337,7 @@ export default function Page() {
           city: currentFavoriteCity,
           lat: String(activeCenter[0]),
           lon: String(activeCenter[1]),
-          limit: "100",
+          limit: "160",
         });
         const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
 
@@ -5346,7 +5346,7 @@ export default function Page() {
         }
 
         const payload = (await response.json()) as { places?: FavoritePlace[] };
-        const nextPlaces = (payload.places ?? []).slice(0, 100);
+        const nextPlaces = (payload.places ?? []).slice(0, 160);
 
         setFavoritePlaces((current) => nextPlaces.length ? nextPlaces : (favoriteMapMode === "home" && current.length ? current : getFallbackFavoritePlaces(cityKey)));
 
