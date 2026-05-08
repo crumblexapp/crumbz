@@ -2505,6 +2505,7 @@ export default function Page() {
   const hasBackfilledReferralCodeRef = useRef(false);
   const hasAdminBackfilledReferralCodesRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
+  const lastInteractionMutationAtRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
   const seenNotifSyncTimerRef = useRef<number | null>(null);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
@@ -4340,29 +4341,11 @@ export default function Page() {
                   {isStudentPost ? authorUsername : ADMIN_PUBLIC_HANDLE}
                 </p>
               )}
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                {!isSundayDump ? (
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-                    {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
-                  </p>
-                ) : (
-                  <span />
-                )}
-                <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                  {feedReasonLabel ? <Chip className="bg-[#2C1A0E] text-white">{feedReasonLabel}</Chip> : null}
-                  {isStudentPost && ctaLabel ? (
-                    <button
-                      type="button"
-                      onClick={() => openProfileByEmail(post.authorEmail)}
-                      className="flex shrink-0 justify-end"
-                    >
-                      <Chip className="bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-                    </button>
-                  ) : ctaLabel ? (
-                    <Chip className="shrink-0 bg-[#FFF0D0] text-[#F5A623]">{ctaLabel}</Chip>
-                  ) : null}
-                </div>
-              </div>
+              {!isSundayDump ? (
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+                  {isStudentPost ? formatRelativePostTime(post.createdAtIso, post.createdAt) : `${post.type} • ${post.createdAt}`}
+                </p>
+              ) : null}
             </div>
           </CardHeader>
           <CardBody className="gap-4 p-5">
@@ -4434,6 +4417,65 @@ export default function Page() {
               </div>
             ) : null}
 
+            <div className="flex items-center gap-3">
+              <PostActionIcon label="like post" active={hasLiked} onPress={() => toggleLike(post.id)}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 20s-6.5-4.35-8.5-7.8C1.7 9 3.2 5.5 7 5.5c2 0 3.3 1.15 4 2.2.7-1.05 2-2.2 4-2.2 3.8 0 5.3 3.5 3.5 6.7C18.5 15.65 12 20 12 20Z"
+                    fill={hasLiked ? "currentColor" : "none"}
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </PostActionIcon>
+              <PostActionIcon
+                label="comment on post"
+                onPress={() => {
+                  setOpenCommentPostId((current) => (current === post.id ? null : post.id));
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M6 18.5L3.5 20V6.8C3.5 5.8 4.3 5 5.3 5h13.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H6Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </PostActionIcon>
+              <PostActionIcon
+                label="share post"
+                onPress={() => {
+                  void (canUseSpecialImageShare ? shareAdminPostCard(post) : sharePost(post.id));
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M20 4 11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <path
+                    d="m20 4-6 16-3.4-6.6L4 10l16-6Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </PostActionIcon>
+            </div>
+
+            {postShareNotice?.postId === post.id ? <p className="text-sm text-[#6c7289]">{postShareNotice.message}</p> : null}
+
+            <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
+              <button
+                type="button"
+                onClick={() => setLikesViewerPostId(post.id)}
+                className="rounded-full bg-[#FFF6E0] px-3 py-2 transition hover:bg-[#FFE8B8]"
+              >
+                {copy.post.likes(bucket.likes.length)}
+              </button>
+              <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.comments(visibleComments.length)}</span>
+              <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.shares(bucket.shares.length)}</span>
+            </div>
+
             {isFriendFeedCard && showPostBody ? renderCaptionWithTags(localizedPost.body, "text-base leading-7 text-[#2C1A0E]") : null}
 
             {canTranslatePost ? (
@@ -4500,97 +4542,36 @@ export default function Page() {
                 {post.priceTag ? <Chip className="bg-white text-[#2C1A0E] ring-1 ring-[#FFF0D0]">{PRICE_TAG_OPTIONS.find((item) => item.key === post.priceTag)?.label ?? post.priceTag}</Chip> : null}
               </div>
             ) : null}
+
+            <div className="space-y-3">
+              {visibleComments.map((comment) => renderCommentThread(post.id, comment))}
+
+              {openCommentPostId === post.id ? (
+                <form className="space-y-2" onSubmit={(event) => addComment(event, post.id)}>
+                  <div className="flex gap-2">
+                    <Input
+                      aria-label={`comment on ${post.title}`}
+                      radius="full"
+                      placeholder="comment on this post"
+                      value={commentDrafts[post.id] ?? ""}
+                      onValueChange={(value) =>
+                        setCommentDrafts((current) => ({
+                          ...current,
+                          [post.id]: value,
+                        }))
+                      }
+                      classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
+                    />
+                    <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
+                      send
+                    </Button>
+                  </div>
+                  <p className="text-xs text-[#6c7289]">type @username if you want to mention someone.</p>
+                </form>
+              ) : null}
+            </div>
           </CardBody>
         </div>
-
-        <CardBody className="gap-4 px-5 pb-5 pt-0">
-          <div className="flex items-center gap-3">
-            <PostActionIcon label="like post" active={hasLiked} onPress={() => toggleLike(post.id)}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 20s-6.5-4.35-8.5-7.8C1.7 9 3.2 5.5 7 5.5c2 0 3.3 1.15 4 2.2.7-1.05 2-2.2 4-2.2 3.8 0 5.3 3.5 3.5 6.7C18.5 15.65 12 20 12 20Z"
-                  fill={hasLiked ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </PostActionIcon>
-            <PostActionIcon
-              label="comment on post"
-              onPress={() => {
-                setOpenCommentPostId((current) => (current === post.id ? null : post.id));
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M6 18.5L3.5 20V6.8C3.5 5.8 4.3 5 5.3 5h13.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H6Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </PostActionIcon>
-            <PostActionIcon
-              label="share post"
-              onPress={() => {
-                void (canUseSpecialImageShare ? shareAdminPostCard(post) : sharePost(post.id));
-              }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M20 4 11 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <path
-                  d="m20 4-6 16-3.4-6.6L4 10l16-6Z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </PostActionIcon>
-          </div>
-
-          {postShareNotice?.postId === post.id ? <p className="text-sm text-[#6c7289]">{postShareNotice.message}</p> : null}
-
-          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">
-            <button
-              type="button"
-              onClick={() => setLikesViewerPostId(post.id)}
-              className="rounded-full bg-[#FFF6E0] px-3 py-2 transition hover:bg-[#FFE8B8]"
-            >
-              {copy.post.likes(bucket.likes.length)}
-            </button>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.comments(visibleComments.length)}</span>
-            <span className="rounded-full bg-[#FFF6E0] px-3 py-2">{copy.post.shares(bucket.shares.length)}</span>
-          </div>
-
-          <div className="space-y-3">
-            {visibleComments.map((comment) => renderCommentThread(post.id, comment))}
-
-            {openCommentPostId === post.id ? (
-              <form className="space-y-2" onSubmit={(event) => addComment(event, post.id)}>
-                <div className="flex gap-2">
-                  <Input
-                    aria-label={`comment on ${post.title}`}
-                    radius="full"
-                    placeholder="comment on this post"
-                    value={commentDrafts[post.id] ?? ""}
-                    onValueChange={(value) =>
-                      setCommentDrafts((current) => ({
-                        ...current,
-                        [post.id]: value,
-                      }))
-                    }
-                    classNames={{ inputWrapper: "bg-[#FFF0D0] border border-[#FFF0D0]" }}
-                  />
-                  <Button type="submit" radius="full" className="bg-[#F5A623] text-white">
-                    send
-                  </Button>
-                </div>
-                <p className="text-xs text-[#6c7289]">type @username if you want to mention someone.</p>
-              </form>
-            ) : null}
-          </div>
-        </CardBody>
       </Card>
     );
   };
@@ -5677,8 +5658,14 @@ export default function Page() {
           const serverPosts = preserveLocalMedia(current, baseServerPosts);
           return shouldPreserveLocalPosts ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
         });
+        const shouldPreserveLocalInteractions = now - lastInteractionMutationAtRef.current < 10000;
         setInteractions(USE_INTERACTIONS_TABLE
-          ? () => serverInteractions
+          ? (current) => {
+              if (shouldPreserveLocalInteractions) {
+                return mergeInteractionsPreferLocal(pruneInteractionsToKnownPosts(mergedPosts, current), serverInteractions);
+              }
+              return serverInteractions;
+            }
           : (current) => {
               const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
               return shouldPreserveLocalPosts
@@ -5698,12 +5685,15 @@ export default function Page() {
     };
 
     syncFromServer();
-    const interval = window.setInterval(syncFromServer, 5000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncFromServer();
+    };
     window.addEventListener("crumbz-refresh", syncFromServer);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener("crumbz-refresh", syncFromServer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [announcements, user.signedIn]);
 
@@ -9399,6 +9389,7 @@ export default function Page() {
       const alreadyLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === authorEmail);
       const nowLiked = !alreadyLiked;
 
+      lastInteractionMutationAtRef.current = Date.now();
       setInteractions((current) => {
         const b = getInteractionBucket(current, postId);
         return {
