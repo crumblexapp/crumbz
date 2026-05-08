@@ -97,7 +97,7 @@ export default function BottomNav({ studentTab, onTabChange, tabLabels }: Bottom
 
   return (
     <nav
-      className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] -translate-x-1/2 rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-3 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur transition-transform duration-300 ease-in-out"
+      className="fixed left-1/2 z-[1200] w-[calc(100%-1rem)] max-w-[24.5rem] rounded-[32px] border border-[#FFF0D0] bg-[#2C1A0E] px-4 py-3 shadow-[0_18px_50px_rgba(44,26,14,0.24)] backdrop-blur transition-transform duration-300 ease-in-out"
       style={{
         bottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))",
         transform: `translateX(-50%) translateY(${visible ? "0" : "calc(100% + 1.5rem)"})`,

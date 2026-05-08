@@ -2434,6 +2434,8 @@ export default function Page() {
   const [dailyPostMediaTypes, setDailyPostMediaTypes] = useState<string[]>([]);
   const [carouselStaging, setCarouselStaging] = useState<CarouselStagingSlide[] | null>(null);
   const [carouselStagingActiveIdx, setCarouselStagingActiveIdx] = useState(0);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createModalStep, setCreateModalStep] = useState<1 | 2>(1);
   const [weeklyDumpNotice, setWeeklyDumpNotice] = useState("");
   const [weeklyDumpCaption, setWeeklyDumpCaption] = useState("");
   const [weeklyDumpMediaUrls, setWeeklyDumpMediaUrls] = useState<string[]>([]);
@@ -2486,6 +2488,7 @@ export default function Page() {
   const profileCameraInputRef = useRef<HTMLInputElement>(null);
   const dailyPostCaptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dailyPostInputRef = useRef<HTMLInputElement>(null);
+  const createModalCameraInputRef = useRef<HTMLInputElement>(null);
   const carouselStagingAddRef = useRef<HTMLInputElement>(null);
   const carouselDragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number } | null>(null);
   const creatorStoryLibraryInputRef = useRef<HTMLInputElement>(null);
@@ -7262,10 +7265,8 @@ export default function Page() {
     setDailyPostComposerMediaKind("photo");
     setDailyPostVideoRatio("4:5");
     setDailyPostNotice(`posting from ${place.name}. add your photo and tell friends what you thought.`);
-    setStudentTab("profile");
-    window.setTimeout(() => {
-      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
+    setIsCreateModalOpen(true);
+    setCreateModalStep(1);
   };
 
   const openCreatorStoryComposer = () => {
@@ -7287,13 +7288,14 @@ export default function Page() {
     setDailyPostVideoRatio("9:16");
     setCreatorStoryComposerOpen(false);
 
+    setIsCreateModalOpen(true);
+    setCreateModalStep(1);
     window.setTimeout(() => {
-      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
       if (source === "camera") {
-        creatorStoryCameraInputRef.current?.click();
+        createModalCameraInputRef.current?.click();
         return;
       }
-      creatorStoryLibraryInputRef.current?.click();
+      dailyPostInputRef.current?.click();
     }, 120);
   };
 
@@ -8032,25 +8034,24 @@ export default function Page() {
     if (!files?.length) return;
 
     const fileList = Array.from(files);
-    const creatorFormat = isInfluencer ? (dailyPostFormat === "story" ? "story" : inferCreatorFormatFromFiles(fileList)) : "post";
-    let nextMediaKind: MediaKind = isInfluencer
-      ? creatorFormat === "carousel"
-        ? "carousel"
-        : creatorFormat === "reel"
-          ? "video"
-          : creatorFormat === "story"
-            ? dailyPostComposerMediaKind
-            : "photo"
-      : "photo";
-    let nextVideoRatio: VideoRatio = isInfluencer ? (creatorFormat === "story" ? dailyPostVideoRatio : creatorFormat === "reel" ? "9:16" : "4:5") : "4:5";
-
     if (!isInfluencer && fileList.length > 1) {
       setDailyPostNotice("pick one photo for your post.");
       setDailyPostInputKey((current) => current + 1);
       return;
     }
 
-    // Carousel: enter staging mode — no upload yet
+    const creatorFormat = dailyPostFormat === "story" ? "story" : inferCreatorFormatFromFiles(fileList);
+    let nextMediaKind: MediaKind =
+      creatorFormat === "carousel"
+        ? "carousel"
+        : creatorFormat === "reel"
+          ? "video"
+          : creatorFormat === "story"
+            ? dailyPostComposerMediaKind
+            : "photo";
+    let nextVideoRatio: VideoRatio = creatorFormat === "story" ? dailyPostVideoRatio : creatorFormat === "reel" ? "9:16" : "4:5";
+
+    // Carousel: enter staging mode (influencers only) — no upload yet
     if (isInfluencer && creatorFormat === "carousel") {
       const incoming = fileList.slice(0, 10).map((file) => ({
         file,
@@ -8166,28 +8167,30 @@ export default function Page() {
       }
     };
 
+    setDailyPostFormat(isInfluencer ? creatorFormat : "post");
     if (isInfluencer) {
-      setDailyPostFormat(creatorFormat);
       const validationResult = await validateCreatorFiles();
       if ("notice" in validationResult) {
         setDailyPostNotice(validationResult.notice);
         setDailyPostInputKey((current) => current + 1);
         return;
       }
-
       nextMediaKind = validationResult.mediaKind;
       nextVideoRatio = validationResult.videoRatio;
-      setDailyPostComposerMediaKind(nextMediaKind);
-      setDailyPostVideoRatio(nextVideoRatio);
+    } else {
+      nextMediaKind = "photo";
+      nextVideoRatio = "4:5";
     }
+    setDailyPostComposerMediaKind(nextMediaKind);
+    setDailyPostVideoRatio(nextVideoRatio);
 
     setIsUploadingDailyPost(true);
-    setDailyPostNotice(isInfluencer ? copy.creator.uploading(creatorFormat) : "uploading your post...");
+    setDailyPostNotice("uploading...");
 
     try {
       const uploadResults = await uploadMediaFiles(files, {
         mediaKind: nextMediaKind,
-        maxFiles: isInfluencer ? 1 : 1,
+        maxFiles: 1,
         setNotice: setDailyPostNotice,
         skipSizeLimit: isInfluencer,
       });
@@ -8195,7 +8198,7 @@ export default function Page() {
       if (!uploadResults?.length) return;
 
       setDailyPostMediaUrls([uploadResults[0]]);
-      setDailyPostNotice(isInfluencer ? copy.creator.mediaReady(creatorFormat) : "your photo is ready.");
+      setDailyPostNotice(isInfluencer ? copy.creator.mediaReady(creatorFormat) : "ready to post!");
       setDailyPostInputKey((current) => current + 1);
     } finally {
       setIsUploadingDailyPost(false);
@@ -8376,11 +8379,9 @@ export default function Page() {
     setDailyPostTasteTag(post.tasteTag);
     setDailyPostPriceTag(post.priceTag);
     setDailyPostNotice("editing this post. save when it looks right.");
-    setStudentTab("profile");
     closeOwnPost();
-    window.setTimeout(() => {
-      document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
+    setIsCreateModalOpen(true);
+    setCreateModalStep(2);
   };
 
   const submitDailyPost = (event: FormEvent<HTMLFormElement>) => {
@@ -8420,7 +8421,7 @@ export default function Page() {
       createdAt: existingPost?.createdAt ?? formatNow(),
       createdAtIso: existingPost?.createdAtIso ?? createdAtIso,
       mediaKind: isInfluencer ? dailyPostComposerMediaKind : "photo",
-      mediaUrls: isInfluencer && dailyPostFormat === "carousel" ? dailyPostMediaUrls : [dailyPostMediaUrls[0]],
+      mediaUrls: isInfluencer && dailyPostComposerMediaKind === "carousel" ? dailyPostMediaUrls : [dailyPostMediaUrls[0]],
       videoRatio: isInfluencer ? dailyPostVideoRatio : "4:5",
       authorRole: "student",
       authorName: user.profile.fullName,
@@ -8436,8 +8437,8 @@ export default function Page() {
       taggedPlaceCity: dailyPostTaggedPlace ? dailyPostCity : "",
       tasteTag: dailyPostTasteTag,
       priceTag: dailyPostPriceTag,
-      cropOffsets: isInfluencer && dailyPostFormat === "carousel" && dailyPostCropOffsets.length ? dailyPostCropOffsets : undefined,
-      mediaTypes: isInfluencer && dailyPostFormat === "carousel" && dailyPostMediaTypes.length ? dailyPostMediaTypes : undefined,
+      cropOffsets: isInfluencer && dailyPostComposerMediaKind === "carousel" && dailyPostCropOffsets.length ? dailyPostCropOffsets : undefined,
+      mediaTypes: isInfluencer && dailyPostComposerMediaKind === "carousel" && dailyPostMediaTypes.length ? dailyPostMediaTypes : undefined,
     };
 
     lastSharedStateMutationAtRef.current = Date.now();
@@ -8466,6 +8467,8 @@ export default function Page() {
     setDailyPostCropOffsets([]);
     setDailyPostMediaTypes([]);
     setDailyPostInputKey((current) => current + 1);
+    setIsCreateModalOpen(false);
+    setCreateModalStep(1);
   };
 
   const weeklyDumpTileCount = Math.max(4, activeWeeklyDumpMediaUrls.length + (activeWeeklyDumpMediaUrls.length < 7 ? 1 : 0));
@@ -12071,10 +12074,8 @@ export default function Page() {
               type="button"
               aria-label="make a post"
               onClick={() => {
-                setStudentTab("profile");
-                window.setTimeout(() => {
-                  document.getElementById("daily-post-composer")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }, 120);
+                setIsCreateModalOpen(true);
+                setCreateModalStep(1);
               }}
               className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2C1A0E] text-white shadow-[0_8px_20px_rgba(44,26,14,0.18)]"
             >
@@ -12962,432 +12963,6 @@ export default function Page() {
               </Card>
             ) : null}
 
-            <Card id="daily-post-composer" className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
-              <CardBody className="gap-4 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.profile.postLabel}</p>
-                    <h2 className="font-[family-name:var(--font-young-serif)] text-[2rem] text-[#2C1A0E]">
-                      {copy.profile.postTitle}
-                    </h2>
-                    <p className="text-sm text-[#6c7289]">{copy.profile.postBody}</p>
-                  </div>
-                </div>
-
-                <form className="space-y-4" onSubmit={submitDailyPost}>
-                  {editingDailyPostId ? (
-                    <div className="flex items-center justify-between rounded-[20px] bg-[#FFF0D0] px-4 py-3 text-sm">
-                      <span className="text-[#2C1A0E]">{copy.creator.editingPost}</span>
-                      <Button type="button" radius="full" variant="light" className="text-[#2C1A0E]" onPress={cancelEditingDailyPost}>
-                        {copy.common.cancel}
-                      </Button>
-                    </div>
-                  ) : null}
-                  <div className="space-y-3">
-                    {isInfluencer && carouselStaging ? (
-                      /* ── Carousel staging preview ── */
-                      <div className="space-y-3">
-                        <div
-                          className="relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded-[24px] bg-[#1a1008] select-none active:cursor-grabbing"
-                          onPointerDown={(e) => {
-                            const activeSlide = carouselStaging[carouselStagingActiveIdx];
-                            if (!activeSlide) return;
-                            (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-                            carouselDragRef.current = {
-                              startX: e.clientX,
-                              startY: e.clientY,
-                              startOffsetX: activeSlide.cropOffset.x,
-                              startOffsetY: activeSlide.cropOffset.y,
-                            };
-                          }}
-                          onPointerMove={(e) => {
-                            if (!carouselDragRef.current) return;
-                            const { startX, startY, startOffsetX, startOffsetY } = carouselDragRef.current;
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const dx = e.clientX - startX;
-                            const dy = e.clientY - startY;
-                            const newX = Math.min(100, Math.max(0, startOffsetX - (dx / rect.width) * 100 * 1.5));
-                            const newY = Math.min(100, Math.max(0, startOffsetY - (dy / rect.height) * 100 * 1.5));
-                            setCarouselStaging((prev) =>
-                              prev?.map((s, i) =>
-                                i === carouselStagingActiveIdx ? { ...s, cropOffset: { x: newX, y: newY } } : s,
-                              ) ?? null,
-                            );
-                          }}
-                          onPointerUp={() => { carouselDragRef.current = null; }}
-                          onPointerCancel={() => { carouselDragRef.current = null; }}
-                        >
-                          {carouselStaging[carouselStagingActiveIdx]?.isVideo ? (
-                            <video
-                              key={carouselStaging[carouselStagingActiveIdx].previewUrl}
-                              src={carouselStaging[carouselStagingActiveIdx].previewUrl}
-                              className="h-full w-full object-cover pointer-events-none"
-                              style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx].cropOffset.x}% ${carouselStaging[carouselStagingActiveIdx].cropOffset.y}%` }}
-                              muted
-                              playsInline
-                              autoPlay
-                              loop
-                            />
-                          ) : (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={carouselStaging[carouselStagingActiveIdx]?.previewUrl}
-                              alt={`slide ${carouselStagingActiveIdx + 1}`}
-                              className="h-full w-full object-cover pointer-events-none"
-                              style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx]?.cropOffset.x ?? 50}% ${carouselStaging[carouselStagingActiveIdx]?.cropOffset.y ?? 50}%` }}
-                            />
-                          )}
-                          {/* slide counter */}
-                          <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                            {carouselStagingActiveIdx + 1} / {carouselStaging.length}
-                          </div>
-                          {/* drag hint */}
-                          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[#2C1A0E]/70 px-3 py-1 text-xs text-white">
-                            {copy.creator.carouselDragHint}
-                          </div>
-                          {/* remove slide */}
-                          <button
-                            type="button"
-                            aria-label={copy.creator.carouselRemoveSlide}
-                            onClick={() => {
-                              const next = carouselStaging.filter((_, i) => i !== carouselStagingActiveIdx);
-                              URL.revokeObjectURL(carouselStaging[carouselStagingActiveIdx].previewUrl);
-                              if (!next.length) {
-                                setCarouselStaging(null);
-                                setDailyPostFormat("post");
-                                setDailyPostComposerMediaKind("photo");
-                              } else {
-                                setCarouselStaging(next);
-                                setCarouselStagingActiveIdx(Math.min(carouselStagingActiveIdx, next.length - 1));
-                              }
-                            }}
-                            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#2C1A0E]/80 text-xl leading-none text-white"
-                          >
-                            ×
-                          </button>
-                          {/* prev/next arrows */}
-                          {carouselStaging.length > 1 ? (
-                            <>
-                              <button
-                                type="button"
-                                aria-label="previous slide"
-                                onClick={() => setCarouselStagingActiveIdx((i) => (i <= 0 ? carouselStaging.length - 1 : i - 1))}
-                                className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E]"
-                              >
-                                ‹
-                              </button>
-                              <button
-                                type="button"
-                                aria-label="next slide"
-                                onClick={() => setCarouselStagingActiveIdx((i) => (i + 1) % carouselStaging.length)}
-                                className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-2xl text-[#2C1A0E]"
-                              >
-                                ›
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                        {/* dot indicators */}
-                        <div className="flex items-center justify-center gap-2">
-                          {carouselStaging.map((_, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              aria-label={`slide ${i + 1}`}
-                              onClick={() => setCarouselStagingActiveIdx(i)}
-                              className={`h-2.5 rounded-full transition-all ${i === carouselStagingActiveIdx ? "w-6 bg-[#F5A623]" : "w-2.5 bg-[#D8DFEB]"}`}
-                            />
-                          ))}
-                        </div>
-                        {/* add more + upload row */}
-                        <div className="flex items-center gap-2">
-                          {carouselStaging.length < 10 ? (
-                            <button
-                              type="button"
-                              onClick={() => carouselStagingAddRef.current?.click()}
-                              className="flex-1 rounded-full border border-[#ffc6b5] bg-[#fff8f5] py-3 text-sm font-medium text-[#ff6a24]"
-                            >
-                              + {copy.creator.carouselAddMore}
-                            </button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            radius="full"
-                            isDisabled={isUploadingDailyPost}
-                            onPress={() => void confirmCarouselStaging()}
-                            className="flex-1 bg-[#ff6a24] py-3 text-sm font-semibold uppercase tracking-[0.14em] text-white disabled:opacity-60"
-                          >
-                            {isUploadingDailyPost ? "uploading..." : copy.creator.carouselUploadSlides}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── Normal upload button ── */
-                      <>
-                        <button
-                          type="button"
-                          aria-label={isInfluencer ? copy.creator.uploadPrompt[dailyPostFormat] : copy.profile.addPostPhoto}
-                          disabled={isUploadingDailyPost}
-                          onClick={() => dailyPostInputRef.current?.click()}
-                          className="relative flex min-h-56 w-full items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-[#ff6a24] transition-transform hover:scale-[1.01] disabled:opacity-50"
-                        >
-                          {dailyPostMediaUrls.length ? (
-                            <>
-                              {dailyPostComposerMediaKind === "video" ? (
-                                <video
-                                  src={dailyPostMediaUrls[0]}
-                                  className="h-full w-full object-cover"
-                                  muted
-                                  playsInline
-                                />
-                              ) : (
-                                <>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={dailyPostMediaUrls[0]}
-                                    alt="post preview"
-                                    className="h-full w-full object-cover"
-                                    style={dailyPostCropOffsets[0] ? { objectPosition: `${dailyPostCropOffsets[0].x}% ${dailyPostCropOffsets[0].y}%` } : undefined}
-                                    loading="lazy"
-                                  />
-                                  {dailyPostComposerMediaKind === "carousel" ? (
-                                    <div className="absolute left-3 top-3 rounded-full bg-[#2C1A0E]/82 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white">
-                                      {copy.creator.carouselSlideCount(dailyPostMediaUrls.length)}
-                                    </div>
-                                  ) : null}
-                                </>
-                              )}
-                              <button
-                                type="button"
-                                aria-label="remove selected media"
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  clearDailyPostPhoto();
-                                }}
-                                className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#2C1A0E]/82 text-2xl leading-none text-white shadow-[0_10px_24px_rgba(44,26,14,0.24)] transition-transform hover:scale-105"
-                              >
-                                ×
-                              </button>
-                            </>
-                          ) : (
-                            <div className="px-6 text-center">
-                              <div className="text-5xl leading-none">+</div>
-                              <p className="mt-3 text-sm font-medium">
-                                {isInfluencer ? copy.creator.uploadPrompt[dailyPostFormat] : copy.profile.addPostPhoto}
-                              </p>
-                              {isInfluencer && dailyPostFormat === "story" ? (
-                                <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#b87037]">{copy.creator.formatRules[dailyPostFormat]}</p>
-                              ) : null}
-                            </div>
-                          )}
-                        </button>
-                        {isInfluencer && dailyPostMediaUrls.length ? (
-                          <div className="rounded-[18px] bg-[#fffaf2] px-4 py-3 text-sm text-[#6c7289]">
-                            {dailyPostFormat === "carousel"
-                              ? copy.creator.carouselSwapHint
-                              : copy.creator.replaceHint(dailyPostFormat)}
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Textarea
-                      ref={dailyPostCaptionRef}
-                      placeholder={
-                        isInfluencer && dailyPostFormat === "story"
-                          ? copy.creator.storyCaption
-                          : copy.profile.captionPlaceholder
-                      }
-                      value={dailyPostCaption}
-                      onValueChange={(value) => {
-                        setDailyPostCaption(value);
-                        const cursorPosition = dailyPostCaptionRef.current?.selectionStart ?? value.length;
-                        updateDailyPostMentionState(value, cursorPosition);
-                      }}
-                      onChange={(event) => {
-                        updateDailyPostMentionState(event.target.value, event.target.selectionStart ?? event.target.value.length);
-                      }}
-                      onKeyUp={(event) => {
-                        const target = event.currentTarget;
-                        updateDailyPostMentionState(target.value, target.selectionStart ?? target.value.length);
-                      }}
-                      onClick={(event) => {
-                        const target = event.currentTarget;
-                        updateDailyPostMentionState(target.value, target.selectionStart ?? target.value.length);
-                      }}
-                      onBlur={() => {
-                        window.setTimeout(() => {
-                          setDailyPostMentionQuery("");
-                          setDailyPostMentionRange(null);
-                        }, 120);
-                      }}
-                      classNames={{ inputWrapper: "rounded-[18px] bg-[#f8f4ec] shadow-none border border-[#f8f4ec]", input: "text-[#8d99ad]" }}
-                    />
-                    {dailyPostMentionRange ? (
-                      <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-[20px] border border-[#f3e1cf] bg-white shadow-[0_18px_40px_rgba(44,26,14,0.08)]">
-                        {dailyPostMentionSuggestions.length ? (
-                          dailyPostMentionSuggestions.map((friend) => (
-                            <button
-                              key={friend.email || friend.username}
-                              type="button"
-                              onMouseDown={(event) => {
-                                event.preventDefault();
-                              }}
-                              onClick={() => applyDailyPostMention(friend.username)}
-                              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[#FFF7E8]"
-                            >
-                              <Avatar src={friend.picture} name={friend.fullName} className="h-10 w-10 bg-[#FFF0D0] text-[#F5A623]" />
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-[#2C1A0E]">{friend.fullName}</p>
-                                <p className="truncate text-sm text-[#6c7289]">@{friend.username}</p>
-                              </div>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-4 py-3 text-sm text-[#6c7289]">{copy.common.noFriendsMatch}</div>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.profile.tagShop} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{copy.profile.tagShopBody}</p>
-                    </div>
-                    <Input
-                      value={dailyPostPlaceQuery}
-                      onValueChange={(value) => {
-                        setDailyPostPlaceQuery(value);
-                        if (dailyPostNotice) setDailyPostNotice("");
-                      }}
-                      placeholder={copy.profile.searchIn(dailyPostCity)}
-                      startContent={<span className="text-[#B56D19]">⌕</span>}
-                      classNames={{ inputWrapper: "rounded-[18px] bg-white shadow-none border border-[#f3e1cf]" }}
-                    />
-                    {dailyPostTaggedPlace ? (
-                      <div className="flex items-start justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
-                        <div className="min-w-0">
-                          <p className="text-xs uppercase tracking-[0.16em] text-[#B56D19]">{dailyPostTaggedPlace.kind}</p>
-                          <p className="mt-1 text-base font-semibold text-[#2C1A0E]">{dailyPostTaggedPlace.name}</p>
-                          <p className="mt-1 text-sm text-[#6c7289]">{dailyPostTaggedPlace.address}</p>
-                        </div>
-                        <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={() => setDailyPostTaggedPlace(null)}>
-                          {copy.common.change}
-                        </Button>
-                      </div>
-                    ) : null}
-                    {dailyPostPlaceSearchLoading ? <p className="text-sm text-[#6c7289]">{copy.common.searchingSpots}</p> : null}
-                    {dailyPostPlaceResults.length ? (
-                      <div className="grid gap-2">
-                        {dailyPostPlaceResults.map((place) => (
-                          <button
-                            key={place.id}
-                            type="button"
-                            onClick={() => {
-                              setDailyPostTaggedPlace(place);
-                              setDailyPostPlaceQuery("");
-                              setDailyPostPlaceResults([]);
-                              if (dailyPostNotice) setDailyPostNotice("");
-                            }}
-                            className="rounded-[18px] bg-white px-4 py-3 text-left"
-                          >
-                            <p className="text-sm font-semibold text-[#2C1A0E]">{place.name}</p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[#B56D19]">{place.kind}</p>
-                            <p className="mt-1 text-sm text-[#6c7289]">{place.address}</p>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.profile.howWasIt} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{copy.creator.howWasItBody}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {TASTE_TAG_OPTIONS.map((option) => (
-                        <Button
-                          key={option.key}
-                          type="button"
-                          radius="full"
-                          variant={dailyPostTasteTag === option.key ? "solid" : "flat"}
-                          className={dailyPostTasteTag === option.key ? "bg-[#2C1A0E] text-white" : "bg-white text-[#2C1A0E]"}
-                          onPress={() => setDailyPostTasteTag((current) => (current === option.key ? "" : option.key))}
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-3 rounded-[24px] border border-[#f3e1cf] bg-[#fffaf2] p-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">{copy.creator.priceVibe} <span className="normal-case tracking-normal text-[#6c7289]">{copy.profile.optional}</span></p>
-                      <p className="mt-1 text-sm text-[#6c7289]">{copy.creator.priceVibeBody}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {PRICE_TAG_OPTIONS.map((option) => (
-                        <Button
-                          key={option.key}
-                          type="button"
-                          radius="full"
-                          variant={dailyPostPriceTag === option.key ? "solid" : "flat"}
-                          className={dailyPostPriceTag === option.key ? "bg-[#F5A623] text-white" : "bg-white text-[#2C1A0E]"}
-                          onPress={() => setDailyPostPriceTag((current) => (current === option.key ? "" : option.key))}
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <input
-                    ref={dailyPostInputRef}
-                    key={dailyPostInputKey}
-                    type="file"
-                    accept={
-                      isInfluencer
-                        ? ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
-                        : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"
-                    }
-                    multiple={isInfluencer && dailyPostFormat !== "story"}
-                    disabled={isUploadingDailyPost}
-                    onChange={(event) => {
-                      void handleDailyPostFiles(event.target.files);
-                    }}
-                    className="hidden"
-                  />
-                  <input
-                    ref={carouselStagingAddRef}
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
-                    multiple
-                    onChange={(event) => {
-                      handleCarouselStagingAddMore(event.target.files);
-                      event.target.value = "";
-                    }}
-                    className="hidden"
-                  />
-                  {!carouselStaging ? (
-                    <div className="flex items-center gap-3">
-                      {dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : <div className="flex-1" />}
-                      <Button
-                        type="submit"
-                        radius="full"
-                        size="lg"
-                        isDisabled={isUploadingDailyPost}
-                        className={`h-14 ${isInfluencer ? "min-w-[7.5rem]" : "min-w-14"} bg-[#ff6a24] px-5 ${isInfluencer ? "text-sm font-semibold uppercase tracking-[0.14em]" : "text-2xl"} text-white disabled:opacity-60`}
-                      >
-                        {editingDailyPostId ? copy.common.save : isInfluencer ? copy.creator.postButton(dailyPostFormat) : "→"}
-                      </Button>
-                    </div>
-                  ) : (
-                    dailyPostNotice ? <p className="text-sm text-[#ff6a24]">{dailyPostNotice}</p> : null
-                  )}
-                </form>
-              </CardBody>
-            </Card>
-
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">your posts</p>
@@ -13401,6 +12976,381 @@ export default function Page() {
             </div>
 
           </section>
+        ) : null}
+
+        {isCreateModalOpen ? (
+          <div
+            className="fixed inset-0 z-[3000] flex flex-col bg-[#111] text-white"
+            style={{ paddingTop: isNativePlatform ? "env(safe-area-inset-top, 0px)" : "0px", paddingBottom: isNativePlatform ? "env(safe-area-inset-bottom, 0px)" : "0px" }}
+          >
+            {/* Hidden file inputs — must be in DOM for refs to work */}
+            <input
+              ref={dailyPostInputRef}
+              key={dailyPostInputKey}
+              type="file"
+              accept={isInfluencer ? ".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime" : ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic,image/heif"}
+              multiple={isInfluencer}
+              disabled={isUploadingDailyPost}
+              onChange={(event) => { void handleDailyPostFiles(event.target.files); }}
+              className="hidden"
+            />
+            <input
+              ref={createModalCameraInputRef}
+              type="file"
+              accept={isInfluencer ? "image/*,video/*" : "image/*"}
+              capture="environment"
+              disabled={isUploadingDailyPost}
+              onChange={(event) => { void handleDailyPostFiles(event.target.files); }}
+              className="hidden"
+            />
+            <input
+              ref={carouselStagingAddRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.heic,.mp4,.mov,image/jpeg,image/png,image/heic,image/heif,video/mp4,video/quicktime"
+              multiple
+              onChange={(event) => { handleCarouselStagingAddMore(event.target.files); event.target.value = ""; }}
+              className="hidden"
+            />
+
+            {createModalStep === 1 ? (
+              <>
+                {/* Step 1 top bar */}
+                <div className="flex shrink-0 items-center justify-between px-5 py-4">
+                  <button
+                    type="button"
+                    aria-label="close"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setCreateModalStep(1);
+                      clearDailyPostPhoto();
+                      setDailyPostCaption("");
+                      setDailyPostTaggedPlace(null);
+                      setDailyPostPlaceQuery("");
+                      setDailyPostPlaceResults([]);
+                      setDailyPostTasteTag("");
+                      setDailyPostPriceTag("");
+                      setDailyPostNotice("");
+                    }}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xl leading-none"
+                  >
+                    ×
+                  </button>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em]">new post</p>
+                  <button
+                    type="button"
+                    disabled={!dailyPostMediaUrls.length && !carouselStaging}
+                    onClick={() => setCreateModalStep(2)}
+                    className="rounded-full bg-[#F5A623] px-4 py-2 text-sm font-semibold text-[#2C1A0E] disabled:opacity-30"
+                  >
+                    Next →
+                  </button>
+                </div>
+
+                {/* Step 1 main area */}
+                <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto px-5 pb-6">
+                  {isUploadingDailyPost ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-[#F5A623]" />
+                      <p className="text-sm text-white/60">{dailyPostNotice || "uploading..."}</p>
+                    </div>
+                  ) : carouselStaging ? (
+                    /* Carousel staging preview */
+                    <div className="w-full space-y-4">
+                      <div
+                        className="relative aspect-[4/5] w-full cursor-grab overflow-hidden rounded-[24px] bg-[#1a1008] select-none active:cursor-grabbing"
+                        onPointerDown={(e) => {
+                          const activeSlide = carouselStaging[carouselStagingActiveIdx];
+                          if (!activeSlide) return;
+                          (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+                          carouselDragRef.current = { startX: e.clientX, startY: e.clientY, startOffsetX: activeSlide.cropOffset.x, startOffsetY: activeSlide.cropOffset.y };
+                        }}
+                        onPointerMove={(e) => {
+                          if (!carouselDragRef.current) return;
+                          const { startX, startY, startOffsetX, startOffsetY } = carouselDragRef.current;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const dx = e.clientX - startX;
+                          const dy = e.clientY - startY;
+                          const newX = Math.min(100, Math.max(0, startOffsetX - (dx / rect.width) * 100 * 1.5));
+                          const newY = Math.min(100, Math.max(0, startOffsetY - (dy / rect.height) * 100 * 1.5));
+                          setCarouselStaging((prev) => prev?.map((s, i) => i === carouselStagingActiveIdx ? { ...s, cropOffset: { x: newX, y: newY } } : s) ?? null);
+                        }}
+                        onPointerUp={() => { carouselDragRef.current = null; }}
+                        onPointerCancel={() => { carouselDragRef.current = null; }}
+                      >
+                        {carouselStaging[carouselStagingActiveIdx]?.isVideo ? (
+                          <video key={carouselStaging[carouselStagingActiveIdx].previewUrl} src={carouselStaging[carouselStagingActiveIdx].previewUrl} className="h-full w-full object-cover pointer-events-none" style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx].cropOffset.x}% ${carouselStaging[carouselStagingActiveIdx].cropOffset.y}%` }} muted playsInline autoPlay loop />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={carouselStaging[carouselStagingActiveIdx]?.previewUrl} alt={`slide ${carouselStagingActiveIdx + 1}`} className="h-full w-full object-cover pointer-events-none" style={{ objectPosition: `${carouselStaging[carouselStagingActiveIdx]?.cropOffset.x ?? 50}% ${carouselStaging[carouselStagingActiveIdx]?.cropOffset.y ?? 50}%` }} />
+                        )}
+                        <div className="absolute left-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">{carouselStagingActiveIdx + 1} / {carouselStaging.length}</div>
+                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs">drag to reposition</div>
+                        <button type="button" aria-label="remove slide" onClick={() => {
+                          const next = carouselStaging.filter((_, i) => i !== carouselStagingActiveIdx);
+                          URL.revokeObjectURL(carouselStaging[carouselStagingActiveIdx].previewUrl);
+                          if (!next.length) { setCarouselStaging(null); setDailyPostFormat("post"); setDailyPostComposerMediaKind("photo"); }
+                          else { setCarouselStaging(next); setCarouselStagingActiveIdx(Math.min(carouselStagingActiveIdx, next.length - 1)); }
+                        }} className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-xl leading-none">×</button>
+                        {carouselStaging.length > 1 ? (
+                          <>
+                            <button type="button" aria-label="previous slide" onClick={() => setCarouselStagingActiveIdx((i) => (i <= 0 ? carouselStaging.length - 1 : i - 1))} className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-2xl">‹</button>
+                            <button type="button" aria-label="next slide" onClick={() => setCarouselStagingActiveIdx((i) => (i + 1) % carouselStaging.length)} className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-2xl">›</button>
+                          </>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        {carouselStaging.map((_, i) => (
+                          <button key={i} type="button" aria-label={`slide ${i + 1}`} onClick={() => setCarouselStagingActiveIdx(i)} className={`h-2.5 rounded-full transition-all ${i === carouselStagingActiveIdx ? "w-6 bg-[#F5A623]" : "w-2.5 bg-white/30"}`} />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {carouselStaging.length < 10 ? (
+                          <button type="button" onClick={() => carouselStagingAddRef.current?.click()} className="flex-1 rounded-full border border-white/20 py-3 text-sm font-medium text-white/70">+ add more</button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          radius="full"
+                          isDisabled={isUploadingDailyPost}
+                          onPress={() => void confirmCarouselStaging()}
+                          className="flex-1 bg-[#F5A623] py-3 text-sm font-semibold uppercase tracking-[0.14em] text-[#2C1A0E] disabled:opacity-60"
+                        >
+                          {isUploadingDailyPost ? "uploading..." : "upload slides"}
+                        </Button>
+                      </div>
+                      {dailyPostNotice ? <p className="text-center text-sm text-[#F5A623]">{dailyPostNotice}</p> : null}
+                    </div>
+                  ) : dailyPostMediaUrls.length ? (
+                    /* Media selected — show preview */
+                    <div className="w-full space-y-4">
+                      <div className="relative overflow-hidden rounded-[24px]">
+                        {dailyPostComposerMediaKind === "video" ? (
+                          <video src={dailyPostMediaUrls[0]} controls playsInline className="max-h-[60vh] w-full object-contain bg-black" />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={dailyPostMediaUrls[0]} alt="preview" className="max-h-[60vh] w-full object-contain bg-black" />
+                        )}
+                        <button
+                          type="button"
+                          aria-label="remove media"
+                          onClick={clearDailyPostPhoto}
+                          className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-xl leading-none text-white"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <p className="text-center text-sm text-white/60">{dailyPostNotice || "tap Next to add details →"}</p>
+                    </div>
+                  ) : (
+                    /* Empty — show pick buttons */
+                    <>
+                      <p className="text-center text-white/50 text-sm">choose a photo or video</p>
+                      <div className="flex gap-6">
+                        <button
+                          type="button"
+                          onClick={() => dailyPostInputRef.current?.click()}
+                          className="flex flex-col items-center gap-3"
+                        >
+                          <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-white/10">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-9 w-9 text-white/80" aria-hidden="true">
+                              <rect x="3" y="3" width="18" height="14" rx="3" />
+                              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+                              <path d="M3 14l4-4 3.5 3.5L14 10l7 7" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                          <span className="text-xs text-white/60">gallery</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => createModalCameraInputRef.current?.click()}
+                          className="flex flex-col items-center gap-3"
+                        >
+                          <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-white/10">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-9 w-9 text-white/80" aria-hidden="true">
+                              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                              <circle cx="12" cy="13" r="4" />
+                            </svg>
+                          </div>
+                          <span className="text-xs text-white/60">camera</span>
+                        </button>
+                      </div>
+                      <p className="text-center text-xs text-white/30">select multiple photos for a carousel</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Step 1 bottom — format tabs (influencer only) */}
+                {isInfluencer ? (
+                  <div className="shrink-0 flex items-center justify-center gap-2 px-5 pb-6 pt-2">
+                    {(["post", "reel", "story"] as CreatorPostFormat[]).map((fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        onClick={() => {
+                          setDailyPostFormat(fmt);
+                          setDailyPostComposerMediaKind(fmt === "reel" ? "video" : fmt === "carousel" ? "carousel" : "photo");
+                          clearDailyPostPhoto();
+                        }}
+                        className={`rounded-full px-5 py-2 text-sm font-semibold uppercase tracking-[0.14em] transition-colors ${dailyPostFormat === fmt ? "bg-white text-[#111]" : "bg-white/10 text-white/50"}`}
+                      >
+                        {fmt}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              /* ── Step 2: Caption & details ── */
+              <form className="flex flex-1 flex-col overflow-hidden" onSubmit={submitDailyPost}>
+                {/* Step 2 top bar */}
+                <div className="flex shrink-0 items-center justify-between px-5 py-4">
+                  <button type="button" onClick={() => setCreateModalStep(1)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg">←</button>
+                  <p className="text-sm font-semibold uppercase tracking-[0.2em]">details</p>
+                  <Button
+                    type="submit"
+                    radius="full"
+                    isDisabled={isUploadingDailyPost}
+                    className="bg-[#F5A623] px-5 py-2 text-sm font-semibold text-[#2C1A0E] disabled:opacity-50"
+                  >
+                    {isUploadingDailyPost ? "..." : "Post"}
+                  </Button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-5">
+                  {/* Media thumbnail */}
+                  {dailyPostMediaUrls[0] ? (
+                    <div className="flex items-center gap-3 rounded-[18px] bg-white/5 p-3">
+                      {dailyPostComposerMediaKind === "video" ? (
+                        <video src={dailyPostMediaUrls[0]} className="h-16 w-16 shrink-0 rounded-[12px] object-cover bg-black" muted playsInline />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={dailyPostMediaUrls[0]} alt="preview" className="h-16 w-16 shrink-0 rounded-[12px] object-cover" />
+                      )}
+                      {dailyPostComposerMediaKind === "carousel" ? (
+                        <p className="text-sm text-white/60">{dailyPostMediaUrls.length} photos · carousel</p>
+                      ) : (
+                        <p className="text-sm text-white/60">{dailyPostComposerMediaKind === "video" ? "video" : "photo"} ready</p>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Caption */}
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.18em] text-white/40">what did you try?</p>
+                    <Textarea
+                      ref={dailyPostCaptionRef}
+                      placeholder="share your thoughts..."
+                      value={dailyPostCaption}
+                      onValueChange={(value) => {
+                        setDailyPostCaption(value);
+                        const cursorPosition = dailyPostCaptionRef.current?.selectionStart ?? value.length;
+                        updateDailyPostMentionState(value, cursorPosition);
+                      }}
+                      onChange={(event) => { updateDailyPostMentionState(event.target.value, event.target.selectionStart ?? event.target.value.length); }}
+                      onKeyUp={(event) => { const t = event.currentTarget; updateDailyPostMentionState(t.value, t.selectionStart ?? t.value.length); }}
+                      onClick={(event) => { const t = event.currentTarget; updateDailyPostMentionState(t.value, t.selectionStart ?? t.value.length); }}
+                      onBlur={() => { window.setTimeout(() => { setDailyPostMentionQuery(""); setDailyPostMentionRange(null); }, 120); }}
+                      classNames={{ inputWrapper: "rounded-[18px] bg-white/10 border-0 shadow-none", input: "text-white placeholder:text-white/30" }}
+                      minRows={3}
+                    />
+                    {dailyPostMentionRange ? (
+                      <div className="mt-1 overflow-hidden rounded-[16px] border border-white/10 bg-[#222]">
+                        {dailyPostMentionSuggestions.length ? (
+                          dailyPostMentionSuggestions.map((friend) => (
+                            <button key={friend.email || friend.username} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyDailyPostMention(friend.username)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/5">
+                              <Avatar src={friend.picture} name={friend.fullName} className="h-8 w-8 bg-white/10 text-white" />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">{friend.fullName}</p>
+                                <p className="truncate text-xs text-white/50">@{friend.username}</p>
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-sm text-white/40">{copy.common.noFriendsMatch}</div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Tag the shop */}
+                  <div className="space-y-3 rounded-[20px] bg-white/5 p-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">tag the shop <span className="normal-case tracking-normal text-white/30">· optional</span></p>
+                      <p className="mt-1 text-sm text-white/40">{copy.profile.tagShopBody}</p>
+                    </div>
+                    <Input
+                      value={dailyPostPlaceQuery}
+                      onValueChange={(value) => { setDailyPostPlaceQuery(value); if (dailyPostNotice) setDailyPostNotice(""); }}
+                      placeholder={copy.profile.searchIn(dailyPostCity)}
+                      startContent={<span className="text-[#F5A623]">⌕</span>}
+                      classNames={{ inputWrapper: "rounded-[14px] bg-white/10 border-0 shadow-none", input: "text-white placeholder:text-white/30" }}
+                    />
+                    {dailyPostTaggedPlace ? (
+                      <div className="flex items-start justify-between gap-3 rounded-[14px] bg-white/10 px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.14em] text-[#F5A623]">{dailyPostTaggedPlace.kind}</p>
+                          <p className="mt-1 text-sm font-semibold text-white">{dailyPostTaggedPlace.name}</p>
+                          <p className="mt-1 text-xs text-white/50">{dailyPostTaggedPlace.address}</p>
+                        </div>
+                        <Button radius="full" variant="light" className="text-white/60 text-sm" onPress={() => setDailyPostTaggedPlace(null)}>change</Button>
+                      </div>
+                    ) : null}
+                    {dailyPostPlaceSearchLoading ? <p className="text-sm text-white/40">searching...</p> : null}
+                    {dailyPostPlaceResults.length ? (
+                      <div className="grid gap-2">
+                        {dailyPostPlaceResults.map((place) => (
+                          <button key={place.id} type="button" onClick={() => { setDailyPostTaggedPlace(place); setDailyPostPlaceQuery(""); setDailyPostPlaceResults([]); }} className="rounded-[14px] bg-white/10 px-4 py-3 text-left">
+                            <p className="text-sm font-semibold text-white">{place.name}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[#F5A623]">{place.kind}</p>
+                            <p className="mt-1 text-xs text-white/50">{place.address}</p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* How was it */}
+                  <div className="space-y-3 rounded-[20px] bg-white/5 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">how was it? <span className="normal-case tracking-normal text-white/30">· optional</span></p>
+                    <div className="flex flex-wrap gap-2">
+                      {TASTE_TAG_OPTIONS.map((option) => (
+                        <Button
+                          key={option.key}
+                          type="button"
+                          radius="full"
+                          variant={dailyPostTasteTag === option.key ? "solid" : "flat"}
+                          className={dailyPostTasteTag === option.key ? "bg-[#F5A623] text-[#2C1A0E]" : "bg-white/10 text-white"}
+                          onPress={() => setDailyPostTasteTag((c) => (c === option.key ? "" : option.key))}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Price vibe */}
+                  <div className="space-y-3 rounded-[20px] bg-white/5 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#F5A623]">price vibe <span className="normal-case tracking-normal text-white/30">· optional</span></p>
+                    <div className="flex flex-wrap gap-2">
+                      {PRICE_TAG_OPTIONS.map((option) => (
+                        <Button
+                          key={option.key}
+                          type="button"
+                          radius="full"
+                          variant={dailyPostPriceTag === option.key ? "solid" : "flat"}
+                          className={dailyPostPriceTag === option.key ? "bg-white text-[#2C1A0E]" : "bg-white/10 text-white"}
+                          onPress={() => setDailyPostPriceTag((c) => (c === option.key ? "" : option.key))}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {dailyPostNotice ? <p className="text-center text-sm text-[#F5A623]">{dailyPostNotice}</p> : null}
+                </div>
+              </form>
+            )}
+          </div>
         ) : null}
 
         {selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail ? null : (
