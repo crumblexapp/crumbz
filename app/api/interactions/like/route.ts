@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "postId is required." }, { status: 400 });
   }
 
-  const rateLimitResult = await checkRateLimit(identity.email, "interaction");
+  const rateLimitResult = await checkRateLimit(identity.email, "like");
   if (!rateLimitResult.ok) {
     return NextResponse.json(
       { ok: false, message: rateLimitResult.message },
@@ -35,11 +35,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
 
   if (liked) {
-    const { error: deleteError } = await supabaseServer.from("post_interactions").delete().eq("id", id);
-    if (deleteError) {
-      console.error("[like] pre-insert delete failed", { id, postId, email: identity.email, error: deleteError });
-    }
-    const { error } = await supabaseServer.from("post_interactions").insert({
+    const { error } = await supabaseServer.from("post_interactions").upsert({
       id,
       post_id: postId,
       interaction_type: "like",
@@ -49,8 +45,8 @@ export async function POST(request: Request) {
       deleted_at: null,
       created_at: now,
       updated_at: now,
-    });
-    if (error && !error.message.includes("duplicate key")) {
+    }, { onConflict: "id" });
+    if (error) {
       console.error("[like] insert failed", { id, postId, email: identity.email, error });
       return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
     }

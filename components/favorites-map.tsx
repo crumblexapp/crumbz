@@ -264,6 +264,7 @@ function createMarkerIcon(kind: string, isFavorited: boolean, hasFriendSave: boo
 const FOOD_KINDS = [
   "restaurant", "cafe", "bar", "bakery", "fast food", "pizza", "burger",
   "ice cream", "dessert", "pub", "shop", "sandwich", "coffee", "pastry", "deli", "chocolate",
+  "food hall", "food spot", "meal takeaway", "meal delivery",
 ];
 
 function isFoodKind(kind: string) {

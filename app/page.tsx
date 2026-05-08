@@ -2532,6 +2532,7 @@ export default function Page() {
   const lastSharedStateMutationAtRef = useRef(0);
   // Posts currently being mutated locally (like/save). Sync skips these — local state wins until the API completes.
   const pendingInteractionPostIdsRef = useRef<Set<string>>(new Set());
+  const pendingLikePostIdsRef = useRef<Set<string>>(new Set());
   // Count of in-flight favorite mutations. While > 0, sync preserves the current user's favoritePlaceIds.
   const pendingFavoriteCountRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
@@ -3500,6 +3501,20 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
   });
+  const favoriteMapPlaces = [
+    ...favoritePlaces,
+    ...profileLikedSpots,
+    ...friendAccounts.flatMap((account) =>
+      resolveFavoritePlaces(account.profile.favoritePlaceIds ?? [], account.profile.favoriteActivities ?? []),
+    ),
+  ].filter(
+    (place, index, list) =>
+      list.findIndex((candidate) => {
+        if (candidate.id === place.id) return true;
+        const sameName = normalizePolishChars(stripPlaceNameSuffixes(candidate.name)) === normalizePolishChars(stripPlaceNameSuffixes(place.name));
+        return sameName && distanceInMeters(candidate.lat, candidate.lon, place.lat, place.lon) < 80;
+      }) === index,
+  );
   const dailyPostMentionFriends = friendAccounts
     .map((account) => ({
       email: account.googleProfile?.email ?? "",
@@ -3596,7 +3611,7 @@ export default function Page() {
         } satisfies StoryRailItem,
       ];
   const mutualFansByPlace = Object.fromEntries(
-    favoritePlaces.map((place) => [
+    favoriteMapPlaces.map((place) => [
       place.id,
       friendAccounts
         .filter((account) => account.profile.favoritePlaceIds?.includes(place.id))
@@ -3608,7 +3623,7 @@ export default function Page() {
         })),
     ]),
   ) as Record<string, { email: string; name: string; username: string; picture?: string }[]>;
-  const sharedFavoriteMoments = favoritePlaces
+  const sharedFavoriteMoments = favoriteMapPlaces
     .map((place) => ({
       place,
       fans: mutualFansByPlace[place.id] ?? [],
@@ -9603,6 +9618,7 @@ export default function Page() {
   const toggleLike = (postId: string) => {
     const authorEmail = user.googleProfile?.email?.toLowerCase();
     if (!authorEmail) return;
+    if (pendingLikePostIdsRef.current.has(postId)) return;
     void haptic("light");
 
     if (USE_INTERACTIONS_TABLE) {
@@ -9628,6 +9644,7 @@ export default function Page() {
 
       // 3. Mark this post as pending — sync will not overwrite its bucket while we're mid-flight
       pendingInteractionPostIdsRef.current.add(postId);
+      pendingLikePostIdsRef.current.add(postId);
 
       // 4. Fire the API. On failure, revert. On success, do nothing — local state is already correct.
       void (async () => {
@@ -9647,8 +9664,10 @@ export default function Page() {
                 },
               };
             });
+            setError("that like didn’t stick. try once more.");
           }
         } finally {
+          pendingLikePostIdsRef.current.delete(postId);
           pendingInteractionPostIdsRef.current.delete(postId);
         }
       })();
@@ -12675,7 +12694,7 @@ export default function Page() {
                   cityName={favoriteMapMode === "nearby" ? favoriteNearbyCity ?? "near you" : currentFavoriteCity}
                   searchCityName={favoriteMapMode === "nearby" ? favoriteNearbyCity ?? "" : currentFavoriteCity}
                   center={favoriteCityCenter}
-                  places={favoritePlaces}
+                  places={favoriteMapPlaces}
                   favoriteIds={favoritePlaceIds}
                   isNewUser={favoritePlaceIds.length === 0 && liveProfile.friends.length === 0}
                   highlightedPlaceId={highlightedFavoritePlaceId}

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "postId is required." }, { status: 400 });
   }
 
-  const rateLimitResult = await checkRateLimit(identity.email, "interaction");
+  const rateLimitResult = await checkRateLimit(identity.email, "save");
   if (!rateLimitResult.ok) {
     return NextResponse.json(
       { ok: false, message: rateLimitResult.message },

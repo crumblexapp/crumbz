@@ -7,6 +7,9 @@ const RATE_LIMITS = {
   post: { windowMs: 60_000, max: 20 },
   // Comments/interactions: 30 per minute
   interaction: { windowMs: 60_000, max: 30 },
+  // Lightweight tap actions should not be blocked by heavier comment/share limits.
+  like: { windowMs: 60_000, max: 180 },
+  save: { windowMs: 60_000, max: 120 },
   // Translation: 10 per minute (costs money)
   translate: { windowMs: 60_000, max: 10 },
   // Upload: 10 per minute
