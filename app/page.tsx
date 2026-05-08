@@ -5752,7 +5752,10 @@ export default function Page() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (appStateCleanup) appStateCleanup();
     };
-  }, [announcements, user.signedIn]);
+    // `announcements` was previously a dep, but the effect only WRITES it via setAnnouncements — never reads it.
+    // Including it caused an infinite re-sync loop (every server response set a new announcements array → effect re-ran → another sync).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.signedIn]);
 
   useEffect(() => {
     if (!selectedStoryPost || selectedStoryPost.mediaKind === "video") return;
