@@ -24,7 +24,6 @@ import {
   Textarea,
 } from "@heroui/react";
 import { motion, AnimatePresence } from "framer-motion";
-import QRCode from "qrcode";
 import { LANGUAGE_STORAGE_KEY, detectPreferredLanguage, translations, type Language } from "@/lib/i18n";
 import {
   buildAdminPostNotification,
@@ -38,7 +37,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { haptic } from "@/lib/haptics";
 import BottomNav from "@/components/BottomNav";
 import PullToRefresh from "@/components/PullToRefresh";
-import { PostMediaPreview, PostActionIcon, getVideoAspectClass } from "@/components/PostCard";
+import { PostMediaPreview, PostActionIcon } from "@/components/PostCard";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
 
@@ -2560,6 +2559,9 @@ export default function Page() {
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [postShareNotice, setPostShareNotice] = useState<{ postId: string; message: string } | null>(null);
+  const [localFeedHydrated, setLocalFeedHydrated] = useState(false);
+  const [initialFeedRefreshDone, setInitialFeedRefreshDone] = useState(false);
+  const [feedSyncing, setFeedSyncing] = useState(false);
   const [pendingOwnArchivePost, setPendingOwnArchivePost] = useState<AppPost | null>(null);
   const [selectedStoryPostId, setSelectedStoryPostId] = useState<string | null>(null);
   const [storyActionMenuOpen, setStoryActionMenuOpen] = useState(false);
@@ -3140,6 +3142,7 @@ export default function Page() {
     ...globalInfluencerFallbackPosts,
   ])
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
+  const shouldShowFeedSkeleton = studentTab === "feed" && (!localFeedHydrated || (!initialFeedRefreshDone && posts.length === 0));
   const feedReasonEntries: Array<readonly [string, "friend" | "city-influencer" | "global-influencer"]> = [
     ...friendDailyFeedPosts.map((post) => [post.id, "friend"] as const),
     ...sameCityInfluencerFeedPosts.map((post) => [post.id, "city-influencer"] as const),
@@ -4378,6 +4381,33 @@ export default function Page() {
     }
   };
 
+  const renderFeedSkeletonCard = (index: number) => (
+    <Card
+      key={`feed-skeleton-${index}`}
+      className="overflow-hidden rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]"
+    >
+      <CardBody className="gap-4 p-5">
+        <div className="flex items-center gap-3">
+          <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-[#F4E8D5]" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-32 animate-pulse rounded-full bg-[#F4E8D5]" />
+            <div className="h-3 w-24 animate-pulse rounded-full bg-[#F7F0E6]" />
+          </div>
+        </div>
+        <div className="h-72 animate-pulse rounded-[24px] bg-[#F7F0E6]" />
+        <div className="flex gap-2">
+          <div className="h-9 w-9 animate-pulse rounded-full bg-[#F4E8D5]" />
+          <div className="h-9 w-9 animate-pulse rounded-full bg-[#F4E8D5]" />
+          <div className="h-9 w-9 animate-pulse rounded-full bg-[#F4E8D5]" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-8 w-20 animate-pulse rounded-full bg-[#FFF0D0]" />
+          <div className="h-8 w-24 animate-pulse rounded-full bg-[#FFF0D0]" />
+        </div>
+      </CardBody>
+    </Card>
+  );
+
   const renderFeedCard = (post: AppPost, detail = false) => {
     const bucket = getInteractionBucket(interactions, post.id);
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
@@ -5061,6 +5091,7 @@ export default function Page() {
         if (savedEmail) setNotifClearedAt(readNotifClearedAt(savedEmail));
         setUsername(nextUser.profile.username || (nextUser.googleProfile?.email?.toLowerCase() === "joshrejis@gmail.com" ? "joeydoesntsharefood" : ""));
         hasLoadedDataRef.current = true;
+        setLocalFeedHydrated(true);
       });
     });
 
@@ -5069,6 +5100,7 @@ export default function Page() {
       ? fetch("/api/interactions", { cache: "no-store" }).then((response) => response.json()).catch(() => null)
       : Promise.resolve(null);
 
+    setFeedSyncing(true);
     void Promise.all([stateFetch, interactionsFetch])
       .then(([payload, interactionsPayload]) => {
         if (!payload?.ok) return;
@@ -5116,7 +5148,11 @@ export default function Page() {
           }
         });
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        setInitialFeedRefreshDone(true);
+        setFeedSyncing(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -5817,6 +5853,7 @@ export default function Page() {
         ? fetch("/api/interactions", { cache: "no-store" }).then((r) => r.json()).catch(() => null)
         : Promise.resolve(null);
 
+      setFeedSyncing(true);
       void Promise.all([stateFetch, interactionsFetch]).then(([payload, interactionsPayload]) => {
         if (!payload?.ok) return;
 
@@ -5913,6 +5950,8 @@ export default function Page() {
             nextDare: dare,
           });
         }
+      }).finally(() => {
+        setFeedSyncing(false);
       });
     };
 
@@ -6385,14 +6424,17 @@ export default function Page() {
       return;
     }
 
-    void QRCode.toDataURL(profileShareUrl, {
-      width: 960,
-      margin: 2,
-      color: {
-        dark: "#000000",
-        light: "#FFFFFF",
-      },
-    })
+    void import("qrcode")
+      .then(({ default: QRCode }) =>
+        QRCode.toDataURL(profileShareUrl, {
+          width: 960,
+          margin: 2,
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
+        }),
+      )
       .then((dataUrl) => {
         if (!cancelled) setProfileQrImageUrl(dataUrl);
       })
@@ -12631,6 +12673,19 @@ export default function Page() {
               transition={{ duration: 0.35, delay: 0.16 }}
               className="mt-7 space-y-4"
             >
+              {feedSyncing && !shouldShowFeedSkeleton ? (
+                <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-[#FFF7E8] px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#B56D19]">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#F5A623]" />
+                  updating
+                </div>
+              ) : null}
+
+              {shouldShowFeedSkeleton ? (
+                <div className="space-y-4">
+                  {[0, 1, 2].map((index) => renderFeedSkeletonCard(index))}
+                </div>
+              ) : (
+                <>
               {shouldShowSundayDumpFeed ? (
                 <div className="space-y-4">
                   {friendWeeklyDumps.length ? (
@@ -12856,6 +12911,8 @@ export default function Page() {
                   </div>
                 </CardBody>
               </Card>
+                </>
+              )}
             </motion.section>
           </>
         ) : null}
