@@ -35,9 +35,10 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
 
   if (liked) {
-    // Delete any stale row first (idempotent if none exists), then INSERT fresh.
-    // Avoids upsert (which was failing in our environment) — uses only operations we know work.
-    await supabaseServer.from("post_interactions").delete().eq("id", id);
+    const { error: deleteError } = await supabaseServer.from("post_interactions").delete().eq("id", id);
+    if (deleteError) {
+      console.error("[like] pre-insert delete failed", { id, postId, email: identity.email, error: deleteError });
+    }
     const { error } = await supabaseServer.from("post_interactions").insert({
       id,
       post_id: postId,
@@ -49,12 +50,14 @@ export async function POST(request: Request) {
       created_at: now,
       updated_at: now,
     });
-    if (error) {
+    if (error && !error.message.includes("duplicate key")) {
+      console.error("[like] insert failed", { id, postId, email: identity.email, error });
       return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
     }
   } else {
     const { error } = await supabaseServer.from("post_interactions").delete().eq("id", id);
     if (error) {
+      console.error("[like] delete failed", { id, postId, email: identity.email, error });
       return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
     }
   }

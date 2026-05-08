@@ -5677,6 +5677,20 @@ export default function Page() {
           Array.from(recentlyDeletedPostIdsRef.current.entries()).filter(([, deletedAt]) => now - deletedAt < 5000),
         );
         const baseServerPosts = filterRecentDeletedPosts(normalizePosts((payload.posts ?? []) as Partial<AppPost>[]), recentDeletedPostIds);
+        // When the interactions table is the source of truth, NEVER fall back to the stale /api/state JSON blob —
+        // it lags behind by seconds-to-minutes and would silently revert fresh likes/saves.
+        // If the table fetch failed, skip overwriting interactions this cycle and let the next sync recover.
+        if (USE_INTERACTIONS_TABLE && !interactionsPayload?.ok) {
+          setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current, hasPendingFavorite ? currentUserEmail : undefined));
+          setPosts((current) => {
+            const serverPosts = preserveLocalMedia(current, baseServerPosts);
+            const shouldPreserve = now - lastSharedStateMutationAtRef.current < 5000;
+            return shouldPreserve ? mergePostsPreferLocal(current, serverPosts) : serverPosts;
+          });
+          setDare(normalizeDareState(payload.dare));
+          setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
+          return;
+        }
         const rawInteractions = USE_INTERACTIONS_TABLE && interactionsPayload?.ok
           ? interactionsPayload.interactions
           : payload.interactions;
