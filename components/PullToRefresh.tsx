@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { haptic } from "@/lib/haptics";
 
 const THRESHOLD = 65;
 
@@ -10,12 +11,14 @@ export default function PullToRefresh() {
   const startYRef = useRef(0);
   const activeRef = useRef(false);
   const progressRef = useRef(0);
+  const triggeredHapticRef = useRef(false);
 
   useEffect(() => {
     const onTouchStart = (e: TouchEvent) => {
       if (window.scrollY > 4) return;
       startYRef.current = e.touches[0]?.clientY ?? 0;
       activeRef.current = true;
+      triggeredHapticRef.current = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -31,6 +34,10 @@ export default function PullToRefresh() {
       const p = Math.min(delta / (THRESHOLD * 2.4), 1);
       progressRef.current = p;
       setProgress(p);
+      if (p >= 0.55 && !triggeredHapticRef.current) {
+        triggeredHapticRef.current = true;
+        void haptic("medium");
+      }
     };
 
     const onTouchEnd = () => {

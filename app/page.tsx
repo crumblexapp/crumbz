@@ -23,7 +23,7 @@ import {
   Tabs,
   Textarea,
 } from "@heroui/react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import QRCode from "qrcode";
 import { LANGUAGE_STORAGE_KEY, detectPreferredLanguage, translations, type Language } from "@/lib/i18n";
 import {
@@ -37,6 +37,7 @@ import {
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { haptic } from "@/lib/haptics";
 import BottomNav from "@/components/BottomNav";
+import PullToRefresh from "@/components/PullToRefresh";
 import { PostMediaPreview, PostActionIcon, getVideoAspectClass } from "@/components/PostCard";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
@@ -5721,9 +5722,24 @@ export default function Page() {
     window.addEventListener("crumbz-refresh", syncFromServer);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
+    // Native app lifecycle (Capacitor): refresh when app comes to foreground
+    let appStateCleanup: (() => void) | null = null;
+    void (async () => {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (!Capacitor.isNativePlatform()) return;
+        const { App } = await import("@capacitor/app");
+        const handle = await App.addListener("appStateChange", ({ isActive }) => {
+          if (isActive) syncFromServer();
+        });
+        appStateCleanup = () => { void handle.remove(); };
+      } catch {}
+    })();
+
     return () => {
       window.removeEventListener("crumbz-refresh", syncFromServer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      if (appStateCleanup) appStateCleanup();
     };
   }, [announcements, user.signedIn]);
 
@@ -5786,6 +5802,135 @@ export default function Page() {
       document.body.style.width = "";
     };
   }, [isNativePlatform, nativeSplashDone]);
+
+  // Horizontal swipe to switch tabs (Instagram/TikTok pattern)
+  useEffect(() => {
+    if (!user.signedIn) return;
+    if (selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail || isCreateModalOpen) return;
+
+    const TAB_ORDER: StudentTab[] = ["feed", "favorites", "rewards", "social", "profile"];
+    let startX: number | null = null;
+    let startY: number | null = null;
+    let blocked = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      blocked = false;
+
+      // Block if the touch starts inside a horizontally-scrollable element
+      // (story rails, carousels, etc.) so their own swipe wins.
+      let el = e.target as HTMLElement | null;
+      while (el && el !== document.body) {
+        if (el.matches?.(".overflow-x-auto, .overflow-x-scroll, [data-no-swipe]")) {
+          blocked = true;
+          break;
+        }
+        // Also block on map / leaflet (they handle their own gestures)
+        if (el.classList?.contains("leaflet-container")) {
+          blocked = true;
+          break;
+        }
+        el = el.parentElement;
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (startX === null || startY === null || blocked) {
+        startX = null;
+        startY = null;
+        return;
+      }
+      const touch = e.changedTouches[0];
+      if (!touch) {
+        startX = null;
+        startY = null;
+        return;
+      }
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      startX = null;
+      startY = null;
+
+      // Need a clear horizontal swipe — at least 60px and dominant over vertical
+      if (Math.abs(dx) < 60) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.4) return;
+
+      const currentIndex = TAB_ORDER.indexOf(studentTab);
+      if (currentIndex === -1) return;
+
+      if (dx < 0 && currentIndex < TAB_ORDER.length - 1) {
+        // Swipe left → next tab
+        const nextTab = TAB_ORDER[currentIndex + 1];
+        void haptic("light");
+        if (nextTab === "favorites") {
+          setFavoriteViewCity(null);
+          setHighlightedFavoritePlaceId(null);
+        }
+        setStudentTab(nextTab);
+      } else if (dx > 0 && currentIndex > 0) {
+        // Swipe right → previous tab
+        const prevTab = TAB_ORDER[currentIndex - 1];
+        void haptic("light");
+        if (prevTab === "favorites") {
+          setFavoriteViewCity(null);
+          setHighlightedFavoritePlaceId(null);
+        }
+        setStudentTab(prevTab);
+      }
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [
+    studentTab,
+    user.signedIn,
+    selectedStoryPost,
+    notificationsOpen,
+    selectedOwnArchiveOpen,
+    selectedOwnPost,
+    selectedProfileEmail,
+    isCreateModalOpen,
+  ]);
+
+  // Lock body scroll + flip status-bar style while the create modal is open
+  useEffect(() => {
+    if (!isCreateModalOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    let cancelled = false;
+    if (isNativePlatform) {
+      void (async () => {
+        try {
+          const { StatusBar, Style } = await import("@capacitor/status-bar");
+          if (cancelled) return;
+          await StatusBar.setStyle({ style: Style.Light });
+          await StatusBar.setBackgroundColor({ color: "#111111" });
+        } catch {}
+      })();
+    }
+
+    return () => {
+      cancelled = true;
+      document.body.style.overflow = prev;
+      if (isNativePlatform) {
+        void (async () => {
+          try {
+            const { StatusBar, Style } = await import("@capacitor/status-bar");
+            await StatusBar.setStyle({ style: Style.Dark });
+            await StatusBar.setBackgroundColor({ color: "#fb8803" });
+          } catch {}
+        })();
+      }
+    };
+  }, [isCreateModalOpen, isNativePlatform]);
 
   // Detect native Capacitor platform and handle native OAuth callbacks
   useEffect(() => {
@@ -8507,6 +8652,7 @@ export default function Page() {
     const draft = commentDrafts[postId]?.trim();
     const authorEmail = user.googleProfile?.email;
     if (!draft || !authorEmail) return;
+    void haptic("light");
 
     const commentId = `${Date.now()}-${postId}`;
     const createdAt = formatNow();
@@ -12121,6 +12267,7 @@ export default function Page() {
               type="button"
               aria-label="make a post"
               onClick={() => {
+                void haptic("medium");
                 setIsCreateModalOpen(true);
                 setCreateModalStep(1);
               }}
@@ -12132,7 +12279,7 @@ export default function Page() {
             </button>
             <button
               type="button"
-              onClick={() => setNotificationsOpen(true)}
+              onClick={() => { void haptic("light"); setNotificationsOpen(true); }}
               className="rounded-full bg-[#fff7ea] p-2.5 text-[#2C1A0E] shadow-[0_8px_20px_rgba(44,26,14,0.06)]"
             >
               <Badge color="warning" content={notificationCount} shape="circle" className="text-[#2C1A0E]">
@@ -13025,11 +13172,41 @@ export default function Page() {
           </section>
         ) : null}
 
+        <AnimatePresence>
         {isCreateModalOpen ? (
-          <div
+          <motion.div
+            key="create-modal"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 32, stiffness: 320 }}
+            drag={createModalStep === 1 ? "y" : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) {
+                void haptic("light");
+                setIsCreateModalOpen(false);
+                setCreateModalStep(1);
+                clearDailyPostPhoto();
+                setDailyPostCaption("");
+                setDailyPostTaggedPlace(null);
+                setDailyPostPlaceQuery("");
+                setDailyPostPlaceResults([]);
+                setDailyPostTasteTag("");
+                setDailyPostPriceTag("");
+                setDailyPostNotice("");
+              }
+            }}
             className="fixed inset-0 z-[3000] flex flex-col bg-[#111] text-white"
             style={{ paddingTop: isNativePlatform ? "env(safe-area-inset-top, 0px)" : "0px", paddingBottom: isNativePlatform ? "env(safe-area-inset-bottom, 0px)" : "0px" }}
           >
+            {/* Drag handle (only on step 1, since step 2 has form fields) */}
+            {createModalStep === 1 ? (
+              <div className="flex shrink-0 justify-center pt-2 pb-1">
+                <div className="h-1 w-10 rounded-full bg-white/20" />
+              </div>
+            ) : null}
             {/* Hidden file inputs — must be in DOM for refs to work */}
             <input
               ref={dailyPostInputRef}
@@ -13397,7 +13574,12 @@ export default function Page() {
                 </div>
               </form>
             )}
-          </div>
+          </motion.div>
+        ) : null}
+        </AnimatePresence>
+
+        {studentTab === "feed" && !selectedStoryPost && !notificationsOpen && !selectedOwnArchiveOpen && !selectedOwnPost && !selectedProfileEmail && !isCreateModalOpen ? (
+          <PullToRefresh />
         ) : null}
 
         {selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail ? null : (

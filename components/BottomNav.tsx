@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { StudentTab } from "@/lib/app-types";
+import { haptic } from "@/lib/haptics";
 
 function TabIcon({ tabKey, className }: { tabKey: StudentTab; className: string }) {
   switch (tabKey) {
@@ -111,7 +112,10 @@ export default function BottomNav({ studentTab, onTabChange, tabLabels }: Bottom
             className={`flex min-w-0 flex-col items-center gap-1 rounded-[22px] px-2 py-2 transition-colors ${
               studentTab === item.key ? "bg-white text-[#2C1A0E]" : "bg-transparent text-[#FFF0D0]"
             }`}
-            onClick={() => onTabChange(item.key)}
+            onClick={() => {
+              if (studentTab !== item.key) void haptic("light");
+              onTabChange(item.key);
+            }}
           >
             <span className={`leading-none ${studentTab === item.key ? "text-[#F5A623]" : "text-[#FFF0D0]"}`}>
               <TabIcon tabKey={item.key} className="h-5 w-5" />
