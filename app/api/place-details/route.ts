@@ -17,6 +17,45 @@ type PlaceDetailsResponse = {
   reviews: Array<{ authorName: string; rating: number | null; text: string }>;
 };
 
+type GoogleReview = {
+  author_name?: string;
+  rating?: number | null;
+  text?: string;
+};
+
+type GooglePlace = {
+  place_id?: string;
+  name?: string;
+  types?: string[];
+  geometry?: {
+    location?: {
+      lat?: number;
+      lng?: number;
+    };
+  };
+  formatted_address?: string;
+  vicinity?: string;
+  price_level?: number;
+  rating?: number | null;
+  opening_hours?: {
+    weekday_text?: string[];
+    open_now?: boolean | null;
+  };
+  current_opening_hours?: {
+    open_now?: boolean | null;
+  };
+  reviews?: GoogleReview[];
+};
+
+type GoogleSearchResponse = {
+  results?: GooglePlace[];
+};
+
+type GoogleDetailsResponse = {
+  status?: string;
+  result?: GooglePlace;
+};
+
 function mapGoogleKind(types: string[]): string {
   if (types.some((t) => t.includes("bakery"))) return "bakery";
   if (types.some((t) => t.includes("cafe") || t.includes("coffee"))) return "cafe";
@@ -62,10 +101,11 @@ export async function GET(request: Request) {
       searchUrl.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
       const searchResponse = await fetch(searchUrl.toString(), { cache: "no-store" });
-      const searchData = await searchResponse.json();
+      const searchData = (await searchResponse.json()) as GoogleSearchResponse;
 
-      if (searchData.results && searchData.results.length > 0) {
-        placeIdToUse = searchData.results[0].place_id;
+      const foundPlaceId = searchData.results?.[0]?.place_id;
+      if (foundPlaceId) {
+        placeIdToUse = foundPlaceId;
       } else {
         return NextResponse.json({ ok: false, message: "place not found in Google", useFallback: true }, { status: 404 });
       }
@@ -78,7 +118,7 @@ export async function GET(request: Request) {
     detailsUrl.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
     const detailsResponse = await fetch(detailsUrl.toString(), { cache: "no-store" });
-    const detailsData = await detailsResponse.json();
+    const detailsData = (await detailsResponse.json()) as GoogleDetailsResponse;
 
     if (detailsData.status !== "OK" || !detailsData.result) {
       return NextResponse.json({ ok: false, message: `Google API error: ${detailsData.status}`, useFallback: true }, { status: 500 });
@@ -120,8 +160,8 @@ export async function GET(request: Request) {
       openingHours,
       openNow,
       rating: result.rating ?? null,
-      reviews: (result.reviews ?? []).map((r: any) => ({
-        authorName: r.author_name,
+      reviews: (result.reviews ?? []).map((r) => ({
+        authorName: r.author_name ?? "",
         rating: r.rating ?? null,
         text: r.text || "",
       })),

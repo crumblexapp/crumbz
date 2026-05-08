@@ -392,6 +392,7 @@ type StoredUser = {
 
 type FavoritePlace = {
   id: string;
+  googlePlaceId?: string;
   name: string;
   kind: string;
   lat: number;
@@ -6709,12 +6710,18 @@ export default function Page() {
 
   function isPlaceFavorited(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]) {
     if (favoriteIds.includes(place.id)) return true;
+    if (place.googlePlaceId && favoriteIds.includes(place.googlePlaceId)) return true;
 
     const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
     const placeLat = place.lat;
     const placeLon = place.lon;
+    const savedPlaces = favoritePlaces.filter(
+      (favoritePlace) =>
+        favoriteIds.includes(favoritePlace.id) ||
+        (favoritePlace.googlePlaceId ? favoriteIds.includes(favoritePlace.googlePlaceId) : false),
+    );
 
-    for (const favPlace of favoritePlaces) {
+    for (const favPlace of savedPlaces) {
       const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
 
       const namesMatch =
@@ -6735,12 +6742,18 @@ export default function Page() {
 
   function findMatchingFavoriteId(place: FavoritePlace, favoriteIds: string[], favoritePlaces: FavoritePlace[]): string | null {
     if (favoriteIds.includes(place.id)) return place.id;
+    if (place.googlePlaceId && favoriteIds.includes(place.googlePlaceId)) return place.googlePlaceId;
 
     const normalizedPlaceName = normalizePolishChars(stripPlaceNameSuffixes(place.name));
     const placeLat = place.lat;
     const placeLon = place.lon;
+    const savedPlaces = favoritePlaces.filter(
+      (favoritePlace) =>
+        favoriteIds.includes(favoritePlace.id) ||
+        (favoritePlace.googlePlaceId ? favoriteIds.includes(favoritePlace.googlePlaceId) : false),
+    );
 
-    for (const favPlace of favoritePlaces) {
+    for (const favPlace of savedPlaces) {
       const normalizedFavName = normalizePolishChars(stripPlaceNameSuffixes(favPlace.name));
 
       const namesMatch =
@@ -9601,13 +9614,14 @@ export default function Page() {
       // 2. Optimistic UI update
       setInteractions((current) => {
         const b = getInteractionBucket(current, postId);
+        const otherLikes = b.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail);
         return {
           ...current,
           [postId]: {
             ...b,
             likes: nowLiked
-              ? [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }]
-              : b.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail),
+              ? [...otherLikes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }]
+              : otherLikes,
           },
         };
       });
@@ -9617,22 +9631,26 @@ export default function Page() {
 
       // 4. Fire the API. On failure, revert. On success, do nothing — local state is already correct.
       void (async () => {
-        const ok = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
-        if (!ok) {
-          setInteractions((current) => {
-            const b = getInteractionBucket(current, postId);
-            return {
-              ...current,
-              [postId]: {
-                ...b,
-                likes: nowLiked
-                  ? b.likes.filter((l) => l.authorEmail.toLowerCase() !== authorEmail)
-                  : [...b.likes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
-              },
-            };
-          });
+        try {
+          const ok = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
+          if (!ok) {
+            setInteractions((current) => {
+              const b = getInteractionBucket(current, postId);
+              const otherLikes = b.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail);
+              return {
+                ...current,
+                [postId]: {
+                  ...b,
+                  likes: nowLiked
+                    ? otherLikes
+                    : [...otherLikes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
+                },
+              };
+            });
+          }
+        } finally {
+          pendingInteractionPostIdsRef.current.delete(postId);
         }
-        pendingInteractionPostIdsRef.current.delete(postId);
       })();
       return;
     }

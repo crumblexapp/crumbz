@@ -16,6 +16,38 @@ type Place = {
   reviews: Array<{ authorName: string; rating: number | null; text: string }>;
 };
 
+type GoogleReview = {
+  author_name?: string;
+  rating?: number | null;
+  text?: string;
+};
+
+type GooglePlace = {
+  place_id?: string;
+  name?: string;
+  types?: string[];
+  geometry?: {
+    location?: {
+      lat?: number;
+      lng?: number;
+    };
+  };
+  formatted_address?: string;
+  vicinity?: string;
+  price_level?: number;
+  opening_hours?: {
+    weekday_text?: string[];
+    open_now?: boolean | null;
+  };
+  reviews?: GoogleReview[];
+};
+
+type GooglePlacesResponse = {
+  status?: string;
+  results?: GooglePlace[];
+  next_page_token?: string;
+};
+
 function normalizeCityKey(cityName: string) {
   return cityName
     .trim()
@@ -63,7 +95,7 @@ function mapGoogleKind(types: string[]): string {
   return "restaurant";
 }
 
-function normalizeGooglePlace(place: any): Place {
+function normalizeGooglePlace(place: GooglePlace): Place {
   const lat = place.geometry?.location?.lat ?? 0;
   const lon = place.geometry?.location?.lng ?? 0;
 
@@ -100,8 +132,8 @@ function normalizeGooglePlace(place: any): Place {
     priceLevel,
     openingHours,
     openNow,
-    reviews: (place.reviews ?? []).map((r: any) => ({
-      authorName: r.author_name,
+    reviews: (place.reviews ?? []).map((r) => ({
+      authorName: r.author_name ?? "",
       rating: r.rating ?? null,
       text: r.text || "",
     })),
@@ -129,7 +161,7 @@ async function fetchNearbyByType(lat: number, lon: number, radius: number, type:
   url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
 
   const response = await fetch(url.toString(), { cache: "no-store" });
-  const data = await response.json();
+  const data = (await response.json()) as GooglePlacesResponse;
 
   if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
     throw new Error(`Google Places API error: ${data.status}`);
@@ -145,7 +177,7 @@ async function fetchNearbyByType(lat: number, lon: number, radius: number, type:
       page2Url.searchParams.set("pagetoken", data.next_page_token);
       page2Url.searchParams.set("key", GOOGLE_PLACES_API_KEY);
       const page2Response = await fetch(page2Url.toString(), { cache: "no-store" });
-      const page2Data = await page2Response.json();
+      const page2Data = (await page2Response.json()) as GooglePlacesResponse;
       if (page2Data.status === "OK") {
         results.push(...(page2Data.results ?? []).map(normalizeGooglePlace));
       }
