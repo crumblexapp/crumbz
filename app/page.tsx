@@ -1127,12 +1127,15 @@ function preserveLocalMedia(localPosts: AppPost[], incomingPosts: AppPost[]) {
   });
 }
 
-function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, serverInteractions: InteractionsMap) {
+// currentUserEmail: if provided, that user's own likes/saves are taken from local as truth
+// (handles the unlike/unsave case where union merge would wrongly restore a removed entry)
+function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, serverInteractions: InteractionsMap, currentUserEmail?: string) {
   const mergedPostIds = [
     ...new Set([...Object.keys(serverInteractions), ...Object.keys(localInteractions)]),
   ].map((id) => ({ id }));
 
   const merged: InteractionsMap = {};
+  const myEmail = currentUserEmail?.toLowerCase();
 
   for (const { id: postId } of mergedPostIds) {
     const local = localInteractions[postId];
@@ -1141,21 +1144,32 @@ function mergeInteractionsPreferLocal(localInteractions: InteractionsMap, server
     if (!local) { merged[postId] = server!; continue; }
     if (!server) { merged[postId] = local; continue; }
 
-    // Union-merge each array so neither side loses data.
-    // For likes/shares/saves/views: dedup by authorEmail — server wins for existing,
-    // local-only entries are recent optimistic updates.
-    const mergedLikes = [
-      ...server.likes,
-      ...local.likes.filter((l) => !server.likes.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
-    ];
+    // For the current user's own likes/saves: local is authoritative (covers both add and remove).
+    // For everyone else: union so no one else's actions are lost.
+    const mergedLikes = myEmail
+      ? [
+          ...server.likes.filter((s) => s.authorEmail.toLowerCase() !== myEmail),
+          ...local.likes.filter((l) => l.authorEmail.toLowerCase() === myEmail),
+          ...local.likes.filter((l) => l.authorEmail.toLowerCase() !== myEmail && !server.likes.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+        ]
+      : [
+          ...server.likes,
+          ...local.likes.filter((l) => !server.likes.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+        ];
     const mergedShares = [
       ...server.shares,
       ...local.shares.filter((l) => !server.shares.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
     ];
-    const mergedSaves = [
-      ...server.saves,
-      ...local.saves.filter((l) => !server.saves.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
-    ];
+    const mergedSaves = myEmail
+      ? [
+          ...server.saves.filter((s) => s.authorEmail.toLowerCase() !== myEmail),
+          ...local.saves.filter((l) => l.authorEmail.toLowerCase() === myEmail),
+          ...local.saves.filter((l) => l.authorEmail.toLowerCase() !== myEmail && !server.saves.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+        ]
+      : [
+          ...server.saves,
+          ...local.saves.filter((l) => !server.saves.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
+        ];
     const mergedViews = [
       ...server.views,
       ...local.views.filter((l) => !server.views.some((s) => s.authorEmail.toLowerCase() === l.authorEmail.toLowerCase())),
@@ -1217,7 +1231,9 @@ function dedupeLowercaseEmails(emails: string[]) {
   return [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
 }
 
-function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: StoredUser[]) {
+// currentUserEmail: if provided, that user's favoritePlaceIds is taken from local as truth
+// (handles the unsave case where union merge would wrongly restore a removed place)
+function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: StoredUser[], currentUserEmail?: string) {
   const localByEmail = new Map(
     localAccounts
       .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", account] as const)
@@ -1228,6 +1244,8 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
     const email = account.googleProfile?.email?.toLowerCase() ?? "";
     const localAccount = localByEmail.get(email);
     if (!localAccount) return account;
+
+    const isCurrentUser = currentUserEmail && email === currentUserEmail.toLowerCase();
 
     return {
       ...account,
@@ -1245,7 +1263,9 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
           ...account.profile.outgoingFriendRequests,
           ...localAccount.profile.outgoingFriendRequests,
         ]),
-        favoritePlaceIds: [...new Set([...(account.profile.favoritePlaceIds ?? []), ...(localAccount.profile.favoritePlaceIds ?? [])])],
+        favoritePlaceIds: isCurrentUser
+          ? (localAccount.profile.favoritePlaceIds ?? [])
+          : [...new Set([...(account.profile.favoritePlaceIds ?? []), ...(localAccount.profile.favoritePlaceIds ?? [])])],
         favoriteActivities:
           account.profile.favoriteActivities?.length || localAccount.profile.favoriteActivities?.length
             ? [
@@ -2509,6 +2529,7 @@ export default function Page() {
   const hasAdminBackfilledReferralCodesRef = useRef(false);
   const lastSharedStateMutationAtRef = useRef(0);
   const lastInteractionMutationAtRef = useRef(0);
+  const lastFavoriteMutationAtRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
   const seenNotifSyncTimerRef = useRef<number | null>(null);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
@@ -5631,8 +5652,10 @@ export default function Page() {
           return;
         }
 
-        setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current));
         const now = Date.now();
+        const currentUserEmail = userRef.current.googleProfile?.email?.toLowerCase() ?? undefined;
+        const shouldPreserveFavorites = now - lastFavoriteMutationAtRef.current < 10000;
+        setAccounts((current) => mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), current, shouldPreserveFavorites ? currentUserEmail : undefined));
         const recentDeletedPostIds = new Set(
           Array.from(recentlyDeletedPostIdsRef.current.entries())
             .filter(([, deletedAt]) => now - deletedAt < 5000)
@@ -5655,7 +5678,7 @@ export default function Page() {
         const mergedPosts = mergePostsPreferLocal(currentPosts, preserveLocalMedia(currentPosts, baseServerPosts));
         const mergedInteractions = pruneInteractionsToKnownPosts(
           mergedPosts,
-          USE_INTERACTIONS_TABLE ? serverInteractions : mergeInteractionsPreferLocal(currentInteractions, serverInteractions),
+          USE_INTERACTIONS_TABLE ? serverInteractions : mergeInteractionsPreferLocal(currentInteractions, serverInteractions, currentUserEmail),
         );
         setPosts((current) => {
           const serverPosts = preserveLocalMedia(current, baseServerPosts);
@@ -5665,14 +5688,14 @@ export default function Page() {
         setInteractions(USE_INTERACTIONS_TABLE
           ? (current) => {
               if (shouldPreserveLocalInteractions) {
-                return mergeInteractionsPreferLocal(pruneInteractionsToKnownPosts(mergedPosts, current), serverInteractions);
+                return mergeInteractionsPreferLocal(pruneInteractionsToKnownPosts(mergedPosts, current), serverInteractions, currentUserEmail);
               }
               return serverInteractions;
             }
           : (current) => {
               const safeCurrent = pruneInteractionsToKnownPosts(postsRef.current, current);
               return shouldPreserveLocalPosts
-                ? pruneInteractionsToKnownPosts(mergedPosts, mergeInteractionsPreferLocal(safeCurrent, serverInteractions))
+                ? pruneInteractionsToKnownPosts(mergedPosts, mergeInteractionsPreferLocal(safeCurrent, serverInteractions, currentUserEmail))
                 : serverInteractions;
             });
         setDare(normalizeDareState(payload.dare));
@@ -6561,6 +6584,7 @@ export default function Page() {
 
   const toggleFavoritePlace = (place: FavoritePlace, sourcePostId?: string) => {
     void haptic("medium");
+    lastFavoriteMutationAtRef.current = Date.now();
     const matchingId = findMatchingFavoriteId(place, favoritePlaceIds, favoritePlaces);
     const isRemoving = matchingId !== null;
     const nextFavoritePlaceIds = isRemoving
@@ -6592,6 +6616,7 @@ export default function Page() {
 
         if (!sourcePostId || !user.googleProfile?.email) return;
 
+        lastInteractionMutationAtRef.current = Date.now();
         const authorEmail = user.googleProfile.email.toLowerCase();
         setInteractions((current) => {
           const bucket = getInteractionBucket(current, sourcePostId);
