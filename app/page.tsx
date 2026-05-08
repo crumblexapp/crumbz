@@ -4939,16 +4939,23 @@ export default function Page() {
       });
     });
 
-    void fetch("/api/state", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload) => {
+    const stateFetch = fetch("/api/state", { cache: "no-store" }).then((response) => response.json()).catch(() => null);
+    const interactionsFetch = USE_INTERACTIONS_TABLE
+      ? fetch("/api/interactions", { cache: "no-store" }).then((response) => response.json()).catch(() => null)
+      : Promise.resolve(null);
+
+    void Promise.all([stateFetch, interactionsFetch])
+      .then(([payload, interactionsPayload]) => {
         if (!payload?.ok) return;
 
         queueMicrotask(() => {
           const serverHasState = hasAnySharedState(payload);
           const normalizedServerPosts = normalizePosts((payload.posts ?? []) as Partial<AppPost>[]);
           const serverPostsWithMedia = preserveLocalMedia(nextPosts, normalizedServerPosts);
-          const serverInteractions = pruneInteractionsToKnownPosts(serverPostsWithMedia, normalizeInteractions(payload.interactions));
+          const rawInteractions = USE_INTERACTIONS_TABLE && interactionsPayload?.ok
+            ? interactionsPayload.interactions
+            : payload.interactions;
+          const serverInteractions = pruneInteractionsToKnownPosts(serverPostsWithMedia, normalizeInteractions(rawInteractions));
 
           if (!serverHasState) {
             void seedAccountsToBackend(nextAccounts).catch(() => undefined);
@@ -4966,7 +4973,7 @@ export default function Page() {
           } else {
             setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
             setPosts(serverPostsWithMedia);
-            setInteractions(serverInteractions);
+            setInteractions(USE_INTERACTIONS_TABLE && !interactionsPayload?.ok ? nextInteractions : serverInteractions);
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
