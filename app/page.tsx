@@ -54,6 +54,7 @@ const POST_TRANSLATIONS_KEY = "crumbz-post-translations-v1";
 const INTERACTIONS_KEY = "crumbz-interactions-v1";
 const DARE_KEY = "crumbz-dare-v1";
 const SEEN_NOTIFICATIONS_KEY = "crumbz-seen-notifications-v1";
+const PENDING_INTERACTION_QUEUE_KEY = "crumbz-pending-interactions-v1";
 const NOTIFICATIONS_CLEARED_AT_PREFIX = "crumbz-notif-cleared-at-v1";
 const PUSH_PROMPT_ASKED_PREFIX = "crumbz-push-prompt-asked-v1";
 const INSTALL_PROMPT_DISMISSED_KEY = "crumbz-install-prompt-dismissed-v1";
@@ -727,6 +728,16 @@ type PostInteraction = {
 
 type InteractionsMap = Record<string, PostInteraction>;
 
+type PendingInteractionAction = {
+  id: string;
+  kind: "like" | "save" | "comment";
+  postId: string;
+  path: string;
+  body: Record<string, unknown>;
+  createdAt: number;
+  attempts: number;
+};
+
 type GoogleAccounts = {
   id: {
     initialize: (config: {
@@ -1321,6 +1332,58 @@ function removeUserFromInteractions(interactions: InteractionsMap, targetEmail: 
 
 function readInteractions() {
   return normalizeInteractions(readJson<InteractionsMap>(INTERACTIONS_KEY, {}));
+}
+
+function readPendingInteractionQueue(): PendingInteractionAction[] {
+  const rawQueue = readJson<unknown[]>(PENDING_INTERACTION_QUEUE_KEY, []);
+  return rawQueue
+    .filter((item): item is Partial<PendingInteractionAction> => Boolean(item && typeof item === "object"))
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      kind: item.kind === "like" || item.kind === "save" || item.kind === "comment" ? item.kind : "like",
+      postId: typeof item.postId === "string" ? item.postId : "",
+      path: typeof item.path === "string" ? item.path : "",
+      body: item.body && typeof item.body === "object" && !Array.isArray(item.body) ? item.body as Record<string, unknown> : {},
+      createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+      attempts: typeof item.attempts === "number" ? item.attempts : 0,
+    }))
+    .filter((item) => item.id && item.postId && item.path);
+}
+
+function writePendingInteractionQueue(queue: PendingInteractionAction[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PENDING_INTERACTION_QUEUE_KEY, JSON.stringify(queue.slice(-100)));
+}
+
+function upsertPendingInteractionAction(action: Omit<PendingInteractionAction, "createdAt" | "attempts">) {
+  if (typeof window === "undefined") return;
+  const queue = readPendingInteractionQueue();
+  const withoutCurrentAction =
+    action.kind === "like" || action.kind === "save"
+      ? queue.filter((item) => !(item.kind === action.kind && item.postId === action.postId))
+      : queue.filter((item) => item.id !== action.id);
+  writePendingInteractionQueue([
+    ...withoutCurrentAction,
+    { ...action, createdAt: Date.now(), attempts: 0 },
+  ]);
+}
+
+function removePendingInteractionAction(id: string) {
+  if (typeof window === "undefined") return;
+  writePendingInteractionQueue(readPendingInteractionQueue().filter((item) => item.id !== id));
+}
+
+function markPendingInteractionAttempt(id: string) {
+  if (typeof window === "undefined") return;
+  writePendingInteractionQueue(
+    readPendingInteractionQueue().map((item) =>
+      item.id === id ? { ...item, attempts: item.attempts + 1 } : item,
+    ),
+  );
+}
+
+function hasQueuedInteractionForPost(postId: string) {
+  return readPendingInteractionQueue().some((item) => item.postId === postId);
 }
 
 function normalizeDareState(dare: unknown): DareState {
@@ -2549,6 +2612,7 @@ export default function Page() {
   // Posts currently being mutated locally (like/save). Sync skips these — local state wins until the API completes.
   const pendingInteractionPostIdsRef = useRef<Set<string>>(new Set());
   const pendingLikePostIdsRef = useRef<Set<string>>(new Set());
+  const pendingInteractionReplayInFlightRef = useRef(false);
   // Count of in-flight favorite mutations. While > 0, sync preserves the current user's favoritePlaceIds.
   const pendingFavoriteCountRef = useRef(0);
   const lastManualSharedStateSyncAtRef = useRef(0);
@@ -4899,6 +4963,38 @@ export default function Page() {
     }
   };
 
+  const replayPendingInteractions = async () => {
+    if (!USE_INTERACTIONS_TABLE || pendingInteractionReplayInFlightRef.current) return;
+    if (!userRef.current.signedIn) return;
+    const queuedActions = readPendingInteractionQueue();
+    if (!queuedActions.length) return;
+
+    pendingInteractionReplayInFlightRef.current = true;
+    try {
+      queuedActions.forEach((action) => {
+        pendingInteractionPostIdsRef.current.add(action.postId);
+        if (action.kind === "like") pendingLikePostIdsRef.current.add(action.postId);
+      });
+
+      for (const action of queuedActions) {
+        const ok = await callInteractionApi(action.path, action.body);
+        if (ok) {
+          removePendingInteractionAction(action.id);
+          if (!hasQueuedInteractionForPost(action.postId)) {
+            pendingInteractionPostIdsRef.current.delete(action.postId);
+          }
+          if (action.kind === "like") pendingLikePostIdsRef.current.delete(action.postId);
+        } else {
+          markPendingInteractionAttempt(action.id);
+          if (action.kind === "like") pendingLikePostIdsRef.current.delete(action.postId);
+          break;
+        }
+      }
+    } finally {
+      pendingInteractionReplayInFlightRef.current = false;
+    }
+  };
+
   useEffect(() => {
     const listener = (event: Event) => {
       const authEvent = event as CustomEvent<{ message?: string }>;
@@ -4910,11 +5006,40 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    if (!user.signedIn || isAdmin) return;
+
+    void replayPendingInteractions();
+
+    const replayWhenOnline = () => {
+      void replayPendingInteractions();
+    };
+    const replayWhenVisible = () => {
+      if (document.visibilityState === "visible") void replayPendingInteractions();
+    };
+
+    window.addEventListener("online", replayWhenOnline);
+    window.addEventListener("crumbz-refresh", replayWhenOnline);
+    document.addEventListener("visibilitychange", replayWhenVisible);
+
+    return () => {
+      window.removeEventListener("online", replayWhenOnline);
+      window.removeEventListener("crumbz-refresh", replayWhenOnline);
+      document.removeEventListener("visibilitychange", replayWhenVisible);
+    };
+  // replayPendingInteractions intentionally reads refs/current auth state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, user.signedIn]);
+
+  useEffect(() => {
     const nextUser = readUser();
     const nextAccounts = readAccounts();
     const nextPosts = readPosts();
     const nextInteractions = pruneInteractionsToKnownPosts(nextPosts, readInteractions());
     const nextDare = readDare();
+    readPendingInteractionQueue().forEach((action) => {
+      pendingInteractionPostIdsRef.current.add(action.postId);
+      if (action.kind === "like") pendingLikePostIdsRef.current.add(action.postId);
+    });
 
     cachedUserSnapshot = nextUser;
     window.dispatchEvent(new Event("crumbz-user-change"));
@@ -4956,6 +5081,17 @@ export default function Page() {
             ? interactionsPayload.interactions
             : payload.interactions;
           const serverInteractions = pruneInteractionsToKnownPosts(serverPostsWithMedia, normalizeInteractions(rawInteractions));
+          const queuedPostIds = new Set(readPendingInteractionQueue().map((action) => action.postId));
+          const serverInteractionsWithPendingLocal = queuedPostIds.size
+            ? {
+                ...serverInteractions,
+                ...Object.fromEntries(
+                  Array.from(queuedPostIds)
+                    .filter((postId) => nextInteractions[postId])
+                    .map((postId) => [postId, nextInteractions[postId]]),
+                ),
+              }
+            : serverInteractions;
 
           if (!serverHasState) {
             void seedAccountsToBackend(nextAccounts).catch(() => undefined);
@@ -4973,7 +5109,7 @@ export default function Page() {
           } else {
             setAccounts(mergeAccountsPreferLocal(normalizeAccounts(payload.accounts), nextAccounts));
             setPosts(serverPostsWithMedia);
-            setInteractions(USE_INTERACTIONS_TABLE && !interactionsPayload?.ok ? nextInteractions : serverInteractions);
+            setInteractions(USE_INTERACTIONS_TABLE && !interactionsPayload?.ok ? nextInteractions : serverInteractionsWithPendingLocal);
             setDare(normalizeDareState(payload.dare));
             setDareHydrated(true);
             setAnnouncements((payload.announcements ?? []) as AppAnnouncement[]);
@@ -6885,16 +7021,32 @@ export default function Page() {
         return { ...current, [sourcePostId]: { ...bucket, saves: nextSaves } };
       });
       pendingInteractionPostIdsRef.current.add(sourcePostId);
+      const pendingSaveId = `save:${sourcePostId}`;
+      const pendingSaveBody = {
+        postId: sourcePostId,
+        saved: !isRemoving,
+        authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
+        placeId: place.id,
+      };
+      upsertPendingInteractionAction({
+        id: pendingSaveId,
+        kind: "save",
+        postId: sourcePostId,
+        path: "/api/interactions/save",
+        body: pendingSaveBody,
+      });
       void (async () => {
         if (USE_INTERACTIONS_TABLE) {
-          await callInteractionApi("/api/interactions/save", {
-            postId: sourcePostId,
-            saved: !isRemoving,
-            authorName: liveProfile.fullName || user.googleProfile?.name || "crumbz user",
-            placeId: place.id,
-          });
+          const ok = await callInteractionApi("/api/interactions/save", pendingSaveBody);
+          if (ok) {
+            removePendingInteractionAction(pendingSaveId);
+            if (!hasQueuedInteractionForPost(sourcePostId)) {
+              pendingInteractionPostIdsRef.current.delete(sourcePostId);
+            }
+          }
+        } else {
+          pendingInteractionPostIdsRef.current.delete(sourcePostId);
         }
-        pendingInteractionPostIdsRef.current.delete(sourcePostId);
       })();
     }
 
@@ -8791,14 +8943,32 @@ export default function Page() {
     setCommentDrafts((current) => ({ ...current, [postId]: "" }));
 
     if (USE_INTERACTIONS_TABLE) {
-      void callInteractionApi("/api/interactions/comment", {
+      const pendingCommentId = `comment:${commentId}`;
+      const pendingCommentBody = {
         postId,
         commentId,
         text: draft,
         authorName: user.profile.fullName,
         schoolName: user.profile.schoolName ?? "",
         createdAt,
+      };
+      pendingInteractionPostIdsRef.current.add(postId);
+      upsertPendingInteractionAction({
+        id: pendingCommentId,
+        kind: "comment",
+        postId,
+        path: "/api/interactions/comment",
+        body: pendingCommentBody,
       });
+      void (async () => {
+        const ok = await callInteractionApi("/api/interactions/comment", pendingCommentBody);
+        if (ok) {
+          removePendingInteractionAction(pendingCommentId);
+          if (!hasQueuedInteractionForPost(postId)) {
+            pendingInteractionPostIdsRef.current.delete(postId);
+          }
+        }
+      })();
     } else {
       lastSharedStateMutationAtRef.current = Date.now();
     }
@@ -9697,30 +9867,28 @@ export default function Page() {
       // 3. Mark this post as pending — sync will not overwrite its bucket while we're mid-flight
       pendingInteractionPostIdsRef.current.add(postId);
       pendingLikePostIdsRef.current.add(postId);
+      const pendingLikeId = `like:${postId}`;
+      const pendingLikeBody = { postId, liked: nowLiked, authorName: user.profile.fullName };
+      upsertPendingInteractionAction({
+        id: pendingLikeId,
+        kind: "like",
+        postId,
+        path: "/api/interactions/like",
+        body: pendingLikeBody,
+      });
 
-      // 4. Fire the API. On failure, revert. On success, do nothing — local state is already correct.
+      // 4. Fire the API. On failure, keep the local state and retry quietly from the pending queue.
       void (async () => {
         try {
-          const ok = await callInteractionApi("/api/interactions/like", { postId, liked: nowLiked, authorName: user.profile.fullName });
-          if (!ok) {
-            setInteractions((current) => {
-              const b = getInteractionBucket(current, postId);
-              const otherLikes = b.likes.filter((like) => like.authorEmail.toLowerCase() !== authorEmail);
-              return {
-                ...current,
-                [postId]: {
-                  ...b,
-                  likes: nowLiked
-                    ? otherLikes
-                    : [...otherLikes, { authorEmail, authorName: user.profile.fullName, createdAt: formatNow() }],
-                },
-              };
-            });
-            setError("that like didn’t stick. try once more.");
+          const ok = await callInteractionApi("/api/interactions/like", pendingLikeBody);
+          if (ok) {
+            removePendingInteractionAction(pendingLikeId);
+            if (!hasQueuedInteractionForPost(postId)) {
+              pendingInteractionPostIdsRef.current.delete(postId);
+            }
           }
         } finally {
           pendingLikePostIdsRef.current.delete(postId);
-          pendingInteractionPostIdsRef.current.delete(postId);
         }
       })();
       return;
