@@ -35,26 +35,24 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
 
   if (liked) {
-    // Like → ensure row is present and active.
-    const { error } = await supabaseServer.from("post_interactions").upsert(
-      {
-        id,
-        post_id: postId,
-        interaction_type: "like",
-        author_email: identity.email,
-        author_name: authorName,
-        payload: {},
-        deleted_at: null,
-        created_at: now,
-        updated_at: now,
-      },
-      { onConflict: "id" },
-    );
+    // Delete any stale row first (idempotent if none exists), then INSERT fresh.
+    // Avoids upsert (which was failing in our environment) — uses only operations we know work.
+    await supabaseServer.from("post_interactions").delete().eq("id", id);
+    const { error } = await supabaseServer.from("post_interactions").insert({
+      id,
+      post_id: postId,
+      interaction_type: "like",
+      author_email: identity.email,
+      author_name: authorName,
+      payload: {},
+      deleted_at: null,
+      created_at: now,
+      updated_at: now,
+    });
     if (error) {
       return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
     }
   } else {
-    // Unlike → hard-delete the row (cleaner than soft-delete + works around any constraint that prevents un-deleting).
     const { error } = await supabaseServer.from("post_interactions").delete().eq("id", id);
     if (error) {
       return NextResponse.json({ ok: false, message: error.message }, { status: 500 });

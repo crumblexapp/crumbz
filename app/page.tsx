@@ -4840,7 +4840,10 @@ export default function Page() {
 
   const callInteractionApi = async (path: string, body: Record<string, unknown>): Promise<boolean> => {
     try {
-      if (!(await ensureAuthenticatedSession())) return false;
+      if (!(await ensureAuthenticatedSession())) {
+        console.warn("[interactions] no session, aborting", path);
+        return false;
+      }
       const headers = await getAuthenticatedHeaders({ "Content-Type": "application/json" });
       const response = await fetch(path, {
         method: "POST",
@@ -4850,11 +4853,13 @@ export default function Page() {
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        console.error("[interactions] API failed", { path, status: response.status, message: payload?.message, body });
         if (response.status === 401) dispatchAuthExpired(payload?.message);
         return false;
       }
       return true;
-    } catch {
+    } catch (err) {
+      console.error("[interactions] fetch threw", { path, err, body });
       return false;
     }
   };
@@ -6810,6 +6815,7 @@ export default function Page() {
         });
       })
       .catch((error) => {
+        console.error("[favorites] update_favorites failed", error);
         setAccounts(previousAccounts);
         persistUser(previousUser);
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
