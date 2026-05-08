@@ -98,7 +98,7 @@ function getPlacesCacheKey({
     cacheCoordinate(lat),
     cacheCoordinate(lon),
     Math.min(radius, 15000),
-    Math.min(limit, query ? 40 : 160),
+    Math.min(limit, query ? 40 : 120),
   ].join("|");
 }
 
@@ -349,7 +349,7 @@ export async function GET(request: Request) {
         nextPlaces = await googlePlacesTextSearch(query, lat, lon, Math.min(limit, 40), city || undefined);
       } else {
         // Nearby mode (initial map load)
-        nextPlaces = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), Math.min(limit, 160));
+        nextPlaces = await googlePlacesNearby(lat, lon, Math.min(radius, 15000), Math.min(limit, 120));
       }
 
       return city && query ? filterByCity(nextPlaces, city) : nextPlaces;

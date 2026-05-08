@@ -117,6 +117,22 @@ const cityCenters: Record<string, [number, number]> = {
   czestochowa: [50.8118, 19.1203],
   torun: [53.0138, 18.5984],
 };
+const favoriteMapPlaceLimitsByCity: Record<string, number> = {
+  warsaw: 120,
+  krakow: 120,
+  lodz: 110,
+  wroclaw: 110,
+  poznan: 105,
+  gdansk: 100,
+  szczecin: 90,
+  bydgoszcz: 85,
+  lublin: 85,
+  katowice: 85,
+  bialystok: 75,
+  gdynia: 75,
+  czestochowa: 70,
+  torun: 70,
+};
 const fallbackFavoritePlacesByCity: Record<string, FavoritePlace[]> = {
   warsaw: [
     { id: "warsaw-hala-koszyki", name: "hala koszyki", kind: "food hall", lat: 52.2221, lon: 21.0047, address: "koszykowa 63" },
@@ -3442,6 +3458,7 @@ export default function Page() {
       : cityCenters[normalizeCityKey(activeLocationCity)] ?? [52.2297, 21.0122];
   const homeFavoriteCity = favoriteViewCity ?? liveProfile.city;
   const currentFavoriteCity = favoriteMapMode === "nearby" ? favoriteNearbyCity ?? homeFavoriteCity : homeFavoriteCity;
+  const favoriteMapPlaceLimit = favoriteMapPlaceLimitsByCity[normalizeCityKey(currentFavoriteCity)] ?? 90;
   const favoriteCityCenter =
     favoriteMapMode === "nearby" && favoriteNearbyCenter
       ? favoriteNearbyCenter
@@ -5303,7 +5320,7 @@ export default function Page() {
     }
 
     // Load cached places immediately for home city
-    const cacheKey = `places-v5-${cityKey}`;
+    const cacheKey = `places-v6-${cityKey}`;
     const cacheExpiry = 7 * 24 * 60 * 60 * 1000; // 7 days
 
     let cacheIsFresh = false;
@@ -5337,7 +5354,7 @@ export default function Page() {
           city: currentFavoriteCity,
           lat: String(activeCenter[0]),
           lon: String(activeCenter[1]),
-          limit: "160",
+          limit: String(favoriteMapPlaceLimit),
         });
         const response = await fetch(`/api/places?${params.toString()}`, { signal: controller.signal, cache: "no-store" });
 
@@ -5346,7 +5363,7 @@ export default function Page() {
         }
 
         const payload = (await response.json()) as { places?: FavoritePlace[] };
-        const nextPlaces = (payload.places ?? []).slice(0, 160);
+        const nextPlaces = (payload.places ?? []).slice(0, favoriteMapPlaceLimit);
 
         setFavoritePlaces((current) => nextPlaces.length ? nextPlaces : (favoriteMapMode === "home" && current.length ? current : getFallbackFavoritePlaces(cityKey)));
 
@@ -5372,7 +5389,7 @@ export default function Page() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [currentFavoriteCity, favoriteMapMode, favoriteNearbyCenter, isAdmin, user.signedIn]);
+  }, [currentFavoriteCity, favoriteMapMode, favoriteMapPlaceLimit, favoriteNearbyCenter, isAdmin, user.signedIn]);
 
   useEffect(() => {
     if (!postSignupOnboardingOpen) return;
