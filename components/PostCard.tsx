@@ -46,7 +46,7 @@ export function PostMediaPreview({
 
   if (effectiveMediaKind === "photo") {
     return (
-      <div className={`overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0] ${detail ? "flex justify-center bg-white p-2" : ""}`}>
+      <div data-no-swipe className={`overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0] ${detail ? "flex justify-center bg-white p-2" : ""}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={mediaUrls[0]}
@@ -60,7 +60,7 @@ export function PostMediaPreview({
 
   if (effectiveMediaKind === "video") {
     return (
-      <div className={`${detail ? "overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]" : `${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}`}>
+      <div data-no-swipe className={`${detail ? "overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]" : `${getVideoAspectClass(post.videoRatio)} overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]`}`}>
         <video
           src={mediaUrls[0]}
           controls
@@ -92,7 +92,7 @@ export function PostMediaPreview({
     post.mediaTypes?.[currentIndex] === "video" || isVideoUrl(mediaUrls[currentIndex] ?? "");
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-no-swipe>
       <div className="relative overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0]">
         {slideIsVideo ? (
           <video

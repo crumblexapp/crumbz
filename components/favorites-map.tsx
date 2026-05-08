@@ -762,8 +762,8 @@ export default function FavoritesMap({
             </div>
 
             {/* Map canvas */}
-            <div className="h-[440px] w-full overflow-hidden sm:h-[540px]">
-              <div id="google-map" className="h-full w-full" />
+            <div className="h-[440px] w-full overflow-hidden sm:h-[540px]" data-no-swipe>
+              <div id="google-map" className="h-full w-full" data-no-swipe />
             </div>
 
             {searchLoading ? (

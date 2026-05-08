@@ -5870,32 +5870,60 @@ export default function Page() {
     if (selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail || isCreateModalOpen) return;
 
     const TAB_ORDER: StudentTab[] = ["feed", "favorites", "rewards", "social", "profile"];
+    const tabSwipeBlockedSelector = [
+      "[data-no-swipe]",
+      "#google-map",
+      ".gm-style",
+      ".leaflet-container",
+      "[role='dialog']",
+      "[aria-modal='true']",
+      "video",
+      "input",
+      "textarea",
+      "select",
+      "button",
+      "a",
+      "[contenteditable='true']",
+    ].join(",");
     let startX: number | null = null;
     let startY: number | null = null;
     let blocked = false;
 
+    const isScrollableTouchSurface = (el: HTMLElement) => {
+      const style = window.getComputedStyle(el);
+      const scrollsX =
+        ["auto", "scroll", "overlay"].includes(style.overflowX) &&
+        el.scrollWidth > el.clientWidth + 8;
+      const scrollsY =
+        ["auto", "scroll", "overlay"].includes(style.overflowY) &&
+        el.scrollHeight > el.clientHeight + 8;
+      return scrollsX || scrollsY;
+    };
+
+    const shouldBlockTabSwipe = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      let el: HTMLElement | null = target;
+      while (el && el !== document.body) {
+        if (el.matches(tabSwipeBlockedSelector) || isScrollableTouchSurface(el)) {
+          return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    };
+
     const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        blocked = true;
+        startX = null;
+        startY = null;
+        return;
+      }
       const touch = e.touches[0];
       if (!touch) return;
       startX = touch.clientX;
       startY = touch.clientY;
-      blocked = false;
-
-      // Block if the touch starts inside a horizontally-scrollable element
-      // (story rails, carousels, etc.) so their own swipe wins.
-      let el = e.target as HTMLElement | null;
-      while (el && el !== document.body) {
-        if (el.matches?.(".overflow-x-auto, .overflow-x-scroll, [data-no-swipe]")) {
-          blocked = true;
-          break;
-        }
-        // Also block on map / leaflet (they handle their own gestures)
-        if (el.classList?.contains("leaflet-container")) {
-          blocked = true;
-          break;
-        }
-        el = el.parentElement;
-      }
+      blocked = shouldBlockTabSwipe(e.target);
     };
 
     const onTouchEnd = (e: TouchEvent) => {
