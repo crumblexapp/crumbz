@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       author_name: authorName,
       payload: {},
       deleted_at: liked ? null : now,
+      created_at: now,
       updated_at: now,
     },
     { onConflict: "id" },

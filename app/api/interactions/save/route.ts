@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       author_name: authorName,
       payload: placeId ? { placeId } : {},
       deleted_at: saved ? null : now,
+      created_at: now,
       updated_at: now,
     },
     { onConflict: "id" },
