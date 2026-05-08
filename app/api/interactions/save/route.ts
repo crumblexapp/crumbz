@@ -36,23 +36,31 @@ export async function POST(request: Request) {
   const id = `save:${postId}:${identity.email}`;
   const now = new Date().toISOString();
 
-  const { error } = await supabaseServer.from("post_interactions").upsert(
-    {
-      id,
-      post_id: postId,
-      interaction_type: "save",
-      author_email: identity.email,
-      author_name: authorName,
-      payload: placeId ? { placeId } : {},
-      deleted_at: saved ? null : now,
-      created_at: now,
-      updated_at: now,
-    },
-    { onConflict: "id" },
-  );
-
-  if (error) {
-    return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  if (saved) {
+    // Save → ensure row is present and active.
+    const { error } = await supabaseServer.from("post_interactions").upsert(
+      {
+        id,
+        post_id: postId,
+        interaction_type: "save",
+        author_email: identity.email,
+        author_name: authorName,
+        payload: placeId ? { placeId } : {},
+        deleted_at: null,
+        created_at: now,
+        updated_at: now,
+      },
+      { onConflict: "id" },
+    );
+    if (error) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    }
+  } else {
+    // Unsave → hard-delete the row.
+    const { error } = await supabaseServer.from("post_interactions").delete().eq("id", id);
+    if (error) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ ok: true });

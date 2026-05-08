@@ -6742,6 +6742,7 @@ export default function Page() {
 
     // Optimistic update so the heart responds immediately without waiting for the API
     const previousAccounts = accounts;
+    const previousUser = user;
     const currentEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     setAccounts((current) =>
       current.map((account) =>
@@ -6750,6 +6751,8 @@ export default function Page() {
           : account,
       ),
     );
+    // Also update `user.profile` so the liveProfile fallback (when accounts doesn't include the user yet) reflects the change
+    persistUser({ ...user, profile: { ...user.profile, favoritePlaceIds: nextFavoritePlaceIds } });
 
     void mutateAccountState({
       action: "update_favorites",
@@ -6808,6 +6811,7 @@ export default function Page() {
       })
       .catch((error) => {
         setAccounts(previousAccounts);
+        persistUser(previousUser);
         setFavoritePlacesError(error instanceof Error ? error.message : "saving that spot didn’t stick. try again.");
       });
   };
