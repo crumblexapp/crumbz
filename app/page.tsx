@@ -40,6 +40,8 @@ import PullToRefresh from "@/components/PullToRefresh";
 import { PostMediaPreview, PostActionIcon } from "@/components/PostCard";
 
 const FavoritesMap = dynamic(() => import("@/components/favorites-map"), { ssr: false });
+const ProfileQrModal = dynamic(() => import("@/components/ProfileQrModal"), { ssr: false });
+const LikesViewerModal = dynamic(() => import("@/components/LikesViewerModal"), { ssr: false });
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -2444,7 +2446,6 @@ export default function Page() {
   const [profileQrOpen, setProfileQrOpen] = useState(false);
   const [profileShareUrl, setProfileShareUrl] = useState("");
   const [profileShareNotice, setProfileShareNotice] = useState("");
-  const [profileQrImageUrl, setProfileQrImageUrl] = useState("");
   const [referralNotice, setReferralNotice] = useState("");
   const [pendingReferralCode, setPendingReferralCode] = useState("");
   const [socialActionNotice, setSocialActionNotice] = useState("");
@@ -6415,37 +6416,6 @@ export default function Page() {
 
     return () => window.clearTimeout(timeout);
   }, [isAdmin, user.signedIn]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!profileShareUrl) {
-      setProfileQrImageUrl("");
-      return;
-    }
-
-    void import("qrcode")
-      .then(({ default: QRCode }) =>
-        QRCode.toDataURL(profileShareUrl, {
-          width: 960,
-          margin: 2,
-          color: {
-            dark: "#000000",
-            light: "#FFFFFF",
-          },
-        }),
-      )
-      .then((dataUrl) => {
-        if (!cancelled) setProfileQrImageUrl(dataUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setProfileQrImageUrl("");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [profileShareUrl]);
 
   const finishOnboarding = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -14341,62 +14311,18 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
-      <Modal isOpen={profileQrOpen} onOpenChange={setProfileQrOpen} placement="center">
-        <ModalContent className="max-h-[calc(100dvh-1.5rem)] overflow-hidden bg-[#fffaf2]">
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex items-center justify-between gap-3 border-b border-[#FFF0D0]">
-                <div>
-                  <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">share your profile</p>
-                </div>
-                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
-                  close
-                </Button>
-              </ModalHeader>
-              <ModalBody className="items-center gap-4 overflow-y-auto bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
-                <div className="w-full rounded-[28px] border border-[#FFF0D0] bg-white p-5 text-center shadow-[0_18px_40px_rgba(254,138,1,0.08)]">
-                  <div className="mx-auto flex w-fit items-center gap-3 rounded-full bg-[#FFF7E8] px-4 py-2">
-                    <Avatar src={currentUserPicture} name={liveProfile.fullName || liveProfile.username} className="h-11 w-11 bg-[#FFF0D0] text-[#F5A623]" />
-                    <div className="text-left">
-                      <p className="text-sm font-semibold text-[#2C1A0E]">{liveProfile.fullName || "crumbz user"}</p>
-                      <p className="text-sm text-[#6c7289]">@{liveProfile.username}</p>
-                    </div>
-                  </div>
-                  {profileQrImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profileQrImageUrl} alt={`QR code for @${liveProfile.username}`} className="mx-auto mt-4 h-64 w-64 rounded-[24px] border border-[#FFF0D0] bg-white p-3" />
-                  ) : (
-                    <div className="mx-auto mt-4 flex h-64 w-64 items-center justify-center rounded-[24px] border border-[#FFF0D0] bg-[#FFF7E8] text-sm text-[#6c7289]">
-                      qr code loading...
-                    </div>
-                  )}
-                  <div className="mt-4 space-y-3">
-                    <Button radius="full" className="w-full bg-[#2C1A0E] text-white" onPress={shareProfile}>
-                      share profile link
-                    </Button>
-                    <Button radius="full" variant="flat" className="w-full bg-[#FFF0D0] text-[#2C1A0E]" onPress={shareProfilePhotoToInstagram}>
-                      share photo to instagram
-                    </Button>
-                    <p className="text-sm text-[#6c7289]">this opens your phone share menu with the profile link people can tap.</p>
-                  </div>
-                  <div className="mt-3 rounded-[18px] bg-[#FFF7E8] px-4 py-3 text-left text-sm text-[#6c7289]">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#B56D19]">link</p>
-                    <button type="button" onClick={() => void copyProfileLink()} className="block w-full truncate text-left text-[#2C1A0E]">
-                      {profileShareUrl}
-                    </button>
-                  </div>
-                </div>
-                {profileShareNotice ? <p className="text-sm text-[#2C1A0E]">{profileShareNotice}</p> : null}
-                <div className="flex w-full items-center justify-end gap-2">
-                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={copyProfileLink}>
-                    copy link
-                  </Button>
-                </div>
-              </ModalBody>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+      <ProfileQrModal
+        isOpen={profileQrOpen}
+        onOpenChange={setProfileQrOpen}
+        profileShareUrl={profileShareUrl}
+        profileShareNotice={profileShareNotice}
+        currentUserPicture={currentUserPicture}
+        fullName={liveProfile.fullName}
+        username={liveProfile.username}
+        onShareProfile={shareProfile}
+        onShareProfilePhoto={shareProfilePhotoToInstagram}
+        onCopyProfileLink={copyProfileLink}
+      />
 
       <Modal isOpen={storyActionMenuOpen} onOpenChange={setStoryActionMenuOpen} placement="bottom-center">
         <ModalContent className="bg-[#fffaf2]">
@@ -15032,67 +14958,24 @@ export default function Page() {
         </ModalContent>
       </Modal>
 
-      <Modal
+      <LikesViewerModal
         isOpen={Boolean(likesViewerPost)}
+        likeCount={likesViewerBucket?.likes.length ?? 0}
+        rows={likesViewerRows}
+        search={likesViewerSearch}
+        label={copy.reactions.label}
+        likesLabel={copy.reactions.likes(likesViewerBucket?.likes.length ?? 0)}
+        closeLabel={copy.common.close}
+        searchPlaceholder={copy.reactions.searchPeople}
+        onSearchChange={setLikesViewerSearch}
+        onOpenProfile={openProfileByEmail}
         onOpenChange={(open) => {
           if (!open) {
             setLikesViewerPostId(null);
             setLikesViewerSearch("");
           }
         }}
-        placement="bottom-center"
-        scrollBehavior="inside"
-      >
-        <ModalContent className="bg-[#fffaf2]">
-          {(onClose) => (
-            <>
-              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.reactions.label}</p>
-                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                    {copy.reactions.likes(likesViewerBucket?.likes.length ?? 0)}
-                  </p>
-                </div>
-                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
-                  {copy.common.close}
-                </Button>
-              </ModalHeader>
-              <ModalBody className="gap-4 bg-[#fffaf2] pb-[calc(8rem+env(safe-area-inset-bottom))] pt-5">
-                <Input
-                  radius="full"
-                  placeholder={copy.reactions.searchPeople}
-                  value={likesViewerSearch}
-                  onValueChange={setLikesViewerSearch}
-                  classNames={{ inputWrapper: "bg-white border border-[#FFF0D0] shadow-none" }}
-                />
-                {likesViewerRows.length ? (
-                  <div className="space-y-3">
-                    {likesViewerRows.map((row) => (
-                      <button
-                        key={`${row.email}-${row.username}`}
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          openProfileByEmail(row.email);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-[18px] bg-white px-3 py-3 text-left ring-1 ring-[#FFF0D0]"
-                      >
-                        <Avatar src={row.picture} name={row.fullName} className="h-12 w-12 bg-[#FFF0D0] text-[#F5A623]" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[#2C1A0E]">{row.username || row.fullName}</p>
-                          <p className="truncate text-sm text-[#6c7289]">{row.fullName}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-[#6c7289]">no likes to show yet.</p>
-                )}
-              </ModalBody>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+      />
 
       <Modal
         isOpen={Boolean(commentReactionViewer)}
