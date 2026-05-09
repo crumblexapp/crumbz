@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendCommentReplyNotifications } from "@/lib/comment-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,18 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  }
+
+  if ("replies" in (body ?? {})) {
+    await sendCommentReplyNotifications({
+      postId,
+      commentId,
+      commentText: normalizeText(currentPayload.text),
+      commentOwnerEmail: current.author_email,
+      actorEmail: identity.email,
+      previousReplies: currentReplies,
+      nextReplies,
+    });
   }
 
   return NextResponse.json({ ok: true });

@@ -6,13 +6,22 @@ import { supabaseServer } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type NativePushTokenPayload = {
+  token?: unknown;
+  platform?: unknown;
+};
+
+function normalizeNativePlatform(value: unknown) {
+  return value === "ios" || value === "android" ? value : "";
+}
+
 export async function POST(request: Request) {
   const { error: authError, identity } = await requireVerifiedIdentity(request);
   if (authError || !identity) {
     return authError;
   }
 
-  const body = (await request.json().catch(() => null)) as { action?: string; subscription?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { action?: string; subscription?: unknown; nativeToken?: NativePushTokenPayload } | null;
   if (body?.action === "test") {
     if (!webPushEnabled) {
       return NextResponse.json({ ok: false, message: "web push isn't configured on the server yet." }, { status: 500 });
@@ -61,6 +70,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "test alert sent." });
   }
 
+  const nativeToken = typeof body?.nativeToken?.token === "string" ? body.nativeToken.token.trim() : "";
+  const nativePlatform = normalizeNativePlatform(body?.nativeToken?.platform);
+
+  if (nativeToken || nativePlatform) {
+    if (!nativeToken || !nativePlatform) {
+      return NextResponse.json({ ok: false, message: "invalid native push token." }, { status: 400 });
+    }
+
+    const { error } = await supabaseServer.from("native_push_tokens").upsert(
+      {
+        token: nativeToken,
+        author_email: identity.email,
+        platform: nativePlatform,
+        user_agent: request.headers.get("user-agent") ?? "",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "token" },
+    );
+
+    if (error) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   const subscription = body?.subscription;
 
   if (!isValidPushSubscription(subscription)) {
@@ -91,11 +126,26 @@ export async function DELETE(request: Request) {
     return authError;
   }
 
-  const body = (await request.json().catch(() => null)) as { endpoint?: string } | null;
+  const body = (await request.json().catch(() => null)) as { endpoint?: string; nativeToken?: string } | null;
   const endpoint = body?.endpoint?.trim();
+  const nativeToken = body?.nativeToken?.trim();
 
-  if (!endpoint) {
-    return NextResponse.json({ ok: false, message: "missing endpoint." }, { status: 400 });
+  if (!endpoint && !nativeToken) {
+    return NextResponse.json({ ok: false, message: "missing endpoint or native token." }, { status: 400 });
+  }
+
+  if (nativeToken) {
+    const { error } = await supabaseServer
+      .from("native_push_tokens")
+      .delete()
+      .eq("token", nativeToken)
+      .eq("author_email", identity.email);
+
+    if (error) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
   }
 
   const { error } = await supabaseServer

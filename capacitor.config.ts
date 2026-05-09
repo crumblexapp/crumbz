@@ -1,5 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 import { KeyboardResize } from '@capacitor/keyboard';
+import type { PresentationOption } from '@capacitor/push-notifications';
 
 const config: CapacitorConfig = {
   appId: 'com.crumbz.app',
@@ -39,6 +40,9 @@ const config: CapacitorConfig = {
     Keyboard: {
       resize: KeyboardResize.Body,
       resizeOnFullScreen: true,
+    },
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'] satisfies PresentationOption[],
     },
   },
 };

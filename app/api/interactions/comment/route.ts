@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireVerifiedIdentity } from "@/lib/google-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendNewCommentNotifications } from "@/lib/comment-notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,16 @@ export async function POST(request: Request) {
 
   if (error && !error.message.includes("duplicate key")) {
     return NextResponse.json({ ok: false, message: error.message }, { status: 500 });
+  }
+
+  if (!error) {
+    await sendNewCommentNotifications({
+      postId,
+      commentId,
+      text,
+      actorEmail: identity.email,
+      actorName: authorName || "someone",
+    });
   }
 
   return NextResponse.json({ ok: true });
