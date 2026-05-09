@@ -728,6 +728,7 @@ type PostInteraction = {
 };
 
 type InteractionsMap = Record<string, PostInteraction>;
+type MediaInputFiles = FileList | File[];
 
 type PendingInteractionAction = {
   id: string;
@@ -7465,7 +7466,7 @@ export default function Page() {
     setDareReminderModalOpen(true);
   };
 
-  const handleDareProofFile = async (files: FileList | null) => {
+  const handleDareProofFile = async (files: MediaInputFiles | null) => {
     if (!files?.length) return;
 
     setIsUploadingDareProof(true);
@@ -7739,11 +7740,7 @@ export default function Page() {
     setIsCreateModalOpen(true);
     setCreateModalStep(1);
     window.setTimeout(() => {
-      if (source === "camera") {
-        createModalCameraInputRef.current?.click();
-        return;
-      }
-      dailyPostInputRef.current?.click();
+      void openPostMediaPicker(source === "camera" ? "camera" : "photos");
     }, 120);
   };
 
@@ -7799,6 +7796,106 @@ export default function Page() {
   const openOwnStorySequence = () => {
     if (!currentUserStoryGroup?.posts.length) return;
     setSelectedStoryPostId(currentUserStoryGroup.posts[0].id);
+  };
+
+  const nativeMediaToFile = async (media: { webPath?: string; metadata?: { format?: string } }, fallbackName: string) => {
+    if (!media.webPath) throw new Error("native media path missing");
+    const response = await fetch(media.webPath);
+    if (!response.ok) throw new Error("native media read failed");
+    const blob = await response.blob();
+    const rawFormat = media.metadata?.format?.toLowerCase().replace("jpeg", "jpg") || "";
+    const extension = rawFormat && /^[a-z0-9]+$/.test(rawFormat) ? rawFormat : blob.type.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+    const contentType = blob.type || (extension === "png" ? "image/png" : "image/jpeg");
+    return new File([blob], `${fallbackName}.${extension}`, { type: contentType });
+  };
+
+  const pickNativeImageFiles = async ({
+    source,
+    limit = 1,
+  }: {
+    source: "camera" | "photos";
+    limit?: number;
+  }): Promise<File[] | null> => {
+    if (!isNativePlatform) return null;
+
+    try {
+      const { Camera, CameraDirection, MediaTypeSelection } = await import("@capacitor/camera");
+
+      if (source === "camera") {
+        const photo = await Camera.takePhoto({
+          quality: 88,
+          correctOrientation: true,
+          saveToGallery: false,
+          cameraDirection: CameraDirection.Rear,
+          includeMetadata: true,
+          presentationStyle: "fullscreen",
+        });
+        return [await nativeMediaToFile(photo, `crumbz-camera-${Date.now()}`)];
+      }
+
+      const media = await Camera.chooseFromGallery({
+        mediaType: MediaTypeSelection.Photo,
+        allowMultipleSelection: limit > 1,
+        limit,
+        quality: 88,
+        correctOrientation: true,
+        includeMetadata: true,
+        presentationStyle: "fullscreen",
+      });
+
+      const files = await Promise.all(
+        media.results.slice(0, limit).map((item, index) => nativeMediaToFile(item, `crumbz-photo-${Date.now()}-${index + 1}`)),
+      );
+      return files.length ? files : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const openPostMediaPicker = async (source: "photos" | "camera") => {
+    if (isUploadingDailyPost) return;
+    const shouldUseNativeImagePicker = !isInfluencer || dailyPostComposerMediaKind === "photo" || dailyPostFormat === "story";
+    if (shouldUseNativeImagePicker) {
+      const files = await pickNativeImageFiles({ source, limit: isInfluencer && source === "photos" && dailyPostFormat !== "story" ? 10 : 1 });
+      if (files?.length) {
+        void handleDailyPostFiles(files);
+        return;
+      }
+      if (files) return;
+    }
+
+    if (source === "camera") {
+      createModalCameraInputRef.current?.click();
+      return;
+    }
+    dailyPostInputRef.current?.click();
+  };
+
+  const openProfilePhotoPicker = async (source: "photos" | "camera") => {
+    if (isSavingProfilePhoto) return;
+    const files = await pickNativeImageFiles({ source, limit: 1 });
+    if (files?.length) {
+      void handleProfilePhotoFiles(files);
+      return;
+    }
+    if (files) return;
+
+    if (source === "camera") {
+      profileCameraInputRef.current?.click();
+      return;
+    }
+    profilePhotoInputRef.current?.click();
+  };
+
+  const openWeeklyDumpPicker = async () => {
+    const remainingSlots = Math.max(0, 7 - activeWeeklyDumpMediaUrls.length);
+    const files = await pickNativeImageFiles({ source: "photos", limit: remainingSlots || 1 });
+    if (files?.length) {
+      void handleWeeklyDumpFiles(files);
+      return;
+    }
+    if (files) return;
+    weeklyDumpInputRef.current?.click();
   };
 
   const resetComposer = (notice = "") => {
@@ -8154,7 +8251,7 @@ export default function Page() {
   };
 
   const uploadMediaFiles = async (
-    files: FileList | null,
+    files: MediaInputFiles | null,
     options: {
       mediaKind: MediaKind;
       postType?: PostType;
@@ -8332,7 +8429,7 @@ export default function Page() {
     return uploadResults?.length ? uploadResults : null;
   };
 
-  const handleProfilePhotoFiles = async (files: FileList | null) => {
+  const handleProfilePhotoFiles = async (files: MediaInputFiles | null) => {
     if (!files?.length) return;
 
     setIsSavingProfilePhoto(true);
@@ -8411,7 +8508,7 @@ export default function Page() {
       });
   };
 
-  const handleComposerFiles = async (files: FileList | null) => {
+  const handleComposerFiles = async (files: MediaInputFiles | null) => {
     if (!files?.length) return;
 
     setIsUploadingMedia(true);
@@ -8439,7 +8536,7 @@ export default function Page() {
     }
   };
 
-  const handleWeeklyDumpFiles = async (files: FileList | null) => {
+  const handleWeeklyDumpFiles = async (files: MediaInputFiles | null) => {
     if (!files?.length) return;
 
     if (!canSubmitWeeklyDumpToday) {
@@ -8478,7 +8575,7 @@ export default function Page() {
     }
   };
 
-  const handleDailyPostFiles = async (files: FileList | null) => {
+  const handleDailyPostFiles = async (files: MediaInputFiles | null) => {
     if (!files?.length) return;
 
     const fileList = Array.from(files);
@@ -8653,7 +8750,7 @@ export default function Page() {
     }
   };
 
-  const handleCarouselStagingAddMore = (files: FileList | null) => {
+  const handleCarouselStagingAddMore = (files: MediaInputFiles | null) => {
     if (!files?.length || !carouselStaging) return;
     const remaining = 10 - carouselStaging.length;
     if (remaining <= 0) return;
@@ -12697,7 +12794,9 @@ export default function Page() {
                                   type="button"
                                   aria-label="add sunday dump photos"
                                   disabled={!canSubmitWeeklyDumpToday || activeWeeklyDumpMediaUrls.length >= 7 || isUploadingWeeklyDump}
-                                  onClick={() => weeklyDumpInputRef.current?.click()}
+                                  onClick={() => {
+                                    void openWeeklyDumpPicker();
+                                  }}
                                   className="flex aspect-square items-center justify-center rounded-[18px] border border-dashed border-[#ffc6b5] bg-[#fff8f5] text-4xl text-[#ff6a24] transition-transform hover:scale-[1.02] disabled:opacity-50"
                                 >
                                   +
@@ -13685,7 +13784,9 @@ export default function Page() {
                       <div className="flex gap-6">
                         <button
                           type="button"
-                          onClick={() => dailyPostInputRef.current?.click()}
+                          onClick={() => {
+                            void openPostMediaPicker("photos");
+                          }}
                           className="flex flex-col items-center gap-3"
                         >
                           <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-white/10">
@@ -13699,7 +13800,9 @@ export default function Page() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => createModalCameraInputRef.current?.click()}
+                          onClick={() => {
+                            void openPostMediaPicker("camera");
+                          }}
                           className="flex flex-col items-center gap-3"
                         >
                           <div className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-white/10">
@@ -14668,7 +14771,9 @@ export default function Page() {
                     radius="full"
                     className="bg-[#2C1A0E] text-white"
                     isDisabled={isSavingProfilePhoto}
-                    onPress={() => profilePhotoInputRef.current?.click()}
+                    onPress={() => {
+                      void openProfilePhotoPicker("photos");
+                    }}
                   >
                     choose from device
                   </Button>
@@ -14677,7 +14782,9 @@ export default function Page() {
                     variant="flat"
                     className="bg-[#FFF0D0] text-[#2C1A0E]"
                     isDisabled={isSavingProfilePhoto}
-                    onPress={() => profileCameraInputRef.current?.click()}
+                    onPress={() => {
+                      void openProfilePhotoPicker("camera");
+                    }}
                   >
                     take new photo
                   </Button>
