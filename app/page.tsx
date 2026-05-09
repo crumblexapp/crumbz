@@ -10415,7 +10415,7 @@ export default function Page() {
                     onPress={async () => {
                       setError("");
                       try {
-                        const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
+                        const { SignInWithApple } = await import("@/lib/native-apple-sign-in");
                         const result = await SignInWithApple.authorize({
                           clientId: "com.crumbz.app",
                           redirectURI: "crumbz://login-callback",

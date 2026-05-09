@@ -4,4 +4,5 @@
     <string name="title_activity_main">Crumbz</string>
     <string name="package_name">com.crumbz.app</string>
     <string name="custom_url_scheme">com.crumbz.app</string>
+    <string name="default_notification_channel_id">crumbz-social</string>
 </resources>
