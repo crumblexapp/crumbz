@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { AppPost, VideoRatio } from "@/lib/app-types";
 
 export function getVideoAspectClass(ratio: VideoRatio) {
@@ -19,6 +19,69 @@ export function getVideoAspectClass(ratio: VideoRatio) {
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase().split("?")[0] ?? "";
   return lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm");
+}
+
+function getOptimizedImageUrl(url: string, detail: boolean): string {
+  if (!url.includes("/storage/v1/object/public/crumbz-media/")) return url;
+
+  try {
+    const parsed = new URL(url);
+    parsed.pathname = parsed.pathname.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/");
+    parsed.searchParams.set("width", detail ? "1800" : "1200");
+    parsed.searchParams.set("quality", detail ? "82" : "74");
+    parsed.searchParams.set("resize", "contain");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function SmartPostImage({
+  src,
+  alt,
+  detail,
+  className,
+  style,
+}: {
+  src: string;
+  alt: string;
+  detail: boolean;
+  className: string;
+  style?: CSSProperties;
+}) {
+  const candidates = useMemo(() => {
+    const optimized = getOptimizedImageUrl(src, detail);
+    return optimized === src ? [src] : [optimized, src];
+  }, [detail, src]);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className={`flex items-center justify-center bg-[#FFF0D0] text-center text-sm font-semibold text-[#9b7b52] ${className}`} style={style}>
+        photo unavailable
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={candidates[candidateIndex]}
+      alt={alt}
+      className={className}
+      style={style}
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        if (candidateIndex < candidates.length - 1) {
+          setCandidateIndex((current) => current + 1);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
+  );
 }
 
 export function PostMediaPreview({
@@ -47,12 +110,11 @@ export function PostMediaPreview({
   if (effectiveMediaKind === "photo") {
     return (
       <div data-no-swipe className={`overflow-hidden rounded-[24px] bg-[#FFF0D0] ring-1 ring-[#FFF0D0] ${detail ? "flex justify-center bg-white p-2" : ""}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <SmartPostImage
           src={mediaUrls[0]}
           alt={post.title}
+          detail={detail}
           className={detail ? "max-h-[70vh] w-auto max-w-full object-contain" : "h-auto w-full object-contain"}
-          loading="lazy"
         />
       </div>
     );
@@ -105,13 +167,12 @@ export function PostMediaPreview({
             style={!detail && cropOffset ? { objectPosition: `${cropOffset.x}% ${cropOffset.y}%` } : undefined}
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <SmartPostImage
             src={mediaUrls[currentIndex]}
             alt={`${post.title} ${currentIndex + 1}`}
+            detail={detail}
             className={detail ? "max-h-[70vh] w-full object-contain bg-white" : "h-[28rem] w-full object-cover"}
             style={!detail && cropOffset ? { objectPosition: `${cropOffset.x}% ${cropOffset.y}%` } : undefined}
-            loading="lazy"
           />
         )}
         {mediaUrls.length > 1 ? (
