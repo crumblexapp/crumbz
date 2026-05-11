@@ -10546,9 +10546,6 @@ export default function Page() {
                 )}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
-                <p className="pt-1 text-center text-sm font-semibold text-[#6c7289]">
-                  Already have an account? <span className="text-[#2C1A0E]">Sign in</span>
-                </p>
               </div>
             </div>
           </motion.section>
