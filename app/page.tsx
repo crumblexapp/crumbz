@@ -10369,7 +10369,7 @@ export default function Page() {
             height: "100dvh",
             maxHeight: "100dvh",
             overflow: "hidden",
-            backgroundColor: "#fb8803",
+            backgroundColor: "#ffefce",
           }}
         >
           <video
@@ -10407,14 +10407,17 @@ export default function Page() {
             {renderInstallPrompt("mb-4")}
             <div className="space-y-10 rounded-[38px] bg-white px-6 py-8 shadow-[0_26px_70px_rgba(44,26,14,0.16)]">
               <div className="space-y-5 text-center">
-                <img src="/brand/crumbz-logo.png" alt="CRUMBZ" className="mx-auto w-56 max-w-full" />
+                <img src="/brand/logo-tagline.png" alt="CRUMBZ - the feed that keeps you hungry" className="mx-auto w-64 max-w-full" />
                 <div className="mx-auto h-px w-16 bg-[#fb8803]" />
                 <div className="space-y-2">
                   <h1 className="font-[family-name:var(--font-young-serif)] text-[2.35rem] leading-none text-[#2C1A0E]">
                     welcome to crumbz
                   </h1>
-                  <p className="mx-auto max-w-[18rem] text-sm font-semibold leading-6 text-[#6c7289]">
-                    sign in to save spots, follow friends, and keep your food map close.
+                  <p className="mx-auto max-w-[19rem] text-sm font-extrabold leading-6 text-[#6c7289]">
+                    your friends are already eating without you.
+                  </p>
+                  <p className="mx-auto max-w-[19rem] text-sm font-semibold leading-6 text-[#6c7289]">
+                    sign in to see where they went - and go one better.
                   </p>
                 </div>
               </div>
