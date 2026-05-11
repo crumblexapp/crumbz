@@ -2622,6 +2622,7 @@ export default function Page() {
   const lastManualSharedStateSyncAtRef = useRef(0);
   const seenNotifSyncTimerRef = useRef<number | null>(null);
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
+  const intentionalSignOutRef = useRef(false);
 
   const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
   const liveAccount =
@@ -4746,6 +4747,8 @@ export default function Page() {
   };
 
   const resetExpiredSession = (message?: string) => {
+    if (intentionalSignOutRef.current) return;
+
     persistUser(defaultUser);
     void supabaseBrowser.auth.signOut().catch(() => undefined);
     setFullName(null);
@@ -5228,12 +5231,14 @@ export default function Page() {
 
     void supabaseBrowser.auth.getSession().then(({ data }) => {
       if (cancelled) return;
+      if (intentionalSignOutRef.current) return;
       if (!data.session && userRef.current.signedIn) {
         resetExpiredSession("sign in with google to keep going.");
       }
     });
 
     const { data: authListener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      if (intentionalSignOutRef.current) return;
       if (session || !userRef.current.signedIn) return;
       resetExpiredSession("sign in with google to keep going.");
     });
@@ -6755,6 +6760,7 @@ export default function Page() {
   };
 
   const signOut = () => {
+    intentionalSignOutRef.current = true;
     const currentEmail = user.googleProfile?.email?.toLowerCase();
     const signedOutAccount = currentEmail
       ? accountsRef.current.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail) ?? null
@@ -6793,7 +6799,11 @@ export default function Page() {
     setError("");
     setAuthMode("login");
     setShowWelcomeScreen(false);
+    setNativeSplashDone(true);
     setStudentTab("feed");
+    window.setTimeout(() => {
+      intentionalSignOutRef.current = false;
+    }, 1000);
   };
 
   const addFriend = async (friendEmail: string) => {
@@ -10933,7 +10943,7 @@ export default function Page() {
                 </h1>
                 <p className="mt-2 break-all text-sm text-white/88">{user.googleProfile?.email}</p>
               </div>
-              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
+              <Button type="button" radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
                 log out
               </Button>
             </div>
@@ -12365,7 +12375,7 @@ export default function Page() {
                   <span>{copy.influencerDashboard.influencerAccessOn}</span>
                 </div>
               </div>
-              <Button radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
+              <Button type="button" radius="full" className="shrink-0 bg-white text-[#2C1A0E]" onPress={signOut}>
                 {copy.influencerDashboard.logOut}
               </Button>
             </div>
@@ -13358,7 +13368,7 @@ export default function Page() {
                       </div>
                     </div>
                   </div>
-                  <Button radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
+                  <Button type="button" radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
                     log out
                   </Button>
                 </div>
