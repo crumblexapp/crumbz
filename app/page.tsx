@@ -13408,6 +13408,168 @@ export default function Page() {
 
         {studentTab === "profile" ? (
           <section className="mt-6 space-y-4">
+            {settingsModalOpen ? (
+              <div className="space-y-4 pb-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (settingsView === "home") {
+                      setSettingsModalOpen(false);
+                    } else {
+                      setSettingsView("home");
+                      setSettingsNotice("");
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#FFF0D0] px-4 py-2 text-sm font-semibold text-[#2C1A0E]"
+                >
+                  <span aria-hidden="true">‹</span>
+                  <span>{settingsView === "home" ? "back to profile" : "settings"}</span>
+                </button>
+
+                <div className="rounded-[30px] border border-[#FFF0D0] bg-white p-5 shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                  <p className="font-[family-name:var(--font-young-serif)] text-[2.4rem] leading-none text-[#2C1A0E]">
+                    {settingsView === "home" ? "settings" : settingsView === "username" ? "edit username" : "edit school"}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[#6c7289]">
+                    {settingsView === "home" ? "account, profile, and app links." : "changes save to your crumbz account."}
+                  </p>
+                </div>
+
+                {settingsView === "home" ? (
+                  <div className="space-y-3">
+                    <button type="button" onClick={() => window.location.assign("/privacy")} className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm">
+                      <span className="font-semibold">Privacy Policy</span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" onClick={() => window.location.assign("/terms")} className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm">
+                      <span className="font-semibold">Terms of Use</span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsUsernameDraft(liveProfile.username ?? "");
+                        setSettingsNotice("");
+                        setSettingsView("username");
+                      }}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span>
+                        <span className="block font-semibold">Edit Username</span>
+                        <span className="mt-1 block text-sm text-[#6c7289]">@{liveProfile.username || "pending"}</span>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsSchoolDraft(liveProfile.schoolName ?? "");
+                        setSettingsNotice("");
+                        setSettingsView("school");
+                      }}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span>
+                        <span className="block font-semibold">Edit University/school</span>
+                        <span className="mt-1 block text-sm text-[#6c7289]">{liveProfile.schoolName || "not added yet"}</span>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <Button type="button" radius="full" className="mt-2 w-full bg-[#2C1A0E] text-white" onPress={signOut}>
+                      Log Out
+                    </Button>
+                  </div>
+                ) : null}
+
+                {settingsView === "username" ? (
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-4 p-5">
+                      <Input
+                        label="username"
+                        labelPlacement="outside"
+                        radius="lg"
+                        value={settingsUsernameDraft}
+                        onValueChange={(value) => {
+                          setSettingsUsernameDraft(value.toLowerCase().replace(/^@+/, ""));
+                          setSettingsNotice("");
+                        }}
+                        startContent={<span className="text-[#6c7289]">@</span>}
+                        classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
+                      />
+                      <p className={`text-sm ${settingsUsername && !settingsUsernameValid ? "text-[#B3261E]" : settingsUsernameTaken ? "text-[#B3261E]" : settingsUsername && !settingsUsernameUnchanged ? "text-[#2E7D32]" : "text-[#6c7289]"}`}>
+                        {!settingsUsername
+                          ? "choose a username."
+                          : !settingsUsernameValid
+                            ? "3-20 letters, numbers, or underscores."
+                            : settingsUsernameTaken
+                              ? "taken."
+                              : settingsUsernameUnchanged
+                                ? "this is your current username."
+                                : "available."}
+                      </p>
+                      {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                      <Button
+                        radius="full"
+                        className="bg-[#2C1A0E] text-white"
+                        isLoading={isSavingSettings}
+                        isDisabled={!settingsUsernameValid || settingsUsernameTaken || settingsUsernameUnchanged}
+                        onPress={saveSettingsUsername}
+                      >
+                        save username
+                      </Button>
+                    </CardBody>
+                  </Card>
+                ) : null}
+
+                {settingsView === "school" ? (
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-4 p-5">
+                      {settingsCitySchools.length ? (
+                        <Select
+                          label="university or school"
+                          labelPlacement="outside"
+                          radius="lg"
+                          selectedKeys={settingsSchoolSelectValue ? [settingsSchoolSelectValue] : []}
+                          onSelectionChange={(keys) => {
+                            const selected = Array.from(keys)[0];
+                            setSettingsSchoolDraft(typeof selected === "string" && selected !== SCHOOL_OTHER_OPTION ? selected : "");
+                            setSettingsNotice("");
+                          }}
+                          classNames={{ trigger: "bg-white shadow-none border border-[#FFF0D0]", value: "text-[#2C1A0E]" }}
+                        >
+                          {[...settingsCitySchools, SCHOOL_OTHER_OPTION].map((school) => (
+                            <SelectItem key={school}>{school === SCHOOL_OTHER_OPTION ? "Other" : school}</SelectItem>
+                          ))}
+                        </Select>
+                      ) : null}
+                      <Input
+                        label={settingsCitySchools.length ? "custom school" : "university or school"}
+                        labelPlacement="outside"
+                        placeholder="type your university or school"
+                        radius="lg"
+                        value={settingsSchoolDraft}
+                        onValueChange={(value) => {
+                          setSettingsSchoolDraft(value);
+                          setSettingsNotice("");
+                        }}
+                        classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
+                      />
+                      {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                      <Button
+                        radius="full"
+                        className="bg-[#2C1A0E] text-white"
+                        isLoading={isSavingSettings}
+                        isDisabled={!settingsSchoolDraft.trim()}
+                        onPress={saveSettingsSchool}
+                      >
+                        save school
+                      </Button>
+                    </CardBody>
+                  </Card>
+                ) : null}
+              </div>
+            ) : (
+              <>
             {!pushEnabled && pushPromptSnoozedUntil <= Date.now() ? (
               <Card className="rounded-[28px] border border-[#FFE1B3] bg-[#FFF7E8] shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                 <CardBody className="gap-3 p-5">
@@ -13705,6 +13867,8 @@ export default function Page() {
                 <p className="py-6 text-center text-sm text-[#6c7289]">your posts will show up here once you share something.</p>
               )}
             </div>
+              </>
+            )}
 
           </section>
         ) : null}
@@ -14123,7 +14287,7 @@ export default function Page() {
           <PullToRefresh />
         ) : null}
 
-        {selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail ? null : (
+        {selectedStoryPost || notificationsOpen || selectedOwnArchiveOpen || selectedOwnPost || selectedProfileEmail || settingsModalOpen ? null : (
           <BottomNav
             studentTab={studentTab}
             onTabChange={(tab) => {
@@ -14550,178 +14714,6 @@ export default function Page() {
         onShareProfilePhoto={shareProfilePhotoToInstagram}
         onCopyProfileLink={copyProfileLink}
       />
-
-      <Modal isOpen={settingsModalOpen} onOpenChange={setSettingsModalOpen} placement="bottom-center" scrollBehavior="inside">
-        <ModalContent className="bg-[#fffaf2]">
-          {(onClose) => (
-            <>
-              <ModalHeader className="border-b border-[#FFF0D0]">
-                <div className="flex w-full items-center justify-between gap-3">
-                  <div>
-                    <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
-                      {settingsView === "home" ? "settings" : settingsView === "username" ? "edit username" : "edit school"}
-                    </p>
-                    <p className="mt-2 text-sm text-[#6c7289]">
-                      {settingsView === "home" ? "account, profile, and app links." : "changes save to your crumbz account."}
-                    </p>
-                  </div>
-                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
-                    close
-                  </Button>
-                </div>
-              </ModalHeader>
-              <ModalBody className="gap-3 bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
-                {settingsView === "home" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => window.open("/privacy", "_blank", "noopener,noreferrer")}
-                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
-                    >
-                      <span className="font-semibold">Privacy Policy</span>
-                      <span aria-hidden="true">›</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => window.open("/terms", "_blank", "noopener,noreferrer")}
-                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
-                    >
-                      <span className="font-semibold">Terms of Use</span>
-                      <span aria-hidden="true">›</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsUsernameDraft(liveProfile.username ?? "");
-                        setSettingsNotice("");
-                        setSettingsView("username");
-                      }}
-                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
-                    >
-                      <span>
-                        <span className="block font-semibold">Edit Username</span>
-                        <span className="mt-1 block text-sm text-[#6c7289]">@{liveProfile.username || "pending"}</span>
-                      </span>
-                      <span aria-hidden="true">›</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsSchoolDraft(liveProfile.schoolName ?? "");
-                        setSettingsNotice("");
-                        setSettingsView("school");
-                      }}
-                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
-                    >
-                      <span>
-                        <span className="block font-semibold">Edit University/school</span>
-                        <span className="mt-1 block text-sm text-[#6c7289]">{liveProfile.schoolName || "not added yet"}</span>
-                      </span>
-                      <span aria-hidden="true">›</span>
-                    </button>
-                    <Button type="button" radius="full" className="mt-2 bg-[#2C1A0E] text-white" onPress={signOut}>
-                      Log Out
-                    </Button>
-                  </>
-                ) : null}
-
-                {settingsView === "username" ? (
-                  <>
-                    <Input
-                      label="username"
-                      labelPlacement="outside"
-                      radius="lg"
-                      value={settingsUsernameDraft}
-                      onValueChange={(value) => {
-                        setSettingsUsernameDraft(value.toLowerCase().replace(/^@+/, ""));
-                        setSettingsNotice("");
-                      }}
-                      startContent={<span className="text-[#6c7289]">@</span>}
-                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
-                    />
-                    <p className={`text-sm ${settingsUsername && !settingsUsernameValid ? "text-[#B3261E]" : settingsUsernameTaken ? "text-[#B3261E]" : settingsUsername && !settingsUsernameUnchanged ? "text-[#2E7D32]" : "text-[#6c7289]"}`}>
-                      {!settingsUsername
-                        ? "choose a username."
-                        : !settingsUsernameValid
-                          ? "3-20 letters, numbers, or underscores."
-                          : settingsUsernameTaken
-                            ? "taken."
-                            : settingsUsernameUnchanged
-                              ? "this is your current username."
-                              : "available."}
-                    </p>
-                    {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
-                    <div className="flex gap-2">
-                      <Button radius="full" variant="flat" className="flex-1 bg-white text-[#2C1A0E]" onPress={() => setSettingsView("home")}>
-                        back
-                      </Button>
-                      <Button
-                        radius="full"
-                        className="flex-1 bg-[#2C1A0E] text-white"
-                        isLoading={isSavingSettings}
-                        isDisabled={!settingsUsernameValid || settingsUsernameTaken || settingsUsernameUnchanged}
-                        onPress={saveSettingsUsername}
-                      >
-                        save
-                      </Button>
-                    </div>
-                  </>
-                ) : null}
-
-                {settingsView === "school" ? (
-                  <>
-                    {settingsCitySchools.length ? (
-                      <Select
-                        label="university or school"
-                        labelPlacement="outside"
-                        radius="lg"
-                        selectedKeys={settingsSchoolSelectValue ? [settingsSchoolSelectValue] : []}
-                        onSelectionChange={(keys) => {
-                          const selected = Array.from(keys)[0];
-                          setSettingsSchoolDraft(typeof selected === "string" && selected !== SCHOOL_OTHER_OPTION ? selected : "");
-                          setSettingsNotice("");
-                        }}
-                        classNames={{ trigger: "bg-white shadow-none border border-[#FFF0D0]", value: "text-[#2C1A0E]" }}
-                      >
-                        {[...settingsCitySchools, SCHOOL_OTHER_OPTION].map((school) => (
-                          <SelectItem key={school}>{school === SCHOOL_OTHER_OPTION ? "Other" : school}</SelectItem>
-                        ))}
-                      </Select>
-                    ) : null}
-                    <Input
-                      label={settingsCitySchools.length ? "custom school" : "university or school"}
-                      labelPlacement="outside"
-                      placeholder="type your university or school"
-                      radius="lg"
-                      value={settingsSchoolDraft}
-                      onValueChange={(value) => {
-                        setSettingsSchoolDraft(value);
-                        setSettingsNotice("");
-                      }}
-                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
-                    />
-                    {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
-                    <div className="flex gap-2">
-                      <Button radius="full" variant="flat" className="flex-1 bg-white text-[#2C1A0E]" onPress={() => setSettingsView("home")}>
-                        back
-                      </Button>
-                      <Button
-                        radius="full"
-                        className="flex-1 bg-[#2C1A0E] text-white"
-                        isLoading={isSavingSettings}
-                        isDisabled={!settingsSchoolDraft.trim()}
-                        onPress={saveSettingsSchool}
-                      >
-                        save
-                      </Button>
-                    </div>
-                  </>
-                ) : null}
-              </ModalBody>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
 
       <Modal isOpen={storyActionMenuOpen} onOpenChange={setStoryActionMenuOpen} placement="bottom-center">
         <ModalContent className="bg-[#fffaf2]">
