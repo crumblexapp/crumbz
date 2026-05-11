@@ -10414,10 +10414,10 @@ export default function Page() {
                     welcome to crumbz
                   </h1>
                   <p className="mx-auto max-w-[19rem] text-sm font-extrabold leading-6 text-[#6c7289]">
-                    your friends are already eating without you.
+                    good spots don't stay secret.
                   </p>
                   <p className="mx-auto max-w-[19rem] text-sm font-semibold leading-6 text-[#6c7289]">
-                    sign in to see where they went - and go one better.
+                    join your friends on crumbz.
                   </p>
                 </div>
               </div>
@@ -10462,7 +10462,7 @@ export default function Page() {
                           }
                         }}
                       >
-                        Sign in with Google
+                        Continue with Google
                       </Button>
                     ) : (
                       /* Web: use Google Identity Services rendered button */
@@ -10541,11 +10541,14 @@ export default function Page() {
                       }
                     }}
                   >
-                    Sign in with Apple
+                    Continue with Apple
                   </Button>
                 )}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
+                <p className="pt-1 text-center text-sm font-semibold text-[#6c7289]">
+                  Already have an account? <span className="text-[#2C1A0E]">Sign in</span>
+                </p>
               </div>
             </div>
           </motion.section>
