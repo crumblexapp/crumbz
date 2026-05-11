@@ -383,6 +383,13 @@ type GoogleProfile = {
   picture?: string;
 };
 
+type AuthSessionLike = {
+  user?: {
+    email?: string | null;
+    user_metadata?: Record<string, unknown> | null;
+  } | null;
+};
+
 type StoredUser = {
   signedIn: boolean;
   googleProfile: GoogleProfile | null;
@@ -462,6 +469,15 @@ const PRICE_TAG_OPTIONS = [
   { key: "student-friendly", label: "student friendly" },
   { key: "kinda-pricey", label: "kinda pricey" },
   { key: "special-occasion", label: "special occasion" },
+] as const;
+
+const REPORT_REASONS = [
+  "Spam or fake post",
+  "Misleading or false information",
+  "Inappropriate or offensive content",
+  "Bullying or harassment",
+  "Fake account or impersonation",
+  "Other",
 ] as const;
 
 type AppPost = {
@@ -659,6 +675,24 @@ type PostComment = {
     }>;
   }>;
 };
+
+type ReportTarget =
+  | {
+      type: "post";
+      postId: string;
+      targetId: string;
+      authorEmail: string;
+      authorName: string;
+      contentPreview: string;
+    }
+  | {
+      type: "comment";
+      postId: string;
+      targetId: string;
+      authorEmail: string;
+      authorName: string;
+      contentPreview: string;
+    };
 
 type PostShare = {
   id: string;
@@ -2513,6 +2547,10 @@ export default function Page() {
   const [showWelcomeScreen, setShowWelcomeScreen] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
   const [googleInitError, setGoogleInitError] = useState(false);
+  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+  const [emailAuthEmail, setEmailAuthEmail] = useState("");
+  const [emailAuthPassword, setEmailAuthPassword] = useState("");
+  const [emailAuthLoading, setEmailAuthLoading] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const [nativeSplashDone, setNativeSplashDone] = useState(false);
   const [error, setError] = useState("");
@@ -2569,6 +2607,12 @@ export default function Page() {
   const [selectedOwnPostId, setSelectedOwnPostId] = useState<string | null>(null);
   const [selectedOwnPostSnapshot, setSelectedOwnPostSnapshot] = useState<AppPost | null>(null);
   const [postShareNotice, setPostShareNotice] = useState<{ postId: string; message: string } | null>(null);
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [reportStep, setReportStep] = useState<"menu" | "reasons" | "thanks">("menu");
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportNotice, setReportNotice] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [localFeedHydrated, setLocalFeedHydrated] = useState(false);
   const [initialFeedRefreshDone, setInitialFeedRefreshDone] = useState(false);
   const [feedSyncing, setFeedSyncing] = useState(false);
@@ -4096,6 +4140,82 @@ export default function Page() {
     setOpenReplyComposerLabel(null);
   };
 
+  const openReportMenu = (target: ReportTarget) => {
+    setReportTarget(target);
+    setReportStep("menu");
+    setReportReason("");
+    setReportDetails("");
+    setReportNotice("");
+  };
+
+  const closeReportMenu = () => {
+    setReportTarget(null);
+    setReportStep("menu");
+    setReportReason("");
+    setReportDetails("");
+    setReportNotice("");
+    setIsSubmittingReport(false);
+  };
+
+  const copyReportTargetLink = async () => {
+    if (!reportTarget || reportTarget.type !== "post" || typeof window === "undefined") return;
+
+    const post = posts.find((item) => item.id === reportTarget.postId) ?? fallbackFeedPosts.find((item) => item.id === reportTarget.postId);
+    if (!post) return;
+
+    const sharePayload = buildPostSharePayload(post);
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sharePayload.url);
+      } else {
+        window.prompt("copy this link", sharePayload.url);
+      }
+      setPostShareNotice({ postId: post.id, message: "post link copied." });
+      closeReportMenu();
+    } catch {
+      setReportNotice("we could not copy the link. try share instead.");
+    }
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget || !reportReason) return;
+    if (!(await ensureAuthenticatedSession("sign in again first so we can send this report from your account."))) return;
+
+    setIsSubmittingReport(true);
+    setReportNotice("");
+
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: await getAuthenticatedHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          targetType: reportTarget.type,
+          targetId: reportTarget.targetId,
+          postId: reportTarget.postId,
+          targetAuthorEmail: reportTarget.authorEmail,
+          targetAuthorName: reportTarget.authorName,
+          reason: reportReason,
+          details: reportDetails,
+          contentPreview: reportTarget.contentPreview,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        setReportNotice(payload?.message ?? "we could not send this report yet. try again in a minute.");
+        return;
+      }
+
+      setReportStep("thanks");
+      setReportNotice("");
+    } catch {
+      setReportNotice("we could not send this report yet. check your connection and try again.");
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+
   const renderCommentThread = (postId: string, comment: PostComment) => {
     const commentAuthorAccount = accountByEmail.get(comment.authorEmail.toLowerCase()) ?? null;
     const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
@@ -4193,6 +4313,22 @@ export default function Page() {
               reply
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              openReportMenu({
+                type: "comment",
+                postId,
+                targetId: comment.id,
+                authorEmail: comment.authorEmail,
+                authorName: comment.authorName,
+                contentPreview: comment.text,
+              })
+            }
+            className="min-h-[44px] px-1 text-[0.56rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+          >
+            report
+          </button>
         </div>
 
         {(comment.replies ?? []).length ? (
@@ -4285,6 +4421,22 @@ export default function Page() {
                         reply
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openReportMenu({
+                          type: "comment",
+                          postId,
+                          targetId: reply.id,
+                          authorEmail: reply.authorEmail,
+                          authorName: reply.authorName,
+                          contentPreview: reply.text,
+                        })
+                      }
+                      className="min-h-[44px] px-1 text-[0.5rem] font-medium uppercase tracking-[0.16em] text-[#6c7289]"
+                    >
+                      report
+                    </button>
                     </div>
                   </div>
                 </div>
@@ -4531,6 +4683,23 @@ export default function Page() {
                 </p>
               ) : null}
             </div>
+            <button
+              type="button"
+              aria-label="post options"
+              onClick={() =>
+                openReportMenu({
+                  type: "post",
+                  postId: post.id,
+                  targetId: post.id,
+                  authorEmail: post.authorEmail,
+                  authorName: post.authorName,
+                  contentPreview: [localizedPost.title, localizedPost.body].filter(Boolean).join(" - ").slice(0, 500),
+                })
+              }
+              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#FFF0D0] bg-white text-xl font-semibold leading-none text-[#2C1A0E] shadow-[0_8px_22px_rgba(44,26,14,0.06)]"
+            >
+              ...
+            </button>
           </CardHeader>
           <CardBody className="gap-4 p-5">
             {isSundayDump ? (
@@ -6640,6 +6809,140 @@ export default function Page() {
     }
 
     saveSettingsProfile({ isStudent: true, schoolName: nextSchool }, "school updated.");
+  };
+
+  const finishSupabaseAuthSession = async (session: AuthSessionLike, fallbackName?: string) => {
+    const meta = session.user?.user_metadata ?? {};
+    const email = String(session.user?.email ?? meta.email ?? "").trim().toLowerCase();
+    if (!email) {
+      setError("couldn't read your email. try again.");
+      return;
+    }
+
+    const nameFromMeta = [meta.full_name, meta.name].find((value) => typeof value === "string" && value.trim());
+    const profile: GoogleProfile = {
+      name: String(nameFromMeta || fallbackName || email.split("@")[0] || "crumbz user"),
+      email,
+      picture: typeof meta.avatar_url === "string" ? meta.avatar_url : typeof meta.picture === "string" ? meta.picture : undefined,
+    };
+
+    const sharedAccounts = await fetch("/api/state", { cache: "no-store" })
+      .then((result) => result.json())
+      .then((payload) => (payload?.ok ? (payload.accounts as StoredUser[]) : null))
+      .catch(() => null);
+
+    const sourceAccounts =
+      sharedAccounts?.length ? sharedAccounts : accountsRef.current.length ? accountsRef.current : readAccounts();
+    const existingAccount =
+      sourceAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === profile.email.toLowerCase()) ?? null;
+
+    setError("");
+
+    if (existingAccount) {
+      const nextSignedInAccount = { ...existingAccount, signedIn: true };
+      const result = await mutateAccountState({
+        action: "upsert_account",
+        account: nextSignedInAccount,
+      }).catch(() => null);
+
+      persistUser((result?.user as StoredUser | null) ?? nextSignedInAccount);
+      if (result?.accounts?.length) setAccounts(result.accounts);
+      else if (sharedAccounts?.length) setAccounts(sharedAccounts);
+      if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
+      setFullName(null);
+      setUsername(null);
+      setCity(null);
+      setIsStudent(null);
+      setSchoolName(null);
+      return;
+    }
+
+    const currentUser = userRef.current;
+    const nextSignedUpAccount = {
+      ...currentUser,
+      signedIn: true,
+      googleProfile: profile,
+      profile: {
+        ...currentUser.profile,
+        fullName: currentUser.profile.fullName || profile.name,
+        username: currentUser.profile.username || "",
+      },
+    };
+    const result = await mutateAccountState({
+      action: "upsert_account",
+      account: nextSignedUpAccount,
+    }).catch(() => null);
+
+    if (result?.accounts?.length) setAccounts(result.accounts);
+    else if (sharedAccounts?.length) setAccounts(sharedAccounts);
+    persistUser((result?.user as StoredUser | null) ?? nextSignedUpAccount);
+    if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
+
+    const signUpTs = Date.now();
+    writeNotifClearedAt(profile.email, signUpTs);
+    setNotifClearedAt(signUpTs);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(getPostSignupOnboardingDoneKey(profile.email), "true");
+      window.localStorage.removeItem(getPostSignupOnboardingPendingKey(profile.email));
+      window.localStorage.removeItem(getPostSignupOnboardingStepKey(profile.email));
+    }
+    setPostSignupOnboardingOpen(false);
+    setFullName(profile.name);
+    setUsername((current) => current ?? "");
+    setIsStudent(null);
+  };
+
+  const submitEmailPasswordAuth = async () => {
+    const email = emailAuthEmail.trim().toLowerCase();
+    const password = emailAuthPassword;
+    if (!email || !email.includes("@")) {
+      setError("add a real email first.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("password should be at least 6 characters.");
+      return;
+    }
+
+    setEmailAuthLoading(true);
+    setError("");
+    try {
+      const signInResult = await supabaseBrowser.auth.signInWithPassword({ email, password });
+      if (signInResult.data.session) {
+        await finishSupabaseAuthSession(signInResult.data.session, email.split("@")[0]);
+        return;
+      }
+
+      const signUpResult = await supabaseBrowser.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: email.split("@")[0],
+            full_name: email.split("@")[0],
+          },
+        },
+      });
+      if (signUpResult.error) {
+        throw signUpResult.error;
+      }
+      if (!signUpResult.data.session) {
+        setError("check your email to finish signing in.");
+        return;
+      }
+      await finishSupabaseAuthSession(signUpResult.data.session, email.split("@")[0]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message.toLowerCase() : "";
+      if (message.includes("invalid login") || message.includes("invalid credentials")) {
+        setError("wrong password for this email.");
+      } else if (message.includes("already registered") || message.includes("already exists")) {
+        setError("this email already exists. use its password to continue.");
+      } else {
+        setError("email sign-in failed. try again.");
+      }
+    } finally {
+      setEmailAuthLoading(false);
+    }
   };
 
   const deleteCurrentAccount = async () => {
@@ -10598,6 +10901,61 @@ export default function Page() {
                     Continue with Apple
                   </Button>
                 )}
+
+                <Button
+                  radius="full"
+                  variant="flat"
+                  className="h-12 w-full border border-[#ead8bb] bg-[#FFF7E8] text-sm font-bold text-[#2C1A0E]"
+                  onPress={() => {
+                    setEmailAuthOpen((current) => !current);
+                    setError("");
+                  }}
+                >
+                  Continue with Email
+                </Button>
+
+                {emailAuthOpen ? (
+                  <form
+                    className="space-y-3 rounded-[24px] bg-[#FFF7E8] p-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitEmailPasswordAuth();
+                    }}
+                  >
+                    <Input
+                      type="email"
+                      label="email"
+                      labelPlacement="outside"
+                      radius="lg"
+                      value={emailAuthEmail}
+                      onValueChange={(value) => {
+                        setEmailAuthEmail(value);
+                        setError("");
+                      }}
+                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
+                    />
+                    <Input
+                      type="password"
+                      label="password"
+                      labelPlacement="outside"
+                      radius="lg"
+                      value={emailAuthPassword}
+                      onValueChange={(value) => {
+                        setEmailAuthPassword(value);
+                        setError("");
+                      }}
+                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
+                    />
+                    <Button
+                      type="submit"
+                      radius="full"
+                      className="h-11 w-full bg-[#2C1A0E] text-sm font-bold text-white"
+                      isLoading={emailAuthLoading}
+                    >
+                      Continue
+                    </Button>
+                  </form>
+                ) : null}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
               </div>
@@ -15484,6 +15842,123 @@ export default function Page() {
           }
         }}
       />
+
+      <Modal isOpen={Boolean(reportTarget)} onOpenChange={(open) => !open && closeReportMenu()} placement="bottom-center" scrollBehavior="inside">
+        <ModalContent className="bg-[#fffaf2]">
+          {() => (
+            <>
+              <ModalHeader className="flex items-center justify-between border-b border-[#FFF0D0]">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">post safety</p>
+                  <p className="mt-1 font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                    {reportStep === "reasons" ? "report this" : reportStep === "thanks" ? "thank you" : "more options"}
+                  </p>
+                </div>
+                <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={closeReportMenu}>
+                  close
+                </Button>
+              </ModalHeader>
+              <ModalBody className="gap-3 bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
+                {reportStep === "menu" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setReportStep("reasons")}
+                      className="flex min-h-[56px] w-full items-center justify-between rounded-[18px] bg-white px-4 py-3 text-left font-semibold text-[#B3261E] ring-1 ring-[#FFE0D8]"
+                    >
+                      <span>Report</span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    {reportTarget?.type === "post" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void sharePost(reportTarget.postId);
+                            closeReportMenu();
+                          }}
+                          className="flex min-h-[56px] w-full items-center justify-between rounded-[18px] bg-white px-4 py-3 text-left font-semibold text-[#2C1A0E] ring-1 ring-[#FFF0D0]"
+                        >
+                          <span>Share</span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void copyReportTargetLink()}
+                          className="flex min-h-[56px] w-full items-center justify-between rounded-[18px] bg-white px-4 py-3 text-left font-semibold text-[#2C1A0E] ring-1 ring-[#FFF0D0]"
+                        >
+                          <span>Copy link</span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      </>
+                    ) : null}
+                    {reportNotice ? <p className="text-sm text-[#B3261E]">{reportNotice}</p> : null}
+                  </>
+                ) : reportStep === "reasons" ? (
+                  <>
+                    <p className="text-sm font-semibold text-[#6c7289]">why are you reporting this?</p>
+                    <div className="space-y-2">
+                      {REPORT_REASONS.map((reason) => (
+                        <button
+                          key={reason}
+                          type="button"
+                          onClick={() => setReportReason(reason)}
+                          className={`flex min-h-[52px] w-full items-center justify-between rounded-[18px] px-4 py-3 text-left font-semibold ring-1 ${
+                            reportReason === reason ? "bg-[#2C1A0E] text-white ring-[#2C1A0E]" : "bg-white text-[#2C1A0E] ring-[#FFF0D0]"
+                          }`}
+                        >
+                          <span>{reason}</span>
+                          {reportReason === reason ? <span aria-hidden="true">✓</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                    {reportReason === "Other" ? (
+                      <Textarea
+                        label="tell us what happened"
+                        value={reportDetails}
+                        onValueChange={setReportDetails}
+                        minRows={3}
+                        classNames={{
+                          inputWrapper: "bg-white border border-[#FFF0D0] shadow-none",
+                          label: "text-[#6c7289]",
+                          input: "text-[#2C1A0E]",
+                        }}
+                      />
+                    ) : null}
+                    {reportNotice ? <p className="text-sm text-[#B3261E]">{reportNotice}</p> : null}
+                    <div className="flex gap-2 pt-2">
+                      <Button radius="full" variant="flat" className="flex-1 bg-white text-[#2C1A0E]" onPress={() => setReportStep("menu")}>
+                        back
+                      </Button>
+                      <Button
+                        radius="full"
+                        className="flex-1 bg-[#F5A623] text-white disabled:opacity-50"
+                        isLoading={isSubmittingReport}
+                        isDisabled={!reportReason || isSubmittingReport}
+                        onPress={() => void submitReport()}
+                      >
+                        submit
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4 rounded-[24px] bg-white p-5 text-center ring-1 ring-[#FFF0D0]">
+                    <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
+                      thanks for letting us know
+                    </p>
+                    <p className="text-sm font-semibold leading-6 text-[#6c7289]">
+                      we saved your report and will review it.
+                    </p>
+                    <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={closeReportMenu}>
+                      done
+                    </Button>
+                  </div>
+                )}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
 
       <Modal
         isOpen={Boolean(commentReactionViewer)}

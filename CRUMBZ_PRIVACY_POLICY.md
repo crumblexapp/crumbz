@@ -165,6 +165,22 @@ Collected when you interact with posts.
 
 ---
 
+### 4.5A Reports and Moderation Data (stored in Supabase)
+
+Collected when you report a post or comment.
+
+| Data field | Example | Why collected |
+|---|---|---|
+| Reporter email | `user@gmail.com` | Links the report to the signed-in account that submitted it |
+| Reported content type | `post` or `comment` | Identifies what was reported |
+| Reported content ID | Post or comment ID | Lets us find and review the content |
+| Reported author details | Email and display name | Helps moderation review the report |
+| Reason and optional details | `Spam or fake post` | Explains why the content was reported |
+| Content preview | Short excerpt | Helps us review the report efficiently |
+| Status and timestamp | `open`, ISO timestamp | Tracks review progress |
+
+---
+
 ### 4.6 Media Files (stored in Supabase Storage)
 
 Collected when you upload photos or videos.

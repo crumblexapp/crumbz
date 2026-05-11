@@ -812,6 +812,11 @@ export async function POST(request: Request) {
       deletedPostIds.size
         ? supabaseServer.from("place_reviews").delete().in("post_id", Array.from(deletedPostIds))
         : Promise.resolve({ error: null }),
+      supabaseServer.from("content_reports").delete().eq("reporter_email", targetEmail),
+      supabaseServer.from("content_reports").delete().eq("target_author_email", targetEmail),
+      deletedPostIds.size
+        ? supabaseServer.from("content_reports").delete().in("post_id", Array.from(deletedPostIds))
+        : Promise.resolve({ error: null }),
       supabaseServer.from("rate_limits").delete().eq("user_email", targetEmail),
     ]).catch(() => undefined);
 
