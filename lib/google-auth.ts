@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const ADMIN_EMAIL = "crumbzglobal@gmail.com";
+const ADMIN_EMAIL = "crumbleappco@gmail.com";
+const LEGACY_ADMIN_EMAIL = "crumbzglobal@gmail.com";
 
 type VerifiedIdentity = {
   email: string;
@@ -39,7 +40,7 @@ async function verifyGoogleIdToken(idToken: string) {
   const expiresAt = parseTokenExpiry(idToken) || Date.now() + 5 * 60 * 1000;
   const verifiedIdentity = {
     email,
-    isAdmin: email === ADMIN_EMAIL,
+    isAdmin: email === ADMIN_EMAIL || email === LEGACY_ADMIN_EMAIL,
     expiresAt,
   };
 

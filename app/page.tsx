@@ -72,9 +72,12 @@ const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const ADMIN_EMAIL = "crumbzglobal@gmail.com";
+const ADMIN_EMAIL = "crumbleappco@gmail.com";
+const LEGACY_ADMIN_EMAIL = "crumbzglobal@gmail.com";
+const ADMIN_CONTACT_EMAIL = "crumbzglobal@gmail.com";
 const ADMIN_PUBLIC_HANDLE = "@crumbz.pl";
 const ADMIN_POST_IMAGE_SHARE_USERNAMES = new Set(["josheats"]);
+const ADMIN_BRAND_PICTURE = "/brand/crumbz-app-icon.png";
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
 const ACCEPTED_IMAGE_TYPES = [".jpg", ".jpeg", ".png", ".heic", "image/jpeg", "image/png", "image/heic", "image/heif"];
 const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
@@ -1032,6 +1035,11 @@ function getFavoriteLocationCenterKey(email: string) {
   return `${FAVORITE_LOCATION_CENTER_PREFIX}:${email.toLowerCase()}`;
 }
 
+function isAdminEmail(email: string | null | undefined) {
+  const normalized = email?.toLowerCase() ?? "";
+  return normalized === ADMIN_EMAIL || normalized === LEGACY_ADMIN_EMAIL;
+}
+
 async function getAuthAccessToken() {
   const { data, error } = await supabaseBrowser.auth.getSession();
   if (error) return "";
@@ -1060,7 +1068,7 @@ function readAccounts() {
 }
 
 function getAccountRole(account: Pick<StoredUser, "googleProfile" | "profile"> | null | undefined): AccountRole {
-  if (account?.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) return "admin";
+  if (isAdminEmail(account?.googleProfile?.email)) return "admin";
   return account?.profile.accountRole === "influencer" ? "influencer" : "user";
 }
 
@@ -1608,7 +1616,7 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
         username: typeof candidate.profile?.username === "string" ? candidate.profile.username : "",
         city: typeof candidate.profile?.city === "string" ? candidate.profile.city : "",
         preferredLanguage: (candidate.profile?.preferredLanguage === "pl" ? "pl" : "en") as Language,
-        accountRole: (candidate.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL
+        accountRole: (isAdminEmail(candidate.googleProfile?.email)
           ? "admin"
           : candidate.profile?.accountRole === "influencer"
             ? "influencer"
@@ -2676,7 +2684,7 @@ export default function Page() {
   const recentlyDeletedPostIdsRef = useRef<Map<string, number>>(new Map());
   const intentionalSignOutRef = useRef(false);
 
-  const isAdmin = user.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL;
+  const isAdmin = isAdminEmail(user.googleProfile?.email);
   const liveAccount =
     accounts.find(
       (account) => account.googleProfile?.email?.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? ""),
@@ -2893,7 +2901,7 @@ export default function Page() {
     if (!user.signedIn || !isAdmin || hasAdminBackfilledReferralCodesRef.current) return;
 
     const missingReferralCodeAccounts = accounts.filter(
-      (account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL && !account.profile.referralCode?.trim(),
+      (account) => !isAdminEmail(account.googleProfile?.email) && !account.profile.referralCode?.trim(),
     );
 
     if (!missingReferralCodeAccounts.length) return;
@@ -2954,9 +2962,9 @@ export default function Page() {
 
 
   const adminAccount =
-    accounts.find((account) => account.googleProfile?.email?.toLowerCase() === ADMIN_EMAIL) ?? null;
-  const adminProfilePicture = getAccountPicture(adminAccount);
-  const nonAdminAccounts = accounts.filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL);
+    accounts.find((account) => isAdminEmail(account.googleProfile?.email)) ?? null;
+  const adminProfilePicture = getAccountPicture(adminAccount) || ADMIN_BRAND_PICTURE;
+  const nonAdminAccounts = accounts.filter((account) => !isAdminEmail(account.googleProfile?.email));
   const influencerAccounts = nonAdminAccounts.filter((account) => getAccountRole(account) === "influencer");
   const nonAdminEmailSet = new Set(
     nonAdminAccounts
@@ -3058,7 +3066,7 @@ export default function Page() {
   const winningDareSubmission =
     dare.winnerSubmissionId ? dare.submissions.find((submission) => submission.id === dare.winnerSubmissionId) ?? null : null;
   const userManagementRows = [...accounts]
-    .filter((account) => account.googleProfile?.email?.toLowerCase() !== ADMIN_EMAIL)
+    .filter((account) => !isAdminEmail(account.googleProfile?.email))
     .sort((a, b) => (b.signedIn ? 1 : 0) - (a.signedIn ? 1 : 0));
   const duplicateUsernames = userManagementRows.reduce<Record<string, number>>((acc, account) => {
     const username = account.profile.username.trim().toLowerCase();
@@ -3096,7 +3104,7 @@ export default function Page() {
   const reminderChallengers = dare.reminderEmails.map((email) => resolveChallenger(email));
   const acceptedChallengers = dare.acceptedEmails.map((email) => resolveChallenger(email));
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
-  const adminPosts = posts.filter((post) => post.authorEmail.toLowerCase() === ADMIN_EMAIL || post.authorRole === "admin");
+  const adminPosts = posts.filter((post) => isAdminEmail(post.authorEmail) || post.authorRole === "admin");
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
   const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
   const today = new Date();
@@ -3398,7 +3406,7 @@ export default function Page() {
     profileDrawer && selectedProfileAccount && !selectedProfileIsOwn
       ? selectedProfileAccount
       : liveAccount ?? user;
-  const profileDrawerFollowerEmails = (profileDrawerOwner?.profile.friends ?? []).filter((email) => email.toLowerCase() !== ADMIN_EMAIL);
+  const profileDrawerFollowerEmails = (profileDrawerOwner?.profile.friends ?? []).filter((email) => !isAdminEmail(email));
   const activeWeeklyDumpMediaUrls = weeklyDumpMediaUrls.length ? weeklyDumpMediaUrls : currentUserWeeklyDump?.mediaUrls ?? [];
   const activeWeeklyDumpCaption = weeklyDumpCaption || currentUserWeeklyDump?.body || "";
   const validPostIds = new Set(posts.map((post) => post.id));
@@ -3569,7 +3577,7 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     const username = account.profile.username?.trim().toLowerCase() ?? "";
     if (!normalizedFriendQuery || !username) return false;
-    if (email.toLowerCase() === ADMIN_EMAIL) return false;
+    if (isAdminEmail(email)) return false;
     if (email.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) return false;
     if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
     if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
@@ -3582,7 +3590,7 @@ export default function Page() {
     const email = account.googleProfile?.email ?? "";
     const username = account.profile.username?.trim().toLowerCase() ?? "";
     if (!normalizedPostSignupFriendQuery || !username) return false;
-    if (email.toLowerCase() === ADMIN_EMAIL) return false;
+    if (isAdminEmail(email)) return false;
     if (email.toLowerCase() === currentUserEmail) return false;
     if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
     if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
@@ -3657,7 +3665,7 @@ export default function Page() {
       : profileLikedSpots;
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
-    return email.toLowerCase() !== ADMIN_EMAIL && liveProfile.friends.includes(email);
+    return !isAdminEmail(email) && liveProfile.friends.includes(email);
   });
   const favoriteMapPlaces = [
     ...favoritePlaces,
@@ -3954,7 +3962,7 @@ export default function Page() {
     ...liveProfile.incomingFriendRequests
       .map((requestEmail, index, requests) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
-        if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
+        if (!requester || isAdminEmail(requestEmail)) return null;
         const copy = buildFriendRequestNotification(
           requester.profile.fullName || requester.googleProfile?.name || "someone",
           requester.profile.username ? `@${requester.profile.username}` : "@someone",
@@ -4595,7 +4603,7 @@ export default function Page() {
     const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const hasLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail);
-    const isStudentPost = post.authorEmail.toLowerCase() !== ADMIN_EMAIL;
+    const isStudentPost = !isAdminEmail(post.authorEmail);
     const isSundayDump = post.type === "weekly-dump";
     const authorAccount = accounts.find((account) => account.googleProfile?.email === post.authorEmail);
     const authorUsername = authorAccount?.profile.username ? `@${authorAccount.profile.username}` : post.authorName;
@@ -5100,7 +5108,7 @@ export default function Page() {
       lastManualSharedStateSyncAtRef.current = Date.now();
     }
 
-    if (!(await ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then try again." : undefined))) {
+    if (!(await ensureAuthenticatedSession(isAdmin ? `your admin session needs a quick refresh. sign out and sign back in with ${ADMIN_EMAIL}, then try again.` : undefined))) {
       return;
     }
 
@@ -5132,7 +5140,7 @@ export default function Page() {
           return;
         }
         const fallbackMessage = isAdmin
-          ? "that admin change didn’t stick. sign out and back in with crumbzglobal@gmail.com, then try again."
+          ? `that admin change didn’t stick. sign out and back in with ${ADMIN_EMAIL}, then try again.`
           : "that change didn’t stick. sign out and back in with google, then try again.";
         const nextMessage = payload?.message ?? fallbackMessage;
 
@@ -8579,7 +8587,7 @@ export default function Page() {
   };
 
   const deletePost = async (postId: string) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then delete the post again."))) {
+    if (!(await ensureAuthenticatedSession(`your admin session needs a quick refresh. sign out and sign back in with ${ADMIN_EMAIL}, then delete the post again.`))) {
       return;
     }
 
@@ -8655,7 +8663,7 @@ export default function Page() {
   };
 
   const deleteUserFromAdmin = async (targetEmail: string) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then delete the user again."))) {
+    if (!(await ensureAuthenticatedSession(`your admin session needs a quick refresh. sign out and sign back in with ${ADMIN_EMAIL}, then delete the user again.`))) {
       return;
     }
 
@@ -8685,7 +8693,7 @@ export default function Page() {
   };
 
   const setAccountRoleFromAdmin = async (account: StoredUser, accountRole: AccountRole) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then update this creator again."))) {
+    if (!(await ensureAuthenticatedSession(`your admin session needs a quick refresh. sign out and sign back in with ${ADMIN_EMAIL}, then update this creator again.`))) {
       return;
     }
 
@@ -9824,7 +9832,7 @@ export default function Page() {
     recordPostShare(postId, platform);
   };
 
-  const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || post.authorEmail.toLowerCase() === ADMIN_EMAIL;
+  const isAdminOwnedPost = (post: AppPost) => post.authorRole === "admin" || isAdminEmail(post.authorEmail);
   const canUseAdminPostImageShare = isAdmin || ADMIN_POST_IMAGE_SHARE_USERNAMES.has(currentUsername);
   const canUseImageShareForPost = (post: AppPost) => {
     const postAuthorUsername =
@@ -13035,9 +13043,9 @@ export default function Page() {
                       <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.supportResources}</p>
                       <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.supportBody}</p>
                     </div>
-                    <a href="mailto:crumbzglobal@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
+                    <a href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=crumbz%20creator%20support`} className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
                       <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.messageFounder}</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">crumbzglobal@gmail.com</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">{ADMIN_CONTACT_EMAIL}</p>
                     </a>
                     <div className="rounded-[18px] bg-[#FFF7E8] p-4">
                       <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.whatToPost}</p>
@@ -13700,7 +13708,7 @@ export default function Page() {
                 {liveProfile.incomingFriendRequests.length ? (
                   liveProfile.incomingFriendRequests.map((requestEmail) => {
                     const requester = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
-                    if (!requester || requestEmail.toLowerCase() === ADMIN_EMAIL) return null;
+                    if (!requester || isAdminEmail(requestEmail)) return null;
 
                     return (
                       <div key={requestEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
@@ -13783,7 +13791,7 @@ export default function Page() {
                 {liveProfile.friends.length ? (
                   liveProfile.friends.map((friendEmail) => {
                     const friend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === friendEmail.toLowerCase());
-                    if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
+                    if (!friend || isAdminEmail(friendEmail)) return null;
 
                     return (
                       <div key={friendEmail} className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
@@ -15118,7 +15126,7 @@ export default function Page() {
                     <div className="grid gap-3">
                       {profileDrawerFollowerEmails.map((friendEmail) => {
                         const friend = accounts.find((account) => account.googleProfile?.email === friendEmail);
-                        if (!friend || friendEmail.toLowerCase() === ADMIN_EMAIL) return null;
+                        if (!friend || isAdminEmail(friendEmail)) return null;
 
                         return (
                           <button

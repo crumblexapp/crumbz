@@ -63,6 +63,7 @@ function normalizeAccount(account: StoredUser) {
       ...account.profile,
       preferredLanguage: (account.profile.preferredLanguage === "pl" ? "pl" : "en") as "en" | "pl",
       accountRole:
+        account.googleProfile?.email?.toLowerCase() === "crumbleappco@gmail.com" ||
         account.googleProfile?.email?.toLowerCase() === "crumbzglobal@gmail.com"
           ? "admin"
           : account.profile.accountRole === "influencer"
