@@ -284,6 +284,20 @@ Crumbz stores data locally in your browser or device storage for performance and
 
 All localStorage and IndexedDB data is cleared when you clear your browser data or when you delete your account and sign out.
 
+### Cookies and tracking technologies
+
+Crumbz does not currently use advertising cookies, third-party ad trackers, or cross-app tracking technologies. We do not sell personal data and we do not use your data for targeted advertising.
+
+Crumbz may use browser storage, localStorage, IndexedDB, service workers, authentication session storage, and similar app storage technologies to:
+
+- Keep you signed in
+- Remember your language, city, onboarding, notification, and map preferences
+- Cache posts, interactions, and media so the feed loads faster
+- Support push notifications and offline-friendly behavior
+- Protect the service from spam or abuse
+
+Third-party services we use, such as Google Sign-In, Supabase, Vercel, Apple, Google Play, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
+
 ---
 
 ## 7. Third-Party Services

@@ -10388,56 +10388,45 @@ export default function Page() {
 
     return (
       <main
-        className={`text-[#2C1A0E] ${isNativePlatform ? "" : "bg-[#FFF0D0]"}`}
-        style={{ minHeight: "100dvh", backgroundColor: isNativePlatform ? "#fb8803" : undefined }}
+        className="text-[#2C1A0E]"
+        style={{ minHeight: "100dvh", backgroundColor: isNativePlatform ? "#fb8803" : "#FFF0D0" }}
       >
         <div
-          className="mx-auto flex w-full max-w-md flex-col px-4 pb-5 font-[family-name:var(--font-manrope)]"
+          className="mx-auto flex w-full max-w-md flex-col justify-between px-5 pb-6 font-[family-name:var(--font-manrope)]"
           style={{
             minHeight: "100dvh",
-            paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1rem)" : "1.25rem",
+            paddingTop: isNativePlatform ? "calc(env(safe-area-inset-top) + 1.5rem)" : "2rem",
           }}
         >
           <motion.section
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="overflow-hidden rounded-[40px] border border-[#FFF0D0] shadow-[0_24px_70px_rgba(255,150,11,0.24)]" style={{ backgroundColor: "#fb8803" }}
-          >
-            <Image
-              src="/brand/onboarding-page-exact.png"
-              alt="crumbz brand card"
-              width={1080}
-              height={1920}
-              className="h-auto w-full object-cover"
-              priority
-            />
-          </motion.section>
-
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.08 }}
-            className="mt-5"
+            className="flex flex-1 flex-col justify-center py-8"
           >
             {renderInstallPrompt("mb-4")}
-            <Card className="rounded-[34px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(47,23,20,0.08)]">
-              <CardBody className="gap-5 p-6">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-[#2C1A0E]">{copy.auth.startHere}</p>
-                  <h1 className="mt-4 font-[family-name:var(--font-young-serif)] text-[2.1rem] leading-[1.02] text-[#2C1A0E]">
-                    {copy.auth.signUpOrLogIn}
+            <div className="space-y-10 rounded-[38px] bg-white px-6 py-8 shadow-[0_26px_70px_rgba(44,26,14,0.16)]">
+              <div className="space-y-5 text-center">
+                <img src="/brand/crumbz-logo.png" alt="CRUMBZ" className="mx-auto w-56 max-w-full" />
+                <div className="mx-auto h-px w-16 bg-[#fb8803]" />
+                <div className="space-y-2">
+                  <h1 className="font-[family-name:var(--font-young-serif)] text-[2.35rem] leading-none text-[#2C1A0E]">
+                    welcome to crumbz
                   </h1>
-                  <p className="mt-4 text-sm leading-7 text-[#2C1A0E]">{copy.auth.signupBody}</p>
+                  <p className="mx-auto max-w-[18rem] text-sm font-semibold leading-6 text-[#6c7289]">
+                    sign in to save spots, follow friends, and keep your food map close.
+                  </p>
                 </div>
+              </div>
 
+              <div className="space-y-3">
                 {GOOGLE_CLIENT_ID ? (
                   <div className="flex flex-col items-center gap-3">
                     {isNativePlatform ? (
                       /* Native iOS/Android: open OAuth in SFSafariViewController */
                       <Button
                         radius="full"
-                        className="h-11 w-80 border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm"
+                        className="h-12 w-full border border-[#ead8bb] bg-white text-sm font-bold text-[#2C1A0E] shadow-sm"
                         startContent={
                           <svg viewBox="0 0 24 24" width="18" height="18">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -10508,7 +10497,7 @@ export default function Page() {
                 {isNativePlatform && (
                   <Button
                     radius="full"
-                    className="h-11 w-80 bg-black text-sm font-medium text-white shadow-sm"
+                    className="h-12 w-full bg-black text-sm font-bold text-white shadow-sm"
                     startContent={
                       <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
                         <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.4c1.37.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.55-1.31 3.08-2.54 4zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
@@ -10554,8 +10543,8 @@ export default function Page() {
                 )}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
-              </CardBody>
-            </Card>
+              </div>
+            </div>
           </motion.section>
 
         </div>
