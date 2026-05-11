@@ -1,16 +1,15 @@
 # Crumbz Terms of Use
 
-**Last updated:** May 2026  
-**Effective date:** May 2026  
-**Company:** Crumble App Co.  
-**Contact:** crumbleappco@gmail.com  
+**Last updated:** May 2026
+**Effective date:** May 2026
+**Contact:** crumbzglobal@gmail.com
 **App domain:** app.crumbz.pl
 
 ---
 
 ## 1. Who We Are
 
-Crumbz is operated by **Crumble App Co.**, based in Poland. Crumbz is a social food discovery app where users can create profiles, post food content, save restaurants and cafes, view map-based food recommendations, follow friends, receive notifications, and participate in community or creator features.
+Crumbz is operated by Josh Reji Skaria, based in Poland. Crumbz is a social food discovery app where users can create profiles, post food content, save restaurants and cafes, view map-based food recommendations, follow friends, receive notifications, and participate in community or creator features.
 
 These Terms of Use ("Terms") apply when you access or use Crumbz through our web app, iOS app, Android app, or any related services.
 
@@ -32,11 +31,13 @@ We may suspend or delete accounts if we believe the user is under the required a
 
 ## 3. Accounts and Sign-In
 
-Crumbz uses third-party sign-in providers, such as Google Sign-In and Apple Sign-In, to authenticate users. You are responsible for keeping access to your sign-in account secure.
+Crumbz uses third-party sign-in providers — **Google Sign-In** and **Apple Sign-In** — to authenticate users. You are responsible for keeping access to your sign-in account secure.
 
 You agree to provide accurate profile information and to keep your username, city, school/university, and other profile details reasonably current. You may not impersonate another person, use a username that is misleading, abusive, illegal, or infringes someone else's rights, or attempt to access another user's account.
 
 We may reclaim, rename, restrict, or remove usernames or accounts if needed to protect users, comply with law, prevent abuse, or avoid confusion.
+
+**Apple Sign-In:** If you sign in with Apple, Apple may provide a private relay email address. We accept this and will never attempt to resolve or de-anonymize it. We will not use any data obtained through Apple Sign-In for advertising, tracking, or any purpose beyond authenticating you and operating your account.
 
 ---
 
@@ -105,7 +106,15 @@ Crumbz may modify, pause, cancel, or remove promotional features at any time. Re
 
 ---
 
-## 10. Account Suspension, Removal, and Enforcement
+## 10. Account Deletion
+
+You may delete your Crumbz account at any time directly within the app by going to **Profile → Settings → Delete Account**. You may also request deletion by contacting us at crumbzglobal@gmail.com.
+
+Account deletion is permanent and cannot be undone. For a full description of what data is removed upon deletion, see our Privacy Policy, Section 12.
+
+---
+
+## 11. Account Suspension, Removal, and Enforcement
 
 We may remove content, restrict features, suspend accounts, ban users, or delete accounts if we believe that:
 
@@ -119,7 +128,7 @@ We may act without prior notice where necessary. We are not required to preserve
 
 ---
 
-## 11. Privacy
+## 12. Privacy
 
 Your use of Crumbz is also governed by our **Privacy Policy**, which explains what data we collect, why we collect it, who we share it with, how long we keep it, and how you can exercise your rights.
 
@@ -127,23 +136,25 @@ Privacy Policy: `https://app.crumbz.pl/privacy`
 
 ---
 
-## 12. Third-Party Services
+## 13. Third-Party Services
 
-Crumbz relies on third-party services such as authentication providers, hosting providers, databases, storage providers, maps/place providers, analytics/logging tools, push notification providers, app stores, and device operating systems.
+Crumbz relies on third-party services such as authentication providers (Google, Apple), hosting providers, databases, storage providers, maps/place providers, analytics/logging tools, push notification providers, app stores, and device operating systems.
 
 We are not responsible for third-party services, websites, policies, content, errors, outages, pricing, availability, or data practices. Your use of third-party services may be subject to their own terms and privacy policies.
 
 ---
 
-## 13. App Stores and Platforms
+## 14. App Stores and Platforms
 
 If you download Crumbz through the Apple App Store, Google Play, TestFlight, or another platform, you may also be subject to that platform's terms. The platform provider is not responsible for Crumbz unless required by its own terms or applicable law.
 
 You agree to use the app only in ways allowed by applicable platform rules.
 
+**Apple App Store:** These Terms are between you and Crumbz only, not with Apple Inc. Apple is not responsible for Crumbz or its content. In the event of any conflict between these Terms and the App Store Terms of Service, the App Store Terms of Service shall govern solely with respect to Apple. Apple and its subsidiaries are third-party beneficiaries of these Terms for that limited purpose.
+
 ---
 
-## 14. Prohibited Technical Use
+## 15. Prohibited Technical Use
 
 You may not:
 
@@ -157,7 +168,7 @@ You may not:
 
 ---
 
-## 15. Disclaimers
+## 16. Disclaimers
 
 Crumbz is provided on an "as is" and "as available" basis. We do not guarantee that the app will always be uninterrupted, secure, error-free, accurate, available, or compatible with every device or network.
 
@@ -167,9 +178,9 @@ Nothing in these Terms limits rights that cannot be limited under applicable con
 
 ---
 
-## 16. Limitation of Liability
+## 17. Limitation of Liability
 
-To the maximum extent allowed by law, Crumble App Co. will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, loss of profits, loss of data, loss of goodwill, service interruption, venue issues, food quality, allergic reactions, restaurant disputes, user content, or third-party conduct.
+To the maximum extent allowed by law, Josh Reji Skaria, as the operator of Crumbz, will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, loss of profits, loss of data, loss of goodwill, service interruption, venue issues, food quality, allergic reactions, restaurant disputes, user content, or third-party conduct.
 
 Our total liability for any claim relating to Crumbz will be limited to the greater of:
 
@@ -180,13 +191,13 @@ This limitation does not exclude liability that cannot legally be excluded, such
 
 ---
 
-## 17. Indemnity
+## 18. Indemnity
 
-If you violate these Terms or misuse Crumbz, you agree to defend, indemnify, and hold harmless Crumble App Co. from claims, damages, losses, liabilities, and expenses arising from your content, conduct, or use of the app, to the extent permitted by law.
+If you violate these Terms or misuse Crumbz, you agree to defend, indemnify, and hold harmless Josh Reji Skaria, as the operator of Crumbz, from claims, damages, losses, liabilities, and expenses arising from your content, conduct, or use of the app, to the extent permitted by law.
 
 ---
 
-## 18. Changes to the App
+## 19. Changes to the App
 
 We may update, change, suspend, remove, or discontinue any part of Crumbz at any time, including features, feeds, maps, notifications, rewards, creator tools, referral programs, or availability in any region.
 
@@ -194,7 +205,7 @@ We may also release beta features that may change or stop working.
 
 ---
 
-## 19. Changes to These Terms
+## 20. Changes to These Terms
 
 We may update these Terms from time to time. If changes are material, we will take reasonable steps to notify users, such as updating the effective date, posting a notice in the app, or sending a notification where appropriate.
 
@@ -202,7 +213,7 @@ Your continued use of Crumbz after updated Terms become effective means you acce
 
 ---
 
-## 20. Governing Law and Disputes
+## 21. Governing Law and Disputes
 
 These Terms are governed by the laws of **Poland**, without regard to conflict-of-law rules.
 
@@ -212,11 +223,10 @@ Where legally permitted, disputes relating to these Terms or Crumbz will be hand
 
 ---
 
-## 21. Contact
+## 22. Contact
 
 For questions about these Terms, contact:
 
-**Crumble App Co.**  
-Email: **crumbleappco@gmail.com**  
+**Josh Reji Skaria**
+Email: **crumbzglobal@gmail.com**
 App: **app.crumbz.pl**
-

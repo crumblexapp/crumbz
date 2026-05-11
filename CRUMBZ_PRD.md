@@ -2,8 +2,8 @@
 
 **Version:** 1.0  
 **Date:** May 2026  
-**Company:** Crumble App Co.  
-**Contact:** crumbleappco@gmail.com  
+**Company:** Josh Reji Skaria  
+**Contact:** crumbzglobal@gmail.com  
 **Primary Domain:** app.crumbz.pl  
 **Tagline:** *the feed that keeps you hungry.*
 
@@ -57,7 +57,7 @@ Crumbz is not a review platform like Yelp. It is a taste-graph social app where 
 
 **Primary users:** University students in Polish cities aged 18–26  
 **Secondary users:** Food content creators (influencers) posting city-specific food content  
-**Operator:** Admin account (`crumbleappco@gmail.com` / `@crumbz.pl`)
+**Operator:** Admin account (`crumbzglobal@gmail.com` / `@crumbz.pl`)
 
 **Geographic focus:** 14 Polish cities at launch  
 **Language:** English and Polish (bilingual throughout)
@@ -70,7 +70,7 @@ Crumbz is not a review platform like Yelp. It is a taste-graph social app where 
 |---|---|---|
 | `user` | Default on signup | Full student experience: feed, map, social, profile, post creation |
 | `influencer` | Manually assigned by admin | All user capabilities + creator dashboard, larger upload limits, post format controls |
-| `admin` | Hardcoded to `crumbleappco@gmail.com` | Full platform control: post anything, delete anyone, manage announcements, dare system, push to all users |
+| `admin` | Hardcoded to `crumbzglobal@gmail.com` | Full platform control: post anything, delete anyone, manage announcements, dare system, push to all users |
 
 Role is determined server-side on every authenticated request. Users cannot self-elevate.
 
@@ -482,7 +482,7 @@ Maximum 7 files per upload request for all users.
 
 ### Admin identity
 
-Admin status is determined purely by email address (`crumbleappco@gmail.com`). Verified server-side on every request. Cannot be faked or self-granted.
+Admin status is determined purely by email address (`crumbzglobal@gmail.com`). Verified server-side on every request. Cannot be faked or self-granted.
 
 ---
 

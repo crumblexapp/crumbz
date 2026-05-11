@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const ADMIN_EMAIL = "crumbleappco@gmail.com";
+const ADMIN_EMAIL = "crumbzglobal@gmail.com";
 
 type VerifiedIdentity = {
   email: string;

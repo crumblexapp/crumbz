@@ -72,7 +72,7 @@ const AUTH_EXPIRED_EVENT = "crumbz-auth-expired";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const WEB_PUSH_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ?? "";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const ADMIN_EMAIL = "crumbleappco@gmail.com";
+const ADMIN_EMAIL = "crumbzglobal@gmail.com";
 const ADMIN_PUBLIC_HANDLE = "@crumbz.pl";
 const ADMIN_POST_IMAGE_SHARE_USERNAMES = new Set(["josheats"]);
 const ACCEPTED_VIDEO_TYPES = [".mp4", ".mov", "video/mp4", "video/quicktime"];
@@ -2437,11 +2437,12 @@ export default function Page() {
   const [bioDraft, setBioDraft] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState<"home" | "username" | "school">("home");
+  const [settingsView, setSettingsView] = useState<"home" | "username" | "school" | "deleteConfirm" | "deleteFinal">("home");
   const [settingsUsernameDraft, setSettingsUsernameDraft] = useState("");
   const [settingsSchoolDraft, setSettingsSchoolDraft] = useState("");
   const [settingsNotice, setSettingsNotice] = useState("");
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [bioModalOpen, setBioModalOpen] = useState(false);
   const [bioSaveNotice, setBioSaveNotice] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
@@ -4930,7 +4931,7 @@ export default function Page() {
       lastManualSharedStateSyncAtRef.current = Date.now();
     }
 
-    if (!(await ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then try again." : undefined))) {
+    if (!(await ensureAuthenticatedSession(isAdmin ? "your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then try again." : undefined))) {
       return;
     }
 
@@ -4962,7 +4963,7 @@ export default function Page() {
           return;
         }
         const fallbackMessage = isAdmin
-          ? "that admin change didn’t stick. sign out and back in with crumbleappco@gmail.com, then try again."
+          ? "that admin change didn’t stick. sign out and back in with crumbzglobal@gmail.com, then try again."
           : "that change didn’t stick. sign out and back in with google, then try again.";
         const nextMessage = payload?.message ?? fallbackMessage;
 
@@ -6641,6 +6642,59 @@ export default function Page() {
     saveSettingsProfile({ isStudent: true, schoolName: nextSchool }, "school updated.");
   };
 
+  const deleteCurrentAccount = async () => {
+    const targetEmail = user.googleProfile?.email?.toLowerCase() ?? "";
+    if (!targetEmail || isDeletingAccount) return;
+
+    if (!(await ensureAuthenticatedSession("your session needs a quick refresh. sign out and sign back in, then delete your account again."))) {
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setSettingsNotice("");
+
+    void mutateAccountState({
+      action: "delete_account",
+      targetEmail,
+    })
+      .then((result) => {
+        const deletedPostIds = new Set(
+          posts.filter((post) => post.authorEmail.toLowerCase() === targetEmail).map((post) => post.id),
+        );
+        const nextPosts = posts.filter((post) => post.authorEmail.toLowerCase() !== targetEmail);
+        const nextInteractions = removeUserFromInteractions(interactions, targetEmail, deletedPostIds);
+        const nextAccounts = result.accounts.length
+          ? result.accounts
+          : accountsRef.current.filter((account) => account.googleProfile?.email?.toLowerCase() !== targetEmail);
+
+        intentionalSignOutRef.current = true;
+        setAccounts(nextAccounts);
+        setPosts(nextPosts);
+        setInteractions(nextInteractions);
+        persistUser(defaultUser);
+        void supabaseBrowser.auth.signOut().catch(() => undefined);
+        setFullName(null);
+        setUsername(null);
+        setCity(null);
+        setIsStudent(null);
+        setSchoolName(null);
+        setError("");
+        setAuthMode("signup");
+        setShowWelcomeScreen(false);
+        setNativeSplashDone(true);
+        setStudentTab("feed");
+        setSettingsModalOpen(false);
+        setSettingsView("home");
+        window.setTimeout(() => {
+          intentionalSignOutRef.current = false;
+        }, 1000);
+      })
+      .catch((error: unknown) => {
+        setSettingsNotice(error instanceof Error ? error.message : "that delete didn’t stick. try again.");
+      })
+      .finally(() => setIsDeletingAccount(false));
+  };
+
   const copyProfileLink = async () => {
     if (!profileShareUrl) return;
 
@@ -8222,7 +8276,7 @@ export default function Page() {
   };
 
   const deletePost = async (postId: string) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the post again."))) {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then delete the post again."))) {
       return;
     }
 
@@ -8298,7 +8352,7 @@ export default function Page() {
   };
 
   const deleteUserFromAdmin = async (targetEmail: string) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then delete the user again."))) {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then delete the user again."))) {
       return;
     }
 
@@ -8328,7 +8382,7 @@ export default function Page() {
   };
 
   const setAccountRoleFromAdmin = async (account: StoredUser, accountRole: AccountRole) => {
-    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbleappco@gmail.com, then update this creator again."))) {
+    if (!(await ensureAuthenticatedSession("your admin session needs a quick refresh. sign out and sign back in with crumbzglobal@gmail.com, then update this creator again."))) {
       return;
     }
 
@@ -12623,9 +12677,9 @@ export default function Page() {
                       <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.influencerDashboard.supportResources}</p>
                       <p className="mt-1 text-sm text-[#2C1A0E]">{copy.influencerDashboard.supportBody}</p>
                     </div>
-                    <a href="mailto:crumbleappco@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
+                    <a href="mailto:crumbzglobal@gmail.com?subject=crumbz%20creator%20support" className="rounded-[18px] bg-[#FFF7E8] p-4 text-left">
                       <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.messageFounder}</p>
-                      <p className="mt-1 text-sm text-[#6c7289]">crumbleappco@gmail.com</p>
+                      <p className="mt-1 text-sm text-[#6c7289]">crumbzglobal@gmail.com</p>
                     </a>
                     <div className="rounded-[18px] bg-[#FFF7E8] p-4">
                       <p className="font-semibold text-[#2C1A0E]">{copy.influencerDashboard.whatToPost}</p>
@@ -13418,10 +13472,22 @@ export default function Page() {
 
                 <div className="rounded-[30px] border border-[#FFF0D0] bg-white p-5 shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
                   <p className="font-[family-name:var(--font-young-serif)] text-[2.4rem] leading-none text-[#2C1A0E]">
-                    {settingsView === "home" ? "settings" : settingsView === "username" ? "edit username" : "edit school"}
+                    {settingsView === "home"
+                      ? "settings"
+                      : settingsView === "username"
+                        ? "edit username"
+                        : settingsView === "school"
+                          ? "edit school"
+                          : settingsView === "deleteConfirm"
+                            ? "delete account?"
+                            : "last step"}
                   </p>
                   <p className="mt-3 text-sm leading-6 text-[#6c7289]">
-                    {settingsView === "home" ? "account, profile, and app links." : "changes save to your crumbz account."}
+                    {settingsView === "home"
+                      ? "account, profile, and app links."
+                      : settingsView === "deleteConfirm" || settingsView === "deleteFinal"
+                        ? "this permanently removes your crumbz account."
+                        : "changes save to your crumbz account."}
                   </p>
                 </div>
 
@@ -13467,6 +13533,18 @@ export default function Page() {
                     </button>
                     <Button type="button" radius="full" className="mt-2 w-full bg-[#2C1A0E] text-white" onPress={signOut}>
                       Log Out
+                    </Button>
+                    <Button
+                      type="button"
+                      radius="full"
+                      variant="flat"
+                      className="w-full bg-[#FFF0D0] text-[#B3261E]"
+                      onPress={() => {
+                        setSettingsNotice("");
+                        setSettingsView("deleteConfirm");
+                      }}
+                    >
+                      Delete Account
                     </Button>
                   </div>
                 ) : null}
@@ -13553,6 +13631,51 @@ export default function Page() {
                         onPress={saveSettingsSchool}
                       >
                         save school
+                      </Button>
+                    </CardBody>
+                  </Card>
+                ) : null}
+
+                {settingsView === "deleteConfirm" ? (
+                  <Card className="rounded-[28px] border border-[#FFE1B3] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-5 p-5">
+                      <div>
+                        <p className="text-lg font-extrabold text-[#2C1A0E]">are you sure?</p>
+                        <p className="mt-2 text-sm leading-6 text-[#6c7289]">
+                          deleting your account removes your profile, posts, media, comments, likes, shares, friend links,
+                          saved spots, notifications, and creator data from crumbz.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button radius="full" variant="flat" className="flex-1 bg-[#FFF0D0] text-[#2C1A0E]" onPress={() => setSettingsView("home")}>
+                          no
+                        </Button>
+                        <Button radius="full" className="flex-1 bg-[#B3261E] text-white" onPress={() => setSettingsView("deleteFinal")}>
+                          yes
+                        </Button>
+                      </div>
+                    </CardBody>
+                  </Card>
+                ) : null}
+
+                {settingsView === "deleteFinal" ? (
+                  <Card className="rounded-[28px] border border-[#FFE1B3] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-5 p-5">
+                      <div>
+                        <p className="text-lg font-extrabold text-[#B3261E]">once you confirm, all your data will be lost.</p>
+                        <p className="mt-2 text-sm leading-6 text-[#6c7289]">
+                          this cannot be undone. if you come back later with Google or Apple, crumbz will treat you like a
+                          new person and you will need to create a new account from the beginning.
+                        </p>
+                      </div>
+                      {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                      <Button
+                        radius="full"
+                        className="bg-[#B3261E] text-white"
+                        isLoading={isDeletingAccount}
+                        onPress={deleteCurrentAccount}
+                      >
+                        confirm delete account
                       </Button>
                     </CardBody>
                   </Card>

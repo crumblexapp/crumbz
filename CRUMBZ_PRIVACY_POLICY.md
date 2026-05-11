@@ -1,9 +1,8 @@
 # Crumbz Privacy Policy
 
-**Last updated:** May 2026  
-**Effective date:** May 2026  
-**Company:** Crumble App Co.  
-**Contact:** crumbleappco@gmail.com  
+**Last updated:** May 2026
+**Effective date:** May 2026
+**Contact:** crumbzglobal@gmail.com
 **App domain:** app.crumbz.pl
 
 ---
@@ -33,9 +32,9 @@
 
 ## 1. Who We Are
 
-Crumbz is operated by **Crumble App Co.**, a student food discovery platform based in Poland. The app is available at `app.crumbz.pl` and as a native mobile application on iOS and Android.
+Crumbz is operated by **Josh Reji Skaria**, based in Poland. Crumbz is a social food discovery platform available at `app.crumbz.pl` and as a native mobile application on iOS and Android.
 
-For questions about this policy or your data, contact us at **crumbleappco@gmail.com**.
+For questions about this policy or your data, contact us at **crumbzglobal@gmail.com**.
 
 ---
 
@@ -55,7 +54,7 @@ It does not cover third-party websites or services that we link to, even if you 
 
 We collect data to:
 
-1. **Authenticate you** — verify who you are via Google Sign-In
+1. **Authenticate you** — verify who you are via Google Sign-In or Apple Sign-In
 2. **Provide the service** — show you posts, maps, friends' activity, and your saved spots
 3. **Enable social features** — friend requests, notifications, shared favorites
 4. **Personalize your experience** — show content in your city and language
@@ -63,7 +62,7 @@ We collect data to:
 6. **Prevent abuse** — rate-limit actions, protect API keys, enforce authorization
 7. **Improve the platform** — understand how features are used
 
-We do **not** use your data for targeted advertising. We do **not** sell your data to third parties.
+We do **not** use your data for targeted advertising. We do **not** sell your data to third parties. We do **not** use Apple ID data for advertising, tracking, or any purpose other than authenticating you and operating your Crumbz account.
 
 ---
 
@@ -79,7 +78,8 @@ Collected when you sign up and complete your profile.
 
 | Data field | Example | Why collected |
 |---|---|---|
-| Google email address | `user@gmail.com` | Primary identifier; used to authenticate every API request |
+| Sign-in provider | `google` or `apple` | Records which sign-in method you used |
+| Email address | `user@gmail.com` | Primary identifier; used to authenticate every API request |
 | Full name | `Anna Kowalska` | Displayed on your profile and in notifications to friends |
 | Username | `annakowalska` | Public handle; used for @mentions and profile URL |
 | City | `Warsaw` | Used to show local content, places, and city-specific feed |
@@ -88,12 +88,14 @@ Collected when you sign up and complete your profile.
 | Bio | `coffee first, everything else after` | Displayed on your public profile |
 | Preferred language | `en` or `pl` | Controls UI language and notification language |
 | Account role | `user`, `influencer`, or `admin` | Controls what features and API actions are available |
-| Profile picture URL | Google CDN URL | Displayed on profile and in comments |
+| Profile picture URL | Google or Apple CDN URL | Displayed on profile and in comments |
 | Referral code | `AB12CD34EF` | Unique 10-character code you share to invite others |
 | Referred-by code | `XY78ZW90QR` | Code of the person who referred you (if any) |
 | Referred-by email | `friend@gmail.com` | Email of the person who referred you |
 | Referral completed timestamp | ISO timestamp | When your profile was considered complete for referral tracking |
 | Sign-in status | `true` or `false` | Whether the account is currently active |
+
+**Note on Apple Sign-In:** If you use Apple Sign-In, Apple may provide a private relay email address instead of your real email address. We accept and store whichever email Apple provides. We will not attempt to resolve or de-anonymize an Apple private relay address. We will never use Apple ID information for advertising or tracking purposes.
 
 ---
 
@@ -286,7 +288,7 @@ All localStorage and IndexedDB data is cleared when you clear your browser data 
 
 ### Cookies and tracking technologies
 
-Crumbz does not currently use advertising cookies, third-party ad trackers, or cross-app tracking technologies. We do not sell personal data and we do not use your data for targeted advertising.
+Crumbz does not use advertising cookies, third-party ad trackers, or cross-app tracking technologies. We do not sell personal data and we do not use your data for targeted advertising.
 
 Crumbz may use browser storage, localStorage, IndexedDB, service workers, authentication session storage, and similar app storage technologies to:
 
@@ -296,7 +298,7 @@ Crumbz may use browser storage, localStorage, IndexedDB, service workers, authen
 - Support push notifications and offline-friendly behavior
 - Protect the service from spam or abuse
 
-Third-party services we use, such as Google Sign-In, Supabase, Vercel, Apple, Google Play, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
+Third-party services we use, such as Google Sign-In, Apple Sign-In, Supabase, Vercel, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
 
 ---
 
@@ -308,58 +310,68 @@ We use the following third-party services. Each receives some of your data to op
 
 ### 7.1 Google (Authentication)
 
-**What we send:** Your Google ID token (JWT) on every authenticated request  
-**What Google provides us:** Your verified email address and profile info (name, picture)  
-**What Google receives from the sign-in flow:** Your consent to share email and basic profile info with Crumbz  
-**Why:** We have no other authentication system. Google Sign-In is the only way to use Crumbz.  
+**What we send:** Your Google ID token (JWT) on every authenticated request
+**What Google provides us:** Your verified email address and profile info (name, picture)
+**What Google receives from the sign-in flow:** Your consent to share email and basic profile info with Crumbz
+**Why:** One of two ways to sign in to Crumbz.
 **Google's privacy policy:** https://policies.google.com/privacy
 
 ---
 
-### 7.2 Google Places API
+### 7.2 Apple (Authentication)
 
-**What we send:** GPS coordinates and search text queries from our server  
-**What Google provides us:** Lists of nearby food spots, place details, reviews from Google Maps  
-**Important:** These queries are made from our server using a private API key — **your browser does not communicate directly with Google Places**. Google does not receive your device IP or browser fingerprint from Places API queries.  
-**Why:** To power the food discovery map.  
+**What we send:** Your Apple identity token on sign-in
+**What Apple provides us:** Your verified identity, and either your real email address or an Apple-generated private relay address
+**Why:** One of two ways to sign in to Crumbz. Required for iOS App Store distribution.
+**Important:** We will never use your Apple ID data for advertising, profiling, or any purpose other than authenticating you and operating your account. If you choose to hide your email via Apple's private relay feature, we respect that and will not attempt to identify your real address.
+**Apple's privacy policy:** https://www.apple.com/legal/privacy/
+
+---
+
+### 7.3 Google Places API
+
+**What we send:** GPS coordinates and search text queries from our server
+**What Google provides us:** Lists of nearby food spots, place details, reviews from Google Maps
+**Important:** These queries are made from our server using a private API key — **your browser does not communicate directly with Google Places**. Google does not receive your device IP or browser fingerprint from Places API queries.
+**Why:** To power the food discovery map.
 **Google's privacy policy:** https://policies.google.com/privacy
 
 ---
 
-### 7.3 Supabase
+### 7.4 Supabase
 
-**What we send:** All structured data described in Section 4  
-**What Supabase does:** Stores and serves data via PostgreSQL and object storage  
-**Why:** Our primary database and file storage provider  
-**Data location:** EU (Frankfurt)  
+**What we send:** All structured data described in Section 4
+**What Supabase does:** Stores and serves data via PostgreSQL and object storage
+**Why:** Our primary database and file storage provider
+**Data location:** EU (Frankfurt)
 **Supabase's privacy policy:** https://supabase.com/privacy
 
 ---
 
-### 7.4 OpenAI
+### 7.5 OpenAI
 
-**What we send:** The title, body text, and call-to-action of a specific post — only when you explicitly request a translation  
-**What OpenAI provides:** Translated text in the target language  
-**Important:** Translation is entirely opt-in. We never send post content to OpenAI unless you press the "see translation" button.  
-**Why:** To provide bilingual translations of food content  
+**What we send:** The title, body text, and call-to-action of a specific post — only when you explicitly request a translation
+**What OpenAI provides:** Translated text in the target language
+**Important:** Translation is entirely opt-in. We never send post content to OpenAI unless you press the "see translation" button.
+**Why:** To provide bilingual translations of food content
 **OpenAI's privacy policy:** https://openai.com/policies/privacy-policy
 
 ---
 
-### 7.5 Vercel
+### 7.6 Vercel
 
-**What Vercel receives:** All HTTP requests made to `app.crumbz.pl`, including request headers, IP addresses, and response times  
-**Why:** Vercel hosts our web application and API routes  
-**Data location:** EU edge network where possible  
+**What Vercel receives:** All HTTP requests made to `app.crumbz.pl`, including request headers, IP addresses, and response times
+**Why:** Vercel hosts our web application and API routes
+**Data location:** EU edge network where possible
 **Vercel's privacy policy:** https://vercel.com/legal/privacy-policy
 
 ---
 
-### 7.6 Browser Push Services (Web Push)
+### 7.7 Browser Push Services (Web Push)
 
-**What we send:** Encrypted push notification payloads to your browser's push service endpoint  
-**Which push services:** Depends on your browser — Google FCM (Chrome), Mozilla Push Service (Firefox), Apple APNS (Safari/iOS)  
-**Why:** To deliver real-time notifications to your device  
+**What we send:** Encrypted push notification payloads to your browser's push service endpoint
+**Which push services:** Depends on your browser — Google FCM (Chrome), Mozilla Push Service (Firefox), Apple APNs (Safari/iOS)
+**Why:** To deliver real-time notifications to your device
 **Important:** Push payloads are encrypted end-to-end between our server and your device. The push service provider can see the payload metadata (timing, size) but not the content.
 
 ---
@@ -409,7 +421,7 @@ We use the following third-party services. Each receives some of your data to op
 - Your username (for search)
 - Your public profile when another user visits `/@yourusername` in the app
 
-### Admin only (`crumbleappco@gmail.com`)
+### Admin only (`crumbzglobal@gmail.com`)
 
 - All account data for all users
 - All posts, interactions, and dare submissions from all users
@@ -438,7 +450,7 @@ We use the following third-party services. Each receives some of your data to op
 | Rate limit logs | ~2 minutes (auto-deleted by system) |
 | Place reviews (indexed from posts) | Until the source post is deleted |
 | localStorage / device data | Until you clear browser data or delete your account |
-| Google authentication tokens (server-side cache) | Until token expiry (typically 1 hour), then evicted |
+| Google/Apple authentication tokens (server-side cache) | Until token expiry (typically 1 hour), then evicted |
 
 We do not retain data for longer than necessary to provide the service.
 
@@ -450,7 +462,7 @@ Depending on your location, you may have the following rights under applicable d
 
 ### Right to access
 
-You can request a copy of all data we hold about you. Contact us at crumbleappco@gmail.com.
+You can request a copy of all data we hold about you. Contact us at crumbzglobal@gmail.com.
 
 ### Right to rectification
 
@@ -458,19 +470,13 @@ You can update your profile information directly in the app (full name, username
 
 ### Right to erasure ("right to be forgotten")
 
-You can delete your account through the admin panel (if you are the admin) or by contacting us. Account deletion permanently removes:
-- Your profile
-- All your posts and their media files from storage
-- All your comments, likes, and shares
-- Your entries in all friend lists and pending requests
-- Your dare participations and submissions
-- Your push subscriptions
+You can delete your account at any time directly within the app via **Profile → Settings → Delete Account**. Account deletion permanently removes your profile, all your posts and media, all your comments, likes, and shares, your entries in all friend lists, your dare participations, and your push subscriptions.
 
 See Section 12 for the full deletion cascade.
 
 ### Right to data portability
 
-You can request an export of your data in a machine-readable format. Contact us at crumbleappco@gmail.com.
+You can request an export of your data in a machine-readable format. Contact us at crumbzglobal@gmail.com.
 
 ### Right to object
 
@@ -478,7 +484,7 @@ You can object to certain uses of your data. For example, you can disable push n
 
 ### Right to restrict processing
 
-You can request that we restrict processing your data in certain circumstances. Contact us at crumbleappco@gmail.com.
+You can request that we restrict processing your data in certain circumstances. Contact us at crumbzglobal@gmail.com.
 
 ### Right to withdraw consent
 
@@ -486,13 +492,15 @@ Where processing is based on consent (e.g., push notifications), you can withdra
 
 ### How to exercise your rights
 
-Contact us at **crumbleappco@gmail.com**. We will respond within 30 days.
+Contact us at **crumbzglobal@gmail.com**. We will respond within 30 days.
 
 ---
 
 ## 12. Account Deletion
 
-When your account is deleted (by you or by the admin), the following happens immediately and permanently:
+You can delete your account at any time directly within the Crumbz app by going to **Profile → Settings → Delete Account**. You may also request deletion by emailing crumbzglobal@gmail.com.
+
+When your account is deleted, the following happens immediately and permanently:
 
 1. **Your profile** is removed from the accounts database
 2. **All your posts** are removed from the shared posts list
@@ -542,7 +550,14 @@ If your push subscription expires (common after browser updates or clearing brow
 
 ## 14. Children's Privacy
 
-Crumbz is intended for users aged **16 and older**. We do not knowingly collect personal data from children under 16. If you believe a child under 16 has provided us with personal data, please contact us at crumbleappco@gmail.com and we will delete it promptly.
+Crumbz has different minimum age requirements depending on your location:
+
+- **European Union, European Economic Area, and United Kingdom:** You must be at least **16 years old** to use Crumbz, unless your country permits a lower digital-consent age and a parent or guardian has provided valid consent.
+- **All other regions:** You must be at least **13 years old**, or the minimum age required by your local law, whichever is higher.
+
+We do not knowingly collect personal data from anyone below the applicable minimum age. If you believe a child below the applicable minimum age has provided us with personal data, please contact us at crumbzglobal@gmail.com and we will delete it promptly.
+
+If we discover that we have collected data from a user below the applicable minimum age without verifiable parental consent where required, we will delete that data as soon as possible.
 
 ---
 
@@ -562,7 +577,7 @@ We take the following technical measures to protect your data:
 
 ### Authentication security
 
-- All API mutations require a verified Google ID token
+- All API mutations require a verified Google or Apple ID token
 - Tokens are verified server-side via Supabase Auth on every request
 - Users can only access and modify their own data (server enforces this)
 - Admin access is locked to a single hardcoded email address
@@ -621,8 +636,8 @@ Continued use of Crumbz after changes are posted constitutes acceptance of the u
 
 For any privacy-related questions, requests to exercise your rights, or data deletion requests:
 
-**Email:** crumbleappco@gmail.com  
-**App:** app.crumbz.pl  
+**Email:** crumbzglobal@gmail.com
+**App:** app.crumbz.pl
 **Response time:** Within 30 days
 
 For urgent security issues (suspected data breach, unauthorized access), please email with the subject line: **SECURITY - Crumbz**

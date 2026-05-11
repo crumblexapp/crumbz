@@ -63,7 +63,7 @@ function normalizeAccount(account: StoredUser) {
       ...account.profile,
       preferredLanguage: (account.profile.preferredLanguage === "pl" ? "pl" : "en") as "en" | "pl",
       accountRole:
-        account.googleProfile?.email?.toLowerCase() === "crumbleappco@gmail.com"
+        account.googleProfile?.email?.toLowerCase() === "crumbzglobal@gmail.com"
           ? "admin"
           : account.profile.accountRole === "influencer"
             ? "influencer"
@@ -693,13 +693,14 @@ export async function POST(request: Request) {
   }
 
   if (action === "delete_account") {
-    if (!identity.isAdmin) {
-      return NextResponse.json({ ok: false, message: "only the admin account can delete users." }, { status: 403 });
-    }
-
-    const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    const requestedTargetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    const targetEmail = identity.isAdmin ? requestedTargetEmail : identity.email.toLowerCase();
     if (!targetEmail) {
       return NextResponse.json({ ok: false, message: "missing target email" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && requestedTargetEmail && requestedTargetEmail !== identity.email.toLowerCase()) {
+      return NextResponse.json({ ok: false, message: "you can only delete your own account." }, { status: 403 });
     }
 
     const existingAccount = accounts.find((account) => getEmail(account) === targetEmail);
@@ -799,6 +800,20 @@ export async function POST(request: Request) {
     if (mediaPaths.length) {
       await supabaseServer.storage.from(MEDIA_BUCKET).remove(mediaPaths).catch(() => undefined);
     }
+
+    await Promise.all([
+      supabaseServer.from("post_interactions").delete().eq("author_email", targetEmail),
+      deletedPostIds.size
+        ? supabaseServer.from("post_interactions").delete().in("post_id", Array.from(deletedPostIds))
+        : Promise.resolve({ error: null }),
+      supabaseServer.from("push_subscriptions").delete().eq("author_email", targetEmail),
+      supabaseServer.from("native_push_tokens").delete().eq("author_email", targetEmail),
+      supabaseServer.from("place_reviews").delete().eq("author_email", targetEmail),
+      deletedPostIds.size
+        ? supabaseServer.from("place_reviews").delete().in("post_id", Array.from(deletedPostIds))
+        : Promise.resolve({ error: null }),
+      supabaseServer.from("rate_limits").delete().eq("user_email", targetEmail),
+    ]).catch(() => undefined);
 
     return NextResponse.json({
       ok: true,
