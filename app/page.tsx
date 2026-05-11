@@ -87,6 +87,7 @@ const STORY_RATIO = 9 / 16;
 const STORY_RATIO_TOLERANCE = 0.02;
 const STORY_IMAGE_DIMENSIONS = { width: 1080, height: 1920 } as const;
 const COMMENT_REACTION_OPTIONS = ["❤️", "😂", "😭", "🔥", "🙏", "👍"] as const;
+const SCHOOL_OTHER_OPTION = "__other_school__";
 const cityOptions = [
   "Warsaw",
   "Kraków",
@@ -2435,6 +2436,12 @@ export default function Page() {
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [bioDraft, setBioDraft] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<"home" | "username" | "school">("home");
+  const [settingsUsernameDraft, setSettingsUsernameDraft] = useState("");
+  const [settingsSchoolDraft, setSettingsSchoolDraft] = useState("");
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [bioModalOpen, setBioModalOpen] = useState(false);
   const [bioSaveNotice, setBioSaveNotice] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
@@ -2646,6 +2653,10 @@ export default function Page() {
   const isStudentValue = isStudent ?? liveProfile.isStudent;
   const schoolNameValue = schoolName ?? liveProfile.schoolName ?? "";
   const matchingSchools = schoolsByCity[normalizeCityKey(cityValue)] ?? [];
+  const usesCustomSchool =
+    schoolNameValue === SCHOOL_OTHER_OPTION || Boolean(schoolNameValue && matchingSchools.length && !matchingSchools.includes(schoolNameValue));
+  const schoolSelectValue = usesCustomSchool ? SCHOOL_OTHER_OPTION : schoolNameValue;
+  const customSchoolValue = usesCustomSchool && schoolNameValue !== SCHOOL_OTHER_OPTION ? schoolNameValue : "";
   const shouldShowSchoolField = isStudentValue === true;
   const isNonStudent = liveProfile.isStudent === false;
   const communityEyebrow = isNonStudent ? "community drops" : "student dumps";
@@ -3206,6 +3217,21 @@ export default function Page() {
     selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
   );
   const currentUsername = liveProfile.username?.trim().toLowerCase() ?? user.profile.username?.trim().toLowerCase() ?? "";
+  const settingsUsername = settingsUsernameDraft.trim().toLowerCase();
+  const settingsUsernameValid = /^[a-z0-9_]{3,20}$/.test(settingsUsername);
+  const settingsUsernameTaken = Boolean(
+    settingsUsername &&
+      settingsUsername !== currentUsername &&
+      accounts.some(
+        (account) =>
+          account.profile.username.trim().toLowerCase() === settingsUsername &&
+          account.googleProfile?.email?.toLowerCase() !== currentUserEmail,
+      ),
+  );
+  const settingsUsernameUnchanged = settingsUsername === currentUsername;
+  const settingsCitySchools = schoolsByCity[normalizeCityKey(liveProfile.city)] ?? [];
+  const settingsSchoolUsesCustom = Boolean(settingsSchoolDraft && !settingsCitySchools.includes(settingsSchoolDraft));
+  const settingsSchoolSelectValue = settingsSchoolUsesCustom ? SCHOOL_OTHER_OPTION : settingsSchoolDraft;
   const shareImageDataUrlCacheRef = useRef<Record<string, string>>({});
   const selectedStoryPostSource =
     selectedStoryPostId
@@ -5283,6 +5309,14 @@ export default function Page() {
   }, [authMode]);
 
   useEffect(() => {
+    if (!settingsModalOpen) return;
+    setSettingsView("home");
+    setSettingsUsernameDraft(liveProfile.username ?? "");
+    setSettingsSchoolDraft(liveProfile.schoolName ?? "");
+    setSettingsNotice("");
+  }, [settingsModalOpen, liveProfile.schoolName, liveProfile.username]);
+
+  useEffect(() => {
     if (!user.signedIn || isAdmin) {
       setPushEnabled(false);
       setPushPromptOpen(false);
@@ -6429,7 +6463,7 @@ export default function Page() {
     const trimmedName = fullNameValue.trim();
     const trimmedUsername = usernameValue.trim().toLowerCase();
     const trimmedCity = cityValue.trim();
-    const trimmedSchool = schoolNameValue.trim();
+    const trimmedSchool = schoolNameValue === SCHOOL_OTHER_OPTION ? "" : schoolNameValue.trim();
 
     if (!trimmedName || !trimmedUsername || !trimmedCity || isStudentValue === null || (isStudentValue && !trimmedSchool)) {
       setError("drop your full name, username, city, and whether you're a student so we can finish your profile.");
@@ -6545,6 +6579,66 @@ export default function Page() {
       .finally(() => {
         setIsSavingBio(false);
       });
+  };
+
+  const saveSettingsProfile = (nextProfileFields: Partial<StoredUser["profile"]>, successMessage: string) => {
+    const sourceUser = liveAccount ?? user;
+    const nextUser = {
+      ...sourceUser,
+      signedIn: true,
+      googleProfile: user.googleProfile ?? sourceUser.googleProfile,
+      profile: {
+        ...sourceUser.profile,
+        ...nextProfileFields,
+      },
+    };
+
+    setIsSavingSettings(true);
+    setSettingsNotice("");
+
+    void mutateAccountState({
+      action: "upsert_account",
+      account: nextUser,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        persistUser((result.user as StoredUser | null) ?? nextUser);
+        setSettingsNotice(successMessage);
+        setSettingsView("home");
+      })
+      .catch(() => {
+        setSettingsNotice("that change didn’t save. try once more.");
+      })
+      .finally(() => setIsSavingSettings(false));
+  };
+
+  const saveSettingsUsername = () => {
+    if (!settingsUsernameValid) {
+      setSettingsNotice("username should be 3-20 characters using letters, numbers, or underscores.");
+      return;
+    }
+
+    if (settingsUsernameTaken) {
+      setSettingsNotice("that username is already taken.");
+      return;
+    }
+
+    if (settingsUsernameUnchanged) {
+      setSettingsNotice("that’s already your username.");
+      return;
+    }
+
+    saveSettingsProfile({ username: settingsUsername }, "username updated.");
+  };
+
+  const saveSettingsSchool = () => {
+    const nextSchool = settingsSchoolDraft.trim();
+    if (!nextSchool) {
+      setSettingsNotice("add your university or school first.");
+      return;
+    }
+
+    saveSettingsProfile({ isStudent: true, schoolName: nextSchool }, "school updated.");
   };
 
   const copyProfileLink = async () => {
@@ -10566,12 +10660,13 @@ export default function Page() {
               </div>
               {shouldShowSchoolField ? (
                 matchingSchools.length ? (
+                  <div className="grid gap-3">
                   <Select
                     label={copy.auth.school}
                     labelPlacement="outside"
                     placeholder={copy.auth.schoolPlaceholder}
                     radius="lg"
-                    selectedKeys={schoolNameValue ? [schoolNameValue] : []}
+                    selectedKeys={schoolSelectValue ? [schoolSelectValue] : []}
                     onSelectionChange={(keys) => {
                       const selected = Array.from(keys)[0];
                       setSchoolName(typeof selected === "string" ? selected : "");
@@ -10581,10 +10676,22 @@ export default function Page() {
                       value: "text-[#2C1A0E]",
                     }}
                   >
-                    {matchingSchools.map((school) => (
-                      <SelectItem key={school}>{school}</SelectItem>
+                    {[...matchingSchools, SCHOOL_OTHER_OPTION].map((school) => (
+                      <SelectItem key={school}>{school === SCHOOL_OTHER_OPTION ? "Other" : school}</SelectItem>
                     ))}
                   </Select>
+                  {usesCustomSchool ? (
+                    <Input
+                      label="type your university or school"
+                      labelPlacement="outside"
+                      placeholder={copy.auth.schoolTypePlaceholder}
+                      radius="lg"
+                      value={customSchoolValue}
+                      onValueChange={setSchoolName}
+                      classNames={{ inputWrapper: "bg-[#FFF0D0] shadow-none border border-[#FFF0D0]" }}
+                    />
+                  ) : null}
+                  </div>
                 ) : (
                   <Input
                     label={copy.auth.school}
@@ -13368,9 +13475,16 @@ export default function Page() {
                       </div>
                     </div>
                   </div>
-                  <Button type="button" radius="full" variant="bordered" className="shrink-0 border-[#2C1A0E] text-[#2C1A0E]" onPress={signOut}>
-                    log out
-                  </Button>
+                  <button
+                    type="button"
+                    aria-label="open settings"
+                    onClick={() => setSettingsModalOpen(true)}
+                    className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-1 rounded-full border border-[#2C1A0E] bg-white text-[#2C1A0E]"
+                  >
+                    <span className="h-0.5 w-5 rounded-full bg-current" />
+                    <span className="h-0.5 w-5 rounded-full bg-current" />
+                    <span className="h-0.5 w-5 rounded-full bg-current" />
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-3">
@@ -14436,6 +14550,178 @@ export default function Page() {
         onShareProfilePhoto={shareProfilePhotoToInstagram}
         onCopyProfileLink={copyProfileLink}
       />
+
+      <Modal isOpen={settingsModalOpen} onOpenChange={setSettingsModalOpen} placement="bottom-center" scrollBehavior="inside">
+        <ModalContent className="bg-[#fffaf2]">
+          {(onClose) => (
+            <>
+              <ModalHeader className="border-b border-[#FFF0D0]">
+                <div className="flex w-full items-center justify-between gap-3">
+                  <div>
+                    <p className="font-[family-name:var(--font-young-serif)] text-[1.8rem] leading-none text-[#2C1A0E]">
+                      {settingsView === "home" ? "settings" : settingsView === "username" ? "edit username" : "edit school"}
+                    </p>
+                    <p className="mt-2 text-sm text-[#6c7289]">
+                      {settingsView === "home" ? "account, profile, and app links." : "changes save to your crumbz account."}
+                    </p>
+                  </div>
+                  <Button radius="full" variant="light" className="text-[#2C1A0E]" onPress={onClose}>
+                    close
+                  </Button>
+                </div>
+              </ModalHeader>
+              <ModalBody className="gap-3 bg-[#fffaf2] pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
+                {settingsView === "home" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => window.open("/privacy", "_blank", "noopener,noreferrer")}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span className="font-semibold">Privacy Policy</span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.open("/terms", "_blank", "noopener,noreferrer")}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span className="font-semibold">Terms of Use</span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsUsernameDraft(liveProfile.username ?? "");
+                        setSettingsNotice("");
+                        setSettingsView("username");
+                      }}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span>
+                        <span className="block font-semibold">Edit Username</span>
+                        <span className="mt-1 block text-sm text-[#6c7289]">@{liveProfile.username || "pending"}</span>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsSchoolDraft(liveProfile.schoolName ?? "");
+                        setSettingsNotice("");
+                        setSettingsView("school");
+                      }}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span>
+                        <span className="block font-semibold">Edit University/school</span>
+                        <span className="mt-1 block text-sm text-[#6c7289]">{liveProfile.schoolName || "not added yet"}</span>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <Button type="button" radius="full" className="mt-2 bg-[#2C1A0E] text-white" onPress={signOut}>
+                      Log Out
+                    </Button>
+                  </>
+                ) : null}
+
+                {settingsView === "username" ? (
+                  <>
+                    <Input
+                      label="username"
+                      labelPlacement="outside"
+                      radius="lg"
+                      value={settingsUsernameDraft}
+                      onValueChange={(value) => {
+                        setSettingsUsernameDraft(value.toLowerCase().replace(/^@+/, ""));
+                        setSettingsNotice("");
+                      }}
+                      startContent={<span className="text-[#6c7289]">@</span>}
+                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
+                    />
+                    <p className={`text-sm ${settingsUsername && !settingsUsernameValid ? "text-[#B3261E]" : settingsUsernameTaken ? "text-[#B3261E]" : settingsUsername && !settingsUsernameUnchanged ? "text-[#2E7D32]" : "text-[#6c7289]"}`}>
+                      {!settingsUsername
+                        ? "choose a username."
+                        : !settingsUsernameValid
+                          ? "3-20 letters, numbers, or underscores."
+                          : settingsUsernameTaken
+                            ? "taken."
+                            : settingsUsernameUnchanged
+                              ? "this is your current username."
+                              : "available."}
+                    </p>
+                    {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                    <div className="flex gap-2">
+                      <Button radius="full" variant="flat" className="flex-1 bg-white text-[#2C1A0E]" onPress={() => setSettingsView("home")}>
+                        back
+                      </Button>
+                      <Button
+                        radius="full"
+                        className="flex-1 bg-[#2C1A0E] text-white"
+                        isLoading={isSavingSettings}
+                        isDisabled={!settingsUsernameValid || settingsUsernameTaken || settingsUsernameUnchanged}
+                        onPress={saveSettingsUsername}
+                      >
+                        save
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+
+                {settingsView === "school" ? (
+                  <>
+                    {settingsCitySchools.length ? (
+                      <Select
+                        label="university or school"
+                        labelPlacement="outside"
+                        radius="lg"
+                        selectedKeys={settingsSchoolSelectValue ? [settingsSchoolSelectValue] : []}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0];
+                          setSettingsSchoolDraft(typeof selected === "string" && selected !== SCHOOL_OTHER_OPTION ? selected : "");
+                          setSettingsNotice("");
+                        }}
+                        classNames={{ trigger: "bg-white shadow-none border border-[#FFF0D0]", value: "text-[#2C1A0E]" }}
+                      >
+                        {[...settingsCitySchools, SCHOOL_OTHER_OPTION].map((school) => (
+                          <SelectItem key={school}>{school === SCHOOL_OTHER_OPTION ? "Other" : school}</SelectItem>
+                        ))}
+                      </Select>
+                    ) : null}
+                    <Input
+                      label={settingsCitySchools.length ? "custom school" : "university or school"}
+                      labelPlacement="outside"
+                      placeholder="type your university or school"
+                      radius="lg"
+                      value={settingsSchoolDraft}
+                      onValueChange={(value) => {
+                        setSettingsSchoolDraft(value);
+                        setSettingsNotice("");
+                      }}
+                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#FFF0D0]" }}
+                    />
+                    {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                    <div className="flex gap-2">
+                      <Button radius="full" variant="flat" className="flex-1 bg-white text-[#2C1A0E]" onPress={() => setSettingsView("home")}>
+                        back
+                      </Button>
+                      <Button
+                        radius="full"
+                        className="flex-1 bg-[#2C1A0E] text-white"
+                        isLoading={isSavingSettings}
+                        isDisabled={!settingsSchoolDraft.trim()}
+                        onPress={saveSettingsSchool}
+                      >
+                        save
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+              </ModalBody>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
 
       <Modal isOpen={storyActionMenuOpen} onOpenChange={setStoryActionMenuOpen} placement="bottom-center">
         <ModalContent className="bg-[#fffaf2]">
