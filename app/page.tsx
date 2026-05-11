@@ -6065,10 +6065,10 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStoryPost?.id]);
 
-  // Auto-advance from native splash after 2 s
+  // Video intro advances on end; this fallback prevents anyone getting stuck if playback fails.
   useEffect(() => {
     if (nativeSplashDone) return;
-    const timer = window.setTimeout(() => setNativeSplashDone(true), 2000);
+    const timer = window.setTimeout(() => setNativeSplashDone(true), 6500);
     return () => window.clearTimeout(timer);
   }, [nativeSplashDone]);
 
@@ -10359,31 +10359,29 @@ export default function Page() {
       );
     }
 
-    // Native app: show branded splash before auth screen
+    // Native app: show branded video intro before auth screen
     const isSplashPreview = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("preview") === "splash";
     if ((isNativePlatform && !nativeSplashDone) || isSplashPreview) {
       return (
         <main
-          className="flex flex-col items-center justify-end font-[family-name:var(--font-manrope)]"
+          className="flex flex-col items-center justify-center font-[family-name:var(--font-manrope)]"
           style={{
             height: "100dvh",
             maxHeight: "100dvh",
             overflow: "hidden",
             backgroundColor: "#fb8803",
-            paddingTop: "env(safe-area-inset-top)",
-            paddingBottom: "calc(env(safe-area-inset-bottom) + 3rem)",
           }}
         >
-          <div className="flex flex-1 flex-col items-center justify-center gap-0">
-            <Image
-              src="/brand/crumbz-opening-exact.png"
-              alt="crumbz"
-              width={340}
-              height={340}
-              className="h-auto w-72 object-contain"
-              priority
-            />
-          </div>
+          <video
+            src="/brand/crumbz-splash-screen.mp4"
+            className="h-full w-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            onEnded={() => setNativeSplashDone(true)}
+            onError={() => setNativeSplashDone(true)}
+          />
         </main>
       );
     }
