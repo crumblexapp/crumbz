@@ -104,6 +104,7 @@ Collected as you interact with other users.
 | Friends list | Array of email addresses | Determines whose posts appear in your feed; friend map overlaps |
 | Incoming friend requests | Array of email addresses | Shows pending requests you need to respond to |
 | Outgoing friend requests | Array of email addresses | Shows requests you have sent but not yet been accepted |
+| Blocked users list | Array of email addresses | Hides blocked users' posts, comments, replies, favorite activity, and social suggestions from your account |
 
 ---
 

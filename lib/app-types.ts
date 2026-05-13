@@ -92,6 +92,7 @@ export type StoredUser = {
     friends: string[];
     incomingFriendRequests: string[];
     outgoingFriendRequests: string[];
+    blockedUserEmails: string[];
     favoritePlaceIds: string[];
     favoriteActivities?: FavoriteActivity[];
     referralCode?: string;

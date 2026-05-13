@@ -124,6 +124,8 @@ We may remove content, restrict features, suspend accounts, ban users, or delete
 
 We may act without prior notice where necessary. We are not required to preserve or return removed content unless required by law.
 
+Users can also report content or block other users from inside the app. Blocking hides that user's posts, comments, replies, saved-place activity, and social suggestions from the blocking user's experience. Unblocking makes public activity visible again, but it does not automatically restore a previous friendship connection.
+
 ---
 
 ## 12. Privacy

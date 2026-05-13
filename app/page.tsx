@@ -410,6 +410,7 @@ type StoredUser = {
     friends: string[];
     incomingFriendRequests: string[];
     outgoingFriendRequests: string[];
+    blockedUserEmails: string[];
     favoritePlaceIds: string[];
     favoriteActivities?: FavoriteActivity[];
     referralCode?: string;
@@ -825,6 +826,7 @@ const defaultUser: StoredUser = {
     friends: [],
     incomingFriendRequests: [],
     outgoingFriendRequests: [],
+    blockedUserEmails: [],
     favoritePlaceIds: [],
     favoriteActivities: [],
     referralCode: "",
@@ -1342,6 +1344,10 @@ function mergeAccountsPreferLocal(serverAccounts: StoredUser[], localAccounts: S
           ...account.profile.outgoingFriendRequests,
           ...localAccount.profile.outgoingFriendRequests,
         ]),
+        blockedUserEmails: dedupeLowercaseEmails([
+          ...(account.profile.blockedUserEmails ?? []),
+          ...(localAccount.profile.blockedUserEmails ?? []),
+        ]),
         favoritePlaceIds: isCurrentUser
           ? (localAccount.profile.favoritePlaceIds ?? [])
           : [...new Set([...(account.profile.favoritePlaceIds ?? []), ...(localAccount.profile.favoritePlaceIds ?? [])])],
@@ -1635,6 +1641,9 @@ function normalizeAccounts(accounts: unknown): StoredUser[] {
           : [],
         outgoingFriendRequests: Array.isArray(candidate.profile?.outgoingFriendRequests)
           ? candidate.profile.outgoingFriendRequests.filter((item): item is string => typeof item === "string")
+          : [],
+        blockedUserEmails: Array.isArray(candidate.profile?.blockedUserEmails)
+          ? dedupeLowercaseEmails(candidate.profile.blockedUserEmails.filter((item): item is string => typeof item === "string"))
           : [],
         favoritePlaceIds: Array.isArray(candidate.profile?.favoritePlaceIds)
           ? candidate.profile.favoritePlaceIds.filter((item): item is string => typeof item === "string")
@@ -2297,7 +2306,7 @@ function fromLocalDateTimeValue(value: string, fallback: string) {
 }
 
 async function mutateAccountState<TUser = StoredUser>(payload: {
-  action: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
+  action: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "block_user" | "unblock_user" | "update_favorites" | "delete_account";
   account?: StoredUser;
   currentEmail?: string;
   targetEmail?: string;
@@ -2484,7 +2493,7 @@ export default function Page() {
   const [bioDraft, setBioDraft] = useState("");
   const [profileEditModalOpen, setProfileEditModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [settingsView, setSettingsView] = useState<"home" | "username" | "school" | "deleteConfirm" | "deleteFinal">("home");
+  const [settingsView, setSettingsView] = useState<"home" | "username" | "school" | "blockedUsers" | "deleteConfirm" | "deleteFinal">("home");
   const [settingsUsernameDraft, setSettingsUsernameDraft] = useState("");
   const [settingsSchoolDraft, setSettingsSchoolDraft] = useState("");
   const [settingsNotice, setSettingsNotice] = useState("");
@@ -3090,6 +3099,9 @@ export default function Page() {
       .filter((account) => account.googleProfile?.email)
       .map((account) => [account.googleProfile?.email?.toLowerCase() ?? "", account] as const),
   );
+  const blockedUserEmails = dedupeLowercaseEmails(liveProfile.blockedUserEmails ?? []);
+  const blockedUserEmailSet = new Set(blockedUserEmails);
+  const isBlockedEmail = (email?: string | null) => Boolean(email && blockedUserEmailSet.has(email.toLowerCase()));
   const accountByUsername = new Map(
     accounts
       .map((account) => {
@@ -3116,7 +3128,10 @@ export default function Page() {
   const proofChallengers = dare.submissions.map((submission) => resolveChallenger(submission.authorEmail, submission));
   const adminPosts = posts.filter((post) => isAdminEmail(post.authorEmail) || post.authorRole === "admin");
   const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
-  const friendEmails = liveProfile.friends.map((email) => email.toLowerCase());
+  const visibleIncomingFriendRequests = liveProfile.incomingFriendRequests.filter((email) => !isBlockedEmail(email));
+  const visibleOutgoingFriendRequests = liveProfile.outgoingFriendRequests.filter((email) => !isBlockedEmail(email));
+  const visibleFriendEmails = liveProfile.friends.filter((email) => !isBlockedEmail(email));
+  const friendEmails = visibleFriendEmails.map((email) => email.toLowerCase());
   const today = new Date();
   const canSubmitWeeklyDumpToday = isSunday(today);
   const shouldShowSundayDumpFeed = canSubmitWeeklyDumpToday;
@@ -3124,11 +3139,13 @@ export default function Page() {
   const studentDailyPosts = posts
     .filter((post) => post.authorRole === "student" && post.type !== "weekly-dump" && post.type !== "story")
     .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
+    .filter((post) => !isBlockedEmail(post.authorEmail))
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const studentWeeklyDumps = posts
     .filter((post) => post.authorRole === "student" && post.type === "weekly-dump")
     .filter((post) => isCurrentWeeklyDump(post, currentSundayKey))
-    .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()));
+    .filter((post) => nonAdminEmailSet.has(post.authorEmail.toLowerCase()))
+    .filter((post) => !isBlockedEmail(post.authorEmail));
   const visibleStudentWeeklyDumps = studentWeeklyDumps.filter((post) => {
     const authorEmail = post.authorEmail.toLowerCase();
     return authorEmail === currentUserEmail || friendEmails.includes(authorEmail);
@@ -3149,6 +3166,7 @@ export default function Page() {
     .filter((post) => influencerAccounts.some((account) => account.googleProfile?.email?.toLowerCase() === post.authorEmail.toLowerCase()))
     .filter((post) => {
       const authorEmail = post.authorEmail.toLowerCase();
+      if (isBlockedEmail(authorEmail)) return false;
       if (authorEmail === currentUserEmail || friendEmails.includes(authorEmail)) return false;
       const account = accountByEmail.get(authorEmail) ?? null;
       return normalizeCityKey(account?.profile.city || "") === normalizeCityKey(liveProfile.city || "");
@@ -3157,6 +3175,7 @@ export default function Page() {
   const globalInfluencerFallbackPosts = influencerAccounts
     .map((account) => {
       const accountEmail = account.googleProfile?.email?.toLowerCase() ?? "";
+      if (isBlockedEmail(accountEmail)) return null;
       if (!accountEmail || accountEmail === currentUserEmail || friendEmails.includes(accountEmail)) return null;
       if (normalizeCityKey(account.profile.city || "") === normalizeCityKey(liveProfile.city || "")) return null;
 
@@ -3189,6 +3208,7 @@ export default function Page() {
       const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
       if (!account || getAccountRole(account) !== "influencer") return false;
       const authorEmail = post.authorEmail.toLowerCase();
+      if (isBlockedEmail(authorEmail)) return false;
       const authorFriends = (account.profile.friends ?? []).map((email) => email.trim().toLowerCase());
       const areFriendsEitherWay = friendEmails.includes(authorEmail) || authorFriends.includes(currentUserEmail);
       return authorEmail === currentUserEmail || areFriendsEitherWay || normalizeCityKey(account.profile.city || "") === viewerCityKey;
@@ -3243,6 +3263,7 @@ export default function Page() {
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a));
   const rawOnboardingCityPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+    .filter((post) => !isBlockedEmail(post.authorEmail))
     .filter((post) => {
       const authorCity = accountByEmail.get(post.authorEmail.toLowerCase())?.profile.city ?? "";
       const postCity = post.taggedPlaceCity ?? authorCity;
@@ -3258,6 +3279,7 @@ export default function Page() {
     .slice(0, 3);
   const cityPhotoFallbackPosts = [...studentDailyPosts, ...studentWeeklyDumps]
     .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+    .filter((post) => !isBlockedEmail(post.authorEmail))
     .filter((post) => Boolean(post.mediaUrls[0]))
     .filter((post) => {
       const authorCity = accountByEmail.get(post.authorEmail.toLowerCase())?.profile.city ?? "";
@@ -3266,8 +3288,8 @@ export default function Page() {
     })
     .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     .slice(0, 6);
-  const shouldShowCityPhotoFallback = liveProfile.friends.length === 0 && cityPhotoFallbackPosts.length > 0;
-  const shouldShowOnboardingCityPosts = liveProfile.friends.length === 0 && (onboardingCityPosts.length > 0 || adminFeedPosts.length > 0);
+  const shouldShowCityPhotoFallback = visibleFriendEmails.length === 0 && cityPhotoFallbackPosts.length > 0;
+  const shouldShowOnboardingCityPosts = visibleFriendEmails.length === 0 && (onboardingCityPosts.length > 0 || adminFeedPosts.length > 0);
   const selectedOwnPost =
     selectedOwnPostSnapshot && selectedOwnPostSnapshot.id === selectedOwnPostId
       ? selectedOwnPostSnapshot
@@ -3275,7 +3297,7 @@ export default function Page() {
         ? currentUserAllPosts.find((post) => post.id === selectedOwnPostId) ?? null
         : null;
   const selectedOwnPostBucket = selectedOwnPost ? getInteractionBucket(interactions, selectedOwnPost.id) : null;
-  const selectedOwnPostVisibleComments = selectedOwnPostBucket?.comments.filter((comment) => !comment.hidden) ?? [];
+  const selectedOwnPostVisibleComments = selectedOwnPostBucket?.comments.filter((comment) => !comment.hidden && !isBlockedEmail(comment.authorEmail)) ?? [];
   const selectedOwnPostHasLiked = Boolean(
     selectedOwnPostBucket?.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail),
   );
@@ -3350,6 +3372,7 @@ export default function Page() {
   const likesViewerRows = (likesViewerBucket?.likes ?? [])
     .slice()
     .reverse()
+    .filter((like) => !isBlockedEmail(like.authorEmail))
     .map((like) => {
       const account = accountByEmail.get(like.authorEmail.toLowerCase()) ?? null;
       const username = account?.profile.username ? `@${account.profile.username}` : "";
@@ -3377,6 +3400,7 @@ export default function Page() {
       : commentReactionViewerComment;
   const commentReactionViewerRows = (commentReactionViewerSource?.reactions ?? [])
     .filter((reaction) => reaction.emoji === commentReactionViewer?.emoji)
+    .filter((reaction) => !isBlockedEmail(reaction.authorEmail))
     .map((reaction) => {
       const account = accountByEmail.get(reaction.authorEmail.toLowerCase()) ?? null;
       return {
@@ -3401,14 +3425,16 @@ export default function Page() {
   const selectedProfileTaggedPosts = selectedProfileUsername
     ? [...studentDailyPosts, ...studentWeeklyDumps]
         .filter((post) => post.authorEmail.toLowerCase() !== selectedProfileEmail?.toLowerCase())
+        .filter((post) => !isBlockedEmail(post.authorEmail))
         .filter((post) => extractTaggedUsernames(post.body).includes(selectedProfileUsername))
         .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
     : [];
   const selectedProfileEmailLower = selectedProfileEmail?.toLowerCase() ?? "";
   const selectedProfileIsOwn = Boolean(selectedProfileEmailLower && selectedProfileEmailLower === currentUserEmail);
-  const selectedProfileIsFriend = Boolean(selectedProfileEmailLower && liveProfile.friends.includes(selectedProfileEmailLower));
-  const selectedProfileRequestPending = Boolean(selectedProfileEmailLower && liveProfile.outgoingFriendRequests.includes(selectedProfileEmailLower));
-  const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && liveProfile.incomingFriendRequests.includes(selectedProfileEmailLower));
+  const selectedProfileIsBlocked = Boolean(selectedProfileEmailLower && isBlockedEmail(selectedProfileEmailLower));
+  const selectedProfileIsFriend = Boolean(selectedProfileEmailLower && visibleFriendEmails.includes(selectedProfileEmailLower));
+  const selectedProfileRequestPending = Boolean(selectedProfileEmailLower && visibleOutgoingFriendRequests.includes(selectedProfileEmailLower));
+  const selectedProfileIncomingRequest = Boolean(selectedProfileEmailLower && visibleIncomingFriendRequests.includes(selectedProfileEmailLower));
   const selectedProfileFollowersCount = selectedProfileAccount?.profile.friends.length ?? 0;
   const selectedProfileBio = selectedProfileAccount?.profile.bio?.trim() ?? "";
   const selectedProfileIsInfluencer = getAccountRole(selectedProfileAccount) === "influencer";
@@ -3588,10 +3614,11 @@ export default function Page() {
     const username = account.profile.username?.trim().toLowerCase() ?? "";
     if (!normalizedFriendQuery || !username) return false;
     if (isAdminEmail(email)) return false;
+    if (isBlockedEmail(email)) return false;
     if (email.toLowerCase() === (user.googleProfile?.email?.toLowerCase() ?? "")) return false;
-    if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
-    if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
-    if (liveProfile.incomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleFriendEmails.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleOutgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleIncomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
 
     return username === normalizedFriendQuery;
   });
@@ -3601,10 +3628,11 @@ export default function Page() {
     const username = account.profile.username?.trim().toLowerCase() ?? "";
     if (!normalizedPostSignupFriendQuery || !username) return false;
     if (isAdminEmail(email)) return false;
+    if (isBlockedEmail(email)) return false;
     if (email.toLowerCase() === currentUserEmail) return false;
-    if (liveProfile.friends.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
-    if (liveProfile.outgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
-    if (liveProfile.incomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleFriendEmails.some((friendEmail) => friendEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleOutgoingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
+    if (visibleIncomingFriendRequests.some((requestEmail) => requestEmail.toLowerCase() === email.toLowerCase())) return false;
 
     return username === normalizedPostSignupFriendQuery;
   });
@@ -3675,7 +3703,7 @@ export default function Page() {
       : profileLikedSpots;
   const friendAccounts = accounts.filter((account) => {
     const email = account.googleProfile?.email ?? "";
-    return !isAdminEmail(email) && liveProfile.friends.includes(email);
+    return !isAdminEmail(email) && visibleFriendEmails.includes(email.toLowerCase()) && !isBlockedEmail(email);
   });
   const favoriteMapPlaces = [
     ...favoritePlaces,
@@ -3705,7 +3733,7 @@ export default function Page() {
         .filter((friend) => !dailyPostMentionQuery || friend.usernameLower.startsWith(dailyPostMentionQuery))
         .slice(0, 6)
     : [];
-  const shouldShowFeedAnnouncementCard = user.signedIn && (liveProfile.friends.length === 0 || (friendDailyFeedPosts.length === 0 && friendWeeklyDumps.length === 0));
+  const shouldShowFeedAnnouncementCard = user.signedIn && (visibleFriendEmails.length === 0 || (friendDailyFeedPosts.length === 0 && friendWeeklyDumps.length === 0));
   const citySpotlightName = liveProfile.city || "Lodz";
   const cityFilteredFriendPosts = [...friendDailyFeedPosts, ...friendWeeklyDumps].filter((post) => {
     const account = accountByEmail.get(post.authorEmail.toLowerCase()) ?? null;
@@ -3845,7 +3873,7 @@ export default function Page() {
       const bucket = getInteractionBucket(interactions, post.id);
       const likeTargetLabel = post.cta === "friend review" ? "friend review" : "post";
       const groupedLikeNotifications = groupLikesForNotifications(
-        bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail),
+        bucket.likes.filter((like) => like.authorEmail.toLowerCase() !== currentUserEmail && !isBlockedEmail(like.authorEmail)),
       )
         .map((group) => {
           const latestLike = group[group.length - 1] ?? null;
@@ -3869,7 +3897,7 @@ export default function Page() {
       return [
         ...groupedLikeNotifications,
         ...bucket.comments
-          .filter((comment) => !comment.hidden && comment.authorEmail.toLowerCase() !== currentUserEmail)
+          .filter((comment) => !comment.hidden && comment.authorEmail.toLowerCase() !== currentUserEmail && !isBlockedEmail(comment.authorEmail))
           .slice()
           .reverse()
           .map((comment, index) => ({
@@ -3882,7 +3910,7 @@ export default function Page() {
             sortTime: getDisplayTimestamp(comment.createdAt, index),
           })),
         ...bucket.shares
-          .filter((share) => share.authorEmail.toLowerCase() !== currentUserEmail)
+          .filter((share) => share.authorEmail.toLowerCase() !== currentUserEmail && !isBlockedEmail(share.authorEmail))
           .slice()
           .reverse()
           .map((share, index) => ({
@@ -3903,7 +3931,7 @@ export default function Page() {
       .filter((comment) => comment.authorEmail.toLowerCase() === currentUserEmail)
       .flatMap((comment) => {
         const groupedReactionNotifications = groupTimedNotificationItems(
-          (comment.reactions ?? []).filter((reaction) => reaction.authorEmail.toLowerCase() !== currentUserEmail),
+          (comment.reactions ?? []).filter((reaction) => reaction.authorEmail.toLowerCase() !== currentUserEmail && !isBlockedEmail(reaction.authorEmail)),
         )
           .map((group) => {
             const latestReaction = group[group.length - 1] ?? null;
@@ -3925,7 +3953,7 @@ export default function Page() {
           .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
         const groupedReplyNotifications = groupTimedNotificationItems(
-          (comment.replies ?? []).filter((reply) => reply.authorEmail.toLowerCase() !== currentUserEmail),
+          (comment.replies ?? []).filter((reply) => reply.authorEmail.toLowerCase() !== currentUserEmail && !isBlockedEmail(reply.authorEmail)),
         )
           .map((group) => {
             const latestReply = group[group.length - 1] ?? null;
@@ -3969,7 +3997,7 @@ export default function Page() {
         sortTime: Number(announcement.id.replace(/\D/g, "")) || 0,
       };
     }),
-    ...liveProfile.incomingFriendRequests
+    ...visibleIncomingFriendRequests
       .map((requestEmail, index, requests) => {
         const requester = accounts.find((account) => account.googleProfile?.email === requestEmail);
         if (!requester || isAdminEmail(requestEmail)) return null;
@@ -4040,6 +4068,7 @@ export default function Page() {
       }),
     ...[...studentDailyPosts, ...studentWeeklyDumps]
       .filter((post) => post.authorEmail.toLowerCase() !== currentUserEmail)
+      .filter((post) => !isBlockedEmail(post.authorEmail))
       .filter((post) => extractTaggedUsernames(post.body).includes(liveProfile.username.trim().toLowerCase()))
       .sort((a, b) => getPostTimestamp(b) - getPostTimestamp(a))
       .slice(0, 6)
@@ -4235,6 +4264,8 @@ export default function Page() {
   };
 
   const renderCommentThread = (postId: string, comment: PostComment) => {
+    if (isBlockedEmail(comment.authorEmail)) return null;
+
     const commentAuthorAccount = accountByEmail.get(comment.authorEmail.toLowerCase()) ?? null;
     const commentAuthorUsername = accountByEmail.get(comment.authorEmail.toLowerCase())?.profile.username;
     const canOpenCommentAuthorProfile = Boolean(commentAuthorAccount?.googleProfile?.email);
@@ -4243,6 +4274,7 @@ export default function Page() {
     const reactionSummary = [...new Set((comment.reactions ?? []).map((reaction) => reaction.emoji))];
     const replyComposerKey = `${postId}:${comment.id}`;
     const reactionPickerId = `${postId}:${comment.id}`;
+    const visibleReplies = (comment.replies ?? []).filter((reply) => !isBlockedEmail(reply.authorEmail));
 
     return (
       <div key={comment.id} className="relative rounded-[18px] bg-[#FFF0D0] px-2.5 py-2">
@@ -4349,9 +4381,9 @@ export default function Page() {
           </button>
         </div>
 
-        {(comment.replies ?? []).length ? (
+        {visibleReplies.length ? (
           <div className="mt-2.5 space-y-2 pl-[2.15rem]">
-            {(comment.replies ?? []).map((reply) => {
+            {visibleReplies.map((reply) => {
               const replyAccount = accountByEmail.get(reply.authorEmail.toLowerCase()) ?? null;
               const replyUsername = replyAccount?.profile.username;
               const canOpenReplyAuthorProfile = Boolean(replyAccount?.googleProfile?.email);
@@ -4610,7 +4642,7 @@ export default function Page() {
 
   const renderFeedCard = (post: AppPost, detail = false) => {
     const bucket = getInteractionBucket(interactions, post.id);
-    const visibleComments = bucket.comments.filter((comment) => !comment.hidden);
+    const visibleComments = bucket.comments.filter((comment) => !comment.hidden && !isBlockedEmail(comment.authorEmail));
     const currentUserEmail = user.googleProfile?.email?.toLowerCase() ?? "";
     const hasLiked = bucket.likes.some((like) => like.authorEmail.toLowerCase() === currentUserEmail);
     const isStudentPost = !isAdminEmail(post.authorEmail);
@@ -4716,7 +4748,7 @@ export default function Page() {
               }
               className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#FFF0D0] bg-white text-xl font-semibold leading-none text-[#2C1A0E] shadow-[0_8px_22px_rgba(44,26,14,0.06)]"
             >
-              ...
+              ⋮
             </button>
           </CardHeader>
           <CardBody className="gap-4 p-5">
@@ -6676,6 +6708,7 @@ export default function Page() {
         friends: liveProfile.friends,
         incomingFriendRequests: liveProfile.incomingFriendRequests,
         outgoingFriendRequests: liveProfile.outgoingFriendRequests,
+        blockedUserEmails: liveProfile.blockedUserEmails ?? [],
         favoritePlaceIds: liveProfile.favoritePlaceIds,
         favoriteActivities: liveProfile.favoriteActivities ?? sourceUser.profile.favoriteActivities ?? [],
         referralCode: liveProfile.referralCode ?? sourceUser.profile.referralCode ?? "",
@@ -7325,6 +7358,7 @@ export default function Page() {
 
   const addFriend = async (friendEmail: string) => {
     if (!friendEmail || friendEmail === user.googleProfile?.email) return;
+    if (isBlockedEmail(friendEmail)) return;
     if (liveProfile.friends.includes(friendEmail) || liveProfile.outgoingFriendRequests.includes(friendEmail)) return;
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
@@ -7448,6 +7482,64 @@ export default function Page() {
         const message = error instanceof Error ? error.message : "removing that friend failed. try again.";
         setError(message);
         setSocialActionNotice(message);
+      });
+  };
+
+  const blockUser = async (targetEmail: string, source: "settings" | "menu" | "profile" = "menu") => {
+    const currentEmail = user.googleProfile?.email;
+    if (!currentEmail || !targetEmail || targetEmail.toLowerCase() === currentEmail.toLowerCase()) return;
+    if (!(await ensureAuthenticatedSession())) return;
+    setSocialActionNotice("");
+    setReportNotice("");
+
+    void haptic("heavy");
+    void mutateAccountState({
+      action: "block_user",
+      currentEmail,
+      targetEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+        if (source === "menu") {
+          setReportNotice("blocked. their posts, comments, and saved spots are hidden from you.");
+          setReportStep("thanks");
+        } else {
+          setSocialActionNotice("user blocked. their activity is hidden from you.");
+        }
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "blocking that user failed. try again.";
+        setError(message);
+        if (source === "menu") setReportNotice(message);
+        setSocialActionNotice(message);
+      });
+  };
+
+  const unblockUser = async (targetEmail: string) => {
+    const currentEmail = user.googleProfile?.email;
+    if (!currentEmail || !targetEmail) return;
+    if (!(await ensureAuthenticatedSession())) return;
+    setSettingsNotice("");
+
+    void mutateAccountState({
+      action: "unblock_user",
+      currentEmail,
+      targetEmail,
+    })
+      .then((result) => {
+        setAccounts(result.accounts);
+        if (result.user) {
+          persistUser(result.user as StoredUser);
+        }
+        setSettingsNotice("unblocked. their public activity can show again.");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "unblocking that user failed. try again.";
+        setError(message);
+        setSettingsNotice(message);
       });
   };
 
@@ -13668,7 +13760,7 @@ export default function Page() {
                   center={favoriteCityCenter}
                   places={favoriteMapPlaces}
                   favoriteIds={favoritePlaceIds}
-                  isNewUser={favoritePlaceIds.length === 0 && liveProfile.friends.length === 0}
+                  isNewUser={favoritePlaceIds.length === 0 && visibleFriendEmails.length === 0}
                   highlightedPlaceId={highlightedFavoritePlaceId}
                   onToggleFavorite={toggleFavoritePlace}
                   onOpenDirections={openPlaceDirections}
@@ -13804,8 +13896,8 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.social.requests}</p>
-                {liveProfile.incomingFriendRequests.length ? (
-                  liveProfile.incomingFriendRequests.map((requestEmail) => {
+                {visibleIncomingFriendRequests.length ? (
+                  visibleIncomingFriendRequests.map((requestEmail) => {
                     const requester = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
                     if (!requester || isAdminEmail(requestEmail)) return null;
 
@@ -13860,11 +13952,11 @@ export default function Page() {
                   )
                 ) : null}
 
-                {liveProfile.outgoingFriendRequests.length ? (
+                {visibleOutgoingFriendRequests.length ? (
                   <div className="rounded-[18px] bg-[#FFF0D0] px-3 py-3">
                     <p className="text-xs uppercase tracking-[0.18em] text-[#2C1A0E]">{copy.social.pending}</p>
                     <div className="mt-2 grid gap-2">
-                      {liveProfile.outgoingFriendRequests.map((requestEmail) => {
+                      {visibleOutgoingFriendRequests.map((requestEmail) => {
                         const pendingFriend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === requestEmail.toLowerCase());
                         return (
                           <div key={requestEmail} className="flex items-center justify-between gap-3 rounded-[16px] bg-white px-3 py-3">
@@ -13887,8 +13979,8 @@ export default function Page() {
             <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.1)]">
               <CardBody className="gap-3 p-5">
                 <p className="text-xs uppercase tracking-[0.22em] text-[#2C1A0E]">{copy.social.yourPeople}</p>
-                {liveProfile.friends.length ? (
-                  liveProfile.friends.map((friendEmail) => {
+                {visibleFriendEmails.length ? (
+                  visibleFriendEmails.map((friendEmail) => {
                     const friend = accounts.find((account) => account.googleProfile?.email?.toLowerCase() === friendEmail.toLowerCase());
                     if (!friend || isAdminEmail(friendEmail)) return null;
 
@@ -13943,14 +14035,18 @@ export default function Page() {
                         ? "edit username"
                         : settingsView === "school"
                           ? "edit school"
-                          : settingsView === "deleteConfirm"
-                            ? "delete account?"
-                            : "last step"}
+                          : settingsView === "blockedUsers"
+                            ? "blocked users"
+                            : settingsView === "deleteConfirm"
+                              ? "delete account?"
+                              : "last step"}
                   </p>
                   <p className="mt-3 text-sm leading-6 text-[#6c7289]">
                     {settingsView === "home"
                       ? "account, profile, and app links."
-                      : settingsView === "deleteConfirm" || settingsView === "deleteFinal"
+                      : settingsView === "blockedUsers"
+                        ? "unblock people if you want their activity to show again."
+                        : settingsView === "deleteConfirm" || settingsView === "deleteFinal"
                         ? "this permanently removes your crumbz account."
                         : "changes save to your crumbz account."}
                   </p>
@@ -13993,6 +14089,22 @@ export default function Page() {
                       <span>
                         <span className="block font-semibold">Edit University/school</span>
                         <span className="mt-1 block text-sm text-[#6c7289]">{liveProfile.schoolName || "not added yet"}</span>
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettingsNotice("");
+                        setSettingsView("blockedUsers");
+                      }}
+                      className="flex w-full items-center justify-between rounded-[22px] bg-white px-4 py-4 text-left text-[#2C1A0E] shadow-sm"
+                    >
+                      <span>
+                        <span className="block font-semibold">Blocked Users</span>
+                        <span className="mt-1 block text-sm text-[#6c7289]">
+                          {blockedUserEmails.length ? `${blockedUserEmails.length} hidden` : "no one blocked"}
+                        </span>
                       </span>
                       <span aria-hidden="true">›</span>
                     </button>
@@ -14097,6 +14209,40 @@ export default function Page() {
                       >
                         save school
                       </Button>
+                    </CardBody>
+                  </Card>
+                ) : null}
+
+                {settingsView === "blockedUsers" ? (
+                  <Card className="rounded-[28px] border border-[#FFF0D0] bg-white shadow-[0_18px_50px_rgba(254,138,1,0.08)]">
+                    <CardBody className="gap-4 p-5">
+                      {settingsNotice ? <p className="text-sm text-[#F5A623]">{settingsNotice}</p> : null}
+                      {blockedUserEmails.length ? (
+                        <div className="space-y-3">
+                          {blockedUserEmails.map((email) => {
+                            const blockedAccount = accountByEmail.get(email) ?? null;
+                            const displayName = blockedAccount?.profile.fullName || blockedAccount?.googleProfile?.name || email;
+                            const displayHandle = blockedAccount?.profile.username ? `@${blockedAccount.profile.username}` : email;
+
+                            return (
+                              <div key={email} className="flex items-center justify-between gap-3 rounded-[18px] bg-[#FFF0D0] px-3 py-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <Avatar src={getAccountPicture(blockedAccount)} name={displayName} className="h-11 w-11 shrink-0 bg-white text-[#2C1A0E]" />
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-[#2C1A0E]">{displayName}</p>
+                                    <p className="truncate text-sm text-[#6c7289]">{displayHandle}</p>
+                                  </div>
+                                </div>
+                                <Button radius="full" size="sm" className="bg-[#2C1A0E] text-white" onPress={() => void unblockUser(email)}>
+                                  unblock
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm leading-6 text-[#6c7289]">you have not blocked anyone. if you block someone later, they will show here.</p>
+                      )}
                     </CardBody>
                   </Card>
                 ) : null}
@@ -14276,7 +14422,7 @@ export default function Page() {
                         onClick={() => setProfileDrawer("followers")}
                         className="flex min-h-[5rem] w-full min-w-0 flex-col items-center justify-start overflow-hidden rounded-[18px] px-1 py-1 text-center"
                       >
-                        <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{liveProfile.friends.length}</p>
+                        <p className="text-[1.25rem] font-semibold leading-none text-[#2C1A0E]">{visibleFriendEmails.length}</p>
                         <p className={`mt-1 w-full text-[0.72rem] leading-[0.95rem] text-[#6c7289] ${language === "en" ? "whitespace-nowrap" : "break-words"}`}>{copy.profile.followers}</p>
                       </button>
                       <button
@@ -15123,7 +15269,11 @@ export default function Page() {
               <ModalBody className="bg-[#fffaf2] pb-[calc(7rem+env(safe-area-inset-bottom))] pt-5">
                 {!selectedProfileIsOwn ? (
                   <div className="mb-4 flex flex-wrap gap-2">
-                    {selectedProfileIsFriend ? (
+                    {selectedProfileIsBlocked ? (
+                      <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={() => selectedProfileEmail && void unblockUser(selectedProfileEmail)}>
+                        unblock
+                      </Button>
+                    ) : selectedProfileIsFriend ? (
                       <Chip className="bg-[#FFF0D0] text-[#2C1A0E]">already in your circle</Chip>
                     ) : selectedProfileIncomingRequest ? (
                       <Button radius="full" className="bg-[#F5A623] text-white" onPress={() => selectedProfileEmail && acceptFriendRequest(selectedProfileEmail)}>
@@ -15976,6 +16126,19 @@ export default function Page() {
                       <span>Report</span>
                       <span aria-hidden="true">›</span>
                     </button>
+                    {reportTarget?.authorEmail &&
+                    reportTarget.authorEmail.toLowerCase() !== currentUserEmail &&
+                    !isAdminEmail(reportTarget.authorEmail) &&
+                    !isBlockedEmail(reportTarget.authorEmail) ? (
+                      <button
+                        type="button"
+                        onClick={() => void blockUser(reportTarget.authorEmail, "menu")}
+                        className="flex min-h-[56px] w-full items-center justify-between rounded-[18px] bg-white px-4 py-3 text-left font-semibold text-[#2C1A0E] ring-1 ring-[#FFF0D0]"
+                      >
+                        <span>Block user</span>
+                        <span aria-hidden="true">›</span>
+                      </button>
+                    ) : null}
                     {reportTarget?.type === "post" ? (
                       <>
                         <button
@@ -16051,10 +16214,12 @@ export default function Page() {
                 ) : (
                   <div className="space-y-4 rounded-[24px] bg-white p-5 text-center ring-1 ring-[#FFF0D0]">
                     <p className="font-[family-name:var(--font-young-serif)] text-[2rem] leading-none text-[#2C1A0E]">
-                      thanks for letting us know
+                      {reportNotice?.startsWith("blocked.") ? "user blocked" : "thanks for letting us know"}
                     </p>
                     <p className="text-sm font-semibold leading-6 text-[#6c7289]">
-                      we saved your report and will review it.
+                      {reportNotice?.startsWith("blocked.")
+                        ? "their posts, comments, replies, and saved-spot activity are hidden from you."
+                        : "we saved your report and will review it."}
                     </p>
                     <Button radius="full" className="bg-[#2C1A0E] text-white" onPress={closeReportMenu}>
                       done

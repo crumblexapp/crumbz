@@ -32,6 +32,7 @@ type StoredUser = {
     friends: string[];
     incomingFriendRequests: string[];
     outgoingFriendRequests: string[];
+    blockedUserEmails: string[];
     favoritePlaceIds: string[];
     favoriteActivities?: {
       id: string;
@@ -73,6 +74,9 @@ function normalizeAccount(account: StoredUser) {
       friends: account.profile.friends ?? [],
       incomingFriendRequests: account.profile.incomingFriendRequests ?? [],
       outgoingFriendRequests: account.profile.outgoingFriendRequests ?? [],
+      blockedUserEmails: [
+        ...new Set((account.profile.blockedUserEmails ?? []).map((email) => email.trim().toLowerCase()).filter(Boolean)),
+      ],
       favoritePlaceIds: account.profile.favoritePlaceIds ?? [],
       favoriteActivities: account.profile.favoriteActivities ?? [],
       referralCode: account.profile.referralCode?.trim().toUpperCase() ?? "",
@@ -114,6 +118,12 @@ function mergeAccountForUpsert(existingAccount: StoredUser | null, incomingAccou
       friends: existingAccount.profile.friends,
       incomingFriendRequests: existingAccount.profile.incomingFriendRequests,
       outgoingFriendRequests: existingAccount.profile.outgoingFriendRequests,
+      blockedUserEmails: [
+        ...new Set([
+          ...(existingAccount.profile.blockedUserEmails ?? []),
+          ...(incomingAccount.profile.blockedUserEmails ?? []),
+        ].map((email) => email.trim().toLowerCase()).filter(Boolean)),
+      ],
       favoritePlaceIds: existingAccount.profile.favoritePlaceIds,
       favoriteActivities: existingAccount.profile.favoriteActivities ?? [],
       seenNotificationIds: [
@@ -245,7 +255,7 @@ export async function POST(request: Request) {
   // Rate limit friend actions
   const body = (await request.json().catch(() => null)) as
     | {
-        action?: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "update_favorites" | "delete_account";
+        action?: "upsert_account" | "send_friend_request" | "cancel_friend_request" | "accept_friend_request" | "decline_friend_request" | "remove_friend" | "block_user" | "unblock_user" | "update_favorites" | "delete_account";
         account?: StoredUser;
         currentEmail?: string;
         targetEmail?: string;
@@ -267,7 +277,7 @@ export async function POST(request: Request) {
   }
 
   // Rate limit friend-related actions (10 per minute)
-  if (action.includes("friend")) {
+  if (action.includes("friend") || action.includes("block")) {
     const rateLimit = await checkRateLimit(identity.email, "friend_request");
     if (!rateLimit.ok) {
       return NextResponse.json({ ok: false, message: rateLimit.message }, { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } });
@@ -378,6 +388,14 @@ export async function POST(request: Request) {
     if (!hasCurrent || !hasTarget) {
       return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
     }
+    const currentAccount = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const requestTargetAccount = accounts.find((account) => getEmail(account) === targetEmail) ?? null;
+    if (
+      currentAccount?.profile.blockedUserEmails?.includes(targetEmail) ||
+      requestTargetAccount?.profile.blockedUserEmails?.includes(currentEmail)
+    ) {
+      return NextResponse.json({ ok: false, message: "friend requests are unavailable for this account." }, { status: 403 });
+    }
 
     nextAccounts = accounts.map((account) => {
       const email = getEmail(account);
@@ -438,6 +456,14 @@ export async function POST(request: Request) {
     const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
     if (!hasCurrent || !hasTarget) {
       return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
+    }
+    const currentAccount = accounts.find((account) => getEmail(account) === currentEmail) ?? null;
+    const targetAccount = accounts.find((account) => getEmail(account) === targetEmail) ?? null;
+    if (
+      currentAccount?.profile.blockedUserEmails?.includes(targetEmail) ||
+      targetAccount?.profile.blockedUserEmails?.includes(currentEmail)
+    ) {
+      return NextResponse.json({ ok: false, message: "friend requests are unavailable for this account." }, { status: 403 });
     }
 
     nextAccounts = accounts.map((account) => {
@@ -621,6 +647,91 @@ export async function POST(request: Request) {
     });
   }
 
+  if (action === "block_user") {
+    const currentEmail = body?.currentEmail?.toLowerCase() ?? "";
+    const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    if (!currentEmail || !targetEmail) {
+      return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (currentEmail === targetEmail) {
+      return NextResponse.json({ ok: false, message: "you cannot block yourself." }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only block from your own account." }, { status: 403 });
+    }
+
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    const hasTarget = accounts.some((account) => getEmail(account) === targetEmail);
+    if (!hasCurrent || !hasTarget) {
+      return NextResponse.json({ ok: false, message: "one of those accounts is missing from shared data" }, { status: 400 });
+    }
+
+    nextAccounts = accounts.map((account) => {
+      const email = getEmail(account);
+      if (email === currentEmail) {
+        const next = normalizeAccount({
+          ...account,
+          profile: {
+            ...account.profile,
+            blockedUserEmails: [...new Set([...(account.profile.blockedUserEmails ?? []), targetEmail])],
+            friends: account.profile.friends.filter((item) => item !== targetEmail),
+            incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== targetEmail),
+            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== targetEmail),
+          },
+        });
+        nextUser = next;
+        return next;
+      }
+
+      if (email === targetEmail) {
+        return normalizeAccount({
+          ...account,
+          profile: {
+            ...account.profile,
+            friends: account.profile.friends.filter((item) => item !== currentEmail),
+            incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== currentEmail),
+            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== currentEmail),
+          },
+        });
+      }
+
+      return account;
+    });
+  }
+
+  if (action === "unblock_user") {
+    const currentEmail = body?.currentEmail?.toLowerCase() ?? "";
+    const targetEmail = body?.targetEmail?.toLowerCase() ?? "";
+    if (!currentEmail || !targetEmail) {
+      return NextResponse.json({ ok: false, message: "missing emails" }, { status: 400 });
+    }
+
+    if (!identity.isAdmin && currentEmail !== identity.email) {
+      return NextResponse.json({ ok: false, message: "you can only unblock from your own account." }, { status: 403 });
+    }
+
+    const hasCurrent = accounts.some((account) => getEmail(account) === currentEmail);
+    if (!hasCurrent) {
+      return NextResponse.json({ ok: false, message: "your account is missing from shared data" }, { status: 400 });
+    }
+
+    nextAccounts = accounts.map((account) => {
+      if (getEmail(account) !== currentEmail) return account;
+
+      const next = normalizeAccount({
+        ...account,
+        profile: {
+          ...account.profile,
+          blockedUserEmails: (account.profile.blockedUserEmails ?? []).filter((item) => item !== targetEmail),
+        },
+      });
+      nextUser = next;
+      return next;
+    });
+  }
+
   if (action === "update_favorites") {
     const currentEmail = body?.currentEmail?.toLowerCase() ?? "";
     if (!currentEmail) {
@@ -682,9 +793,14 @@ export async function POST(request: Request) {
         ? body.favoritePlace.name
         : "a new food spot";
 
-    if (actorFriends.length && didAddFavorite && addedFavoritePlace) {
+    const pushableActorFriends = actorFriends.filter((email) => {
+      const friend = nextAccounts.find((account) => getEmail(account) === email.toLowerCase()) ?? null;
+      return !friend?.profile.blockedUserEmails?.includes(currentEmail);
+    });
+
+    if (pushableActorFriends.length && didAddFavorite && addedFavoritePlace) {
       pendingPush = {
-        emails: actorFriends,
+        emails: pushableActorFriends,
         title: `${getPublicName(actor)} saved ${addedFavoritePlace}`,
         body: "check the map to see what they added.",
         url: "/?tab=favorites",
@@ -719,6 +835,7 @@ export async function POST(request: Request) {
             friends: account.profile.friends.filter((item) => item !== targetEmail),
             incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== targetEmail),
             outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== targetEmail),
+            blockedUserEmails: (account.profile.blockedUserEmails ?? []).filter((item) => item !== targetEmail),
           },
         }),
       );
