@@ -31,13 +31,11 @@ We may suspend or delete accounts if we believe the user is under the required a
 
 ## 3. Accounts and Sign-In
 
-Crumbz uses third-party sign-in providers — **Google Sign-In** and **Apple Sign-In** — to authenticate users. You are responsible for keeping access to your sign-in account secure.
+Crumbz lets users sign in with **Google Sign-In** or **email/password**. You are responsible for keeping access to your sign-in account secure.
 
 You agree to provide accurate profile information and to keep your username, city, school/university, and other profile details reasonably current. You may not impersonate another person, use a username that is misleading, abusive, illegal, or infringes someone else's rights, or attempt to access another user's account.
 
 We may reclaim, rename, restrict, or remove usernames or accounts if needed to protect users, comply with law, prevent abuse, or avoid confusion.
-
-**Apple Sign-In:** If you sign in with Apple, Apple may provide a private relay email address. We accept this and will never attempt to resolve or de-anonymize it. We will not use any data obtained through Apple Sign-In for advertising, tracking, or any purpose beyond authenticating you and operating your account.
 
 ---
 
@@ -138,7 +136,7 @@ Privacy Policy: `https://app.crumbz.pl/privacy`
 
 ## 13. Third-Party Services
 
-Crumbz relies on third-party services such as authentication providers (Google, Apple), hosting providers, databases, storage providers, maps/place providers, analytics/logging tools, push notification providers, app stores, and device operating systems.
+Crumbz relies on third-party services such as authentication providers (Google and Supabase Auth), hosting providers, databases, storage providers, maps/place providers, analytics/logging tools, push notification providers, app stores, and device operating systems.
 
 We are not responsible for third-party services, websites, policies, content, errors, outages, pricing, availability, or data practices. Your use of third-party services may be subject to their own terms and privacy policies.
 

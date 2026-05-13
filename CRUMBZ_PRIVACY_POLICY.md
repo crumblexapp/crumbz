@@ -54,7 +54,7 @@ It does not cover third-party websites or services that we link to, even if you 
 
 We collect data to:
 
-1. **Authenticate you** — verify who you are via Google Sign-In or Apple Sign-In
+1. **Authenticate you** — verify who you are via Google Sign-In or email/password sign-in
 2. **Provide the service** — show you posts, maps, friends' activity, and your saved spots
 3. **Enable social features** — friend requests, notifications, shared favorites
 4. **Personalize your experience** — show content in your city and language
@@ -62,7 +62,7 @@ We collect data to:
 6. **Prevent abuse** — rate-limit actions, protect API keys, enforce authorization
 7. **Improve the platform** — understand how features are used
 
-We do **not** use your data for targeted advertising. We do **not** sell your data to third parties. We do **not** use Apple ID data for advertising, tracking, or any purpose other than authenticating you and operating your Crumbz account.
+We do **not** use your data for targeted advertising. We do **not** sell your data to third parties.
 
 ---
 
@@ -78,7 +78,7 @@ Collected when you sign up and complete your profile.
 
 | Data field | Example | Why collected |
 |---|---|---|
-| Sign-in provider | `google` or `apple` | Records which sign-in method you used |
+| Sign-in provider | `google` or `email/password` | Records which sign-in method you used |
 | Email address | `user@gmail.com` | Primary identifier; used to authenticate every API request |
 | Full name | `Anna Kowalska` | Displayed on your profile and in notifications to friends |
 | Username | `annakowalska` | Public handle; used for @mentions and profile URL |
@@ -88,16 +88,12 @@ Collected when you sign up and complete your profile.
 | Bio | `coffee first, everything else after` | Displayed on your public profile |
 | Preferred language | `en` or `pl` | Controls UI language and notification language |
 | Account role | `user`, `influencer`, or `admin` | Controls what features and API actions are available |
-| Profile picture URL | Google or Apple CDN URL | Displayed on profile and in comments |
+| Profile picture URL | Google profile image URL or uploaded profile image URL | Displayed on profile and in comments |
 | Referral code | `AB12CD34EF` | Unique 10-character code you share to invite others |
 | Referred-by code | `XY78ZW90QR` | Code of the person who referred you (if any) |
 | Referred-by email | `friend@gmail.com` | Email of the person who referred you |
 | Referral completed timestamp | ISO timestamp | When your profile was considered complete for referral tracking |
 | Sign-in status | `true` or `false` | Whether the account is currently active |
-
-**Note on Apple Sign-In:** If you use Apple Sign-In, Apple may provide a private relay email address instead of your real email address. We accept and store whichever email Apple provides. We will not attempt to resolve or de-anonymize an Apple private relay address. We will never use Apple ID information for advertising or tracking purposes.
-
----
 
 ### 4.2 Social Graph Data (stored in Supabase)
 
@@ -314,7 +310,7 @@ Crumbz may use browser storage, localStorage, IndexedDB, service workers, authen
 - Support push notifications and offline-friendly behavior
 - Protect the service from spam or abuse
 
-Third-party services we use, such as Google Sign-In, Apple Sign-In, Supabase, Vercel, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
+Third-party services we use, such as Google Sign-In, Supabase, Vercel, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
 
 ---
 
@@ -329,18 +325,17 @@ We use the following third-party services. Each receives some of your data to op
 **What we send:** Your Google ID token (JWT) on every authenticated request
 **What Google provides us:** Your verified email address and profile info (name, picture)
 **What Google receives from the sign-in flow:** Your consent to share email and basic profile info with Crumbz
-**Why:** One of two ways to sign in to Crumbz.
+**Why:** One way to sign in to Crumbz.
 **Google's privacy policy:** https://policies.google.com/privacy
 
 ---
 
-### 7.2 Apple (Authentication)
+### 7.2 Email/Password Authentication (Supabase Auth)
 
-**What we send:** Your Apple identity token on sign-in
-**What Apple provides us:** Your verified identity, and either your real email address or an Apple-generated private relay address
-**Why:** One of two ways to sign in to Crumbz. Required for iOS App Store distribution.
-**Important:** We will never use your Apple ID data for advertising, profiling, or any purpose other than authenticating you and operating your account. If you choose to hide your email via Apple's private relay feature, we respect that and will not attempt to identify your real address.
-**Apple's privacy policy:** https://www.apple.com/legal/privacy/
+**What we collect:** Your email address and password credentials
+**What we store:** Your email address and authentication session data. Passwords are handled by Supabase Auth and are not visible to Crumbz.
+**Why:** One way to sign in to Crumbz.
+**Supabase privacy policy:** https://supabase.com/privacy
 
 ---
 
@@ -466,7 +461,7 @@ We use the following third-party services. Each receives some of your data to op
 | Rate limit logs | ~2 minutes (auto-deleted by system) |
 | Place reviews (indexed from posts) | Until the source post is deleted |
 | localStorage / device data | Until you clear browser data or delete your account |
-| Google/Apple authentication tokens (server-side cache) | Until token expiry (typically 1 hour), then evicted |
+| Google/email authentication tokens (server-side cache) | Until token expiry (typically 1 hour), then evicted |
 
 We do not retain data for longer than necessary to provide the service.
 
@@ -593,7 +588,7 @@ We take the following technical measures to protect your data:
 
 ### Authentication security
 
-- All API mutations require a verified Google or Apple ID token
+- All API mutations require a verified Google or email/password authentication token
 - Tokens are verified server-side via Supabase Auth on every request
 - Users can only access and modify their own data (server enforces this)
 - Admin access is locked to a single hardcoded email address
