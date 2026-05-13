@@ -14,7 +14,6 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
-		84B2C3532FAAAFE5003278E5 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 84B2C3522FAAAFE5003278E5 /* CapApp-SPM */; };
 		84B2C3562FAAB09A003278E5 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 84B2C3552FAAB09A003278E5 /* CapApp-SPM */; };
 /* End PBXBuildFile section */
 
@@ -39,7 +38,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				84B2C3562FAAB09A003278E5 /* CapApp-SPM in Frameworks */,
-				84B2C3532FAAAFE5003278E5 /* CapApp-SPM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -97,7 +95,6 @@
 			);
 			name = App;
 			packageProductDependencies = (
-				84B2C3522FAAAFE5003278E5 /* CapApp-SPM */,
 				84B2C3552FAAB09A003278E5 /* CapApp-SPM */,
 			);
 			productName = App;
@@ -321,6 +318,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = H49GG2V6D4;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -348,6 +346,7 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = H49GG2V6D4;
 				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -394,10 +393,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		84B2C3522FAAAFE5003278E5 /* CapApp-SPM */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = "CapApp-SPM";
-		};
 		84B2C3552FAAB09A003278E5 /* CapApp-SPM */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = "CapApp-SPM";
