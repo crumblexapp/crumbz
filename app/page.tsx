@@ -7056,11 +7056,13 @@ export default function Page() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(getEmailPasswordSetupPendingKey(email), "true");
       }
+      const redirectTo = getEmailAuthRedirectUrl(email);
+      console.log("[crumbz auth] sending magic link", { email, redirectTo });
       const { error: otpError } = await supabaseBrowser.auth.signInWithOtp({
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: getEmailAuthRedirectUrl(email),
+          emailRedirectTo: redirectTo,
           data: {
             name: email.split("@")[0],
             full_name: email.split("@")[0],
@@ -7070,11 +7072,24 @@ export default function Page() {
       });
       if (otpError) throw otpError;
       setError("check your email. tap the crumbz link, then set your password.");
-    } catch {
+    } catch (err: unknown) {
       if (typeof window !== "undefined") {
         window.localStorage.removeItem(getEmailPasswordSetupPendingKey(email));
       }
-      setError("we couldn’t send the email link. try again.");
+      const raw = err instanceof Error ? err.message : String(err ?? "");
+      console.error("[crumbz auth] magic link failed", err);
+      const lower = raw.toLowerCase();
+      if (lower.includes("rate") || lower.includes("too many") || lower.includes("after")) {
+        setError("too many tries. wait a minute and try again.");
+      } else if (lower.includes("redirect") || lower.includes("not allowed") || lower.includes("invalid url")) {
+        setError("redirect url not allowed in supabase. add it to auth → url configuration.");
+      } else if (lower.includes("smtp") || lower.includes("send") || lower.includes("email")) {
+        setError(`email send failed: ${raw}`);
+      } else if (raw) {
+        setError(`couldn’t send link: ${raw}`);
+      } else {
+        setError("we couldn’t send the email link. try again.");
+      }
     } finally {
       setEmailAuthLoading(false);
     }
