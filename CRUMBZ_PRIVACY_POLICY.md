@@ -54,7 +54,7 @@ It does not cover third-party websites or services that we link to, even if you 
 
 We collect data to:
 
-1. **Authenticate you** — verify who you are via Google Sign-In or email/password sign-in
+1. **Authenticate you** — verify who you are via Google Sign-In, Sign in with Apple, or email/password sign-in
 2. **Provide the service** — show you posts, maps, friends' activity, and your saved spots
 3. **Enable social features** — friend requests, notifications, shared favorites
 4. **Personalize your experience** — show content in your city and language
@@ -78,8 +78,9 @@ Collected when you sign up and complete your profile.
 
 | Data field | Example | Why collected |
 |---|---|---|
-| Sign-in provider | `google` or `email/password` | Records which sign-in method you used |
-| Email address | `user@gmail.com` | Primary identifier; used to authenticate every API request |
+| Sign-in provider | `google`, `apple`, or `email/password` | Records which sign-in method you used |
+| Email address | `user@gmail.com` or `xyz@privaterelay.appleid.com` | Primary identifier; used to authenticate every API request. If you sign in with Apple and choose "Hide My Email," we store the Apple-provided private relay address instead of your real email |
+| Apple user identifier | `001234.abcdef1234567890.0987` | Stable Apple-issued ID returned by Sign in with Apple; used to recognize returning Apple sign-in users |
 | Full name | `Anna Kowalska` | Displayed on your profile and in notifications to friends |
 | Username | `annakowalska` | Public handle; used for @mentions and profile URL |
 | City | `Warsaw` | Used to show local content, places, and city-specific feed |
@@ -311,7 +312,7 @@ Crumbz may use browser storage, localStorage, IndexedDB, service workers, authen
 - Support push notifications and offline-friendly behavior
 - Protect the service from spam or abuse
 
-Third-party services we use, such as Google Sign-In, Supabase, Vercel, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
+Third-party services we use, such as Google Sign-In, Sign in with Apple, Supabase, Vercel, Google Maps, browser push services, and device operating systems, may process technical data such as IP address, device identifiers, request headers, logs, or authentication/session data according to their own privacy policies. Where required, we ask for permission before accessing photos, camera, location, or push notifications.
 
 ---
 
@@ -331,7 +332,18 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.2 Email/Password Authentication (Supabase Auth)
+### 7.2 Apple (Sign in with Apple)
+
+**What we send:** Your Apple-issued identity token (JWT) when you sign in with Apple
+**What Apple provides us:** A stable Apple user identifier (`sub` claim), your verified email address (your real address or a private `@privaterelay.appleid.com` relay address if you chose "Hide My Email"), and your name on first sign-in if you chose to share it
+**What Apple receives from the sign-in flow:** The Crumbz app bundle identifier you are authenticating into and minimal device/locale information needed to display the Apple sign-in sheet
+**Why:** One way to sign in to Crumbz, required on iOS by Apple when other social sign-in options are offered (App Store Guideline 4.8)
+**Hide My Email:** If you select Hide My Email, your real email is never shared with Crumbz. Apple forwards email from the relay address to your real inbox. You can disable this relay any time from your Apple ID settings, which will stop email delivery from Crumbz.
+**Apple's privacy policy:** https://www.apple.com/legal/privacy/
+
+---
+
+### 7.3 Email/Password Authentication (Supabase Auth)
 
 **What we collect:** Your email address and password credentials
 **What we store:** Your email address and authentication session data. Passwords are handled by Supabase Auth and are not visible to Crumbz.
@@ -340,7 +352,7 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.3 Google Places API
+### 7.4 Google Places API
 
 **What we send:** GPS coordinates and search text queries from our server
 **What Google provides us:** Lists of nearby food spots, place details, reviews from Google Maps
@@ -350,7 +362,7 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.4 Supabase
+### 7.5 Supabase
 
 **What we send:** All structured data described in Section 4
 **What Supabase does:** Stores and serves data via PostgreSQL and object storage
@@ -360,7 +372,7 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.5 OpenAI
+### 7.6 OpenAI
 
 **What we send:** The title, body text, and call-to-action of a specific post — only when you explicitly request a translation
 **What OpenAI provides:** Translated text in the target language
@@ -370,7 +382,7 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.6 Vercel
+### 7.7 Vercel
 
 **What Vercel receives:** All HTTP requests made to `app.crumbz.pl`, including request headers, IP addresses, and response times
 **Why:** Vercel hosts our web application and API routes
@@ -379,7 +391,7 @@ We use the following third-party services. Each receives some of your data to op
 
 ---
 
-### 7.7 Browser Push Services (Web Push)
+### 7.8 Browser Push Services (Web Push)
 
 **What we send:** Encrypted push notification payloads to your browser's push service endpoint
 **Which push services:** Depends on your browser — Google FCM (Chrome), Mozilla Push Service (Firefox), Apple APNs (Safari/iOS)

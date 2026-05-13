@@ -31,7 +31,9 @@ We may suspend or delete accounts if we believe the user is under the required a
 
 ## 3. Accounts and Sign-In
 
-Crumbz lets users sign in with **Google Sign-In** or **email/password**. You are responsible for keeping access to your sign-in account secure.
+Crumbz lets users sign in with **Google Sign-In**, **Sign in with Apple**, or **email/password**. You are responsible for keeping access to your sign-in account secure.
+
+If you use Sign in with Apple, you may choose to share your real email address or to hide it using Apple's private email relay service. Either option works to create and use a Crumbz account.
 
 You agree to provide accurate profile information and to keep your username, city, school/university, and other profile details reasonably current. You may not impersonate another person, use a username that is misleading, abusive, illegal, or infringes someone else's rights, or attempt to access another user's account.
 
