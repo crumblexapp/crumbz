@@ -63,6 +63,7 @@ const PENDING_REFERRAL_CODE_KEY = "crumbz-pending-referral-code-v1";
 const POST_SIGNUP_ONBOARDING_PENDING_PREFIX = "crumbz-post-signup-onboarding-pending-v1";
 const POST_SIGNUP_ONBOARDING_DONE_PREFIX = "crumbz-post-signup-onboarding-done-v1";
 const POST_SIGNUP_ONBOARDING_STEP_PREFIX = "crumbz-post-signup-onboarding-step-v1";
+const EMAIL_PASSWORD_SETUP_PENDING_PREFIX = "crumbz-email-password-setup-pending-v1";
 const FAVORITE_LOCATION_MODE_PREFIX = "crumbz-favorite-location-mode-v1";
 const FAVORITE_LOCATION_CITY_PREFIX = "crumbz-favorite-location-city-v1";
 const FAVORITE_LOCATION_CENTER_PREFIX = "crumbz-favorite-location-center-v1";
@@ -1021,6 +1022,10 @@ function getPostSignupOnboardingDoneKey(email: string) {
 
 function getPostSignupOnboardingStepKey(email: string) {
   return `${POST_SIGNUP_ONBOARDING_STEP_PREFIX}:${email.toLowerCase()}`;
+}
+
+function getEmailPasswordSetupPendingKey(email: string) {
+  return `${EMAIL_PASSWORD_SETUP_PENDING_PREFIX}:${email.toLowerCase()}`;
 }
 
 function getFavoriteLocationModeKey(email: string) {
@@ -2559,6 +2564,11 @@ export default function Page() {
   const [emailAuthEmail, setEmailAuthEmail] = useState("");
   const [emailAuthPassword, setEmailAuthPassword] = useState("");
   const [emailAuthLoading, setEmailAuthLoading] = useState(false);
+  const [emailPasswordSetupOpen, setEmailPasswordSetupOpen] = useState(false);
+  const [emailPasswordSetupEmail, setEmailPasswordSetupEmail] = useState("");
+  const [emailPasswordSetupPassword, setEmailPasswordSetupPassword] = useState("");
+  const [emailPasswordSetupConfirm, setEmailPasswordSetupConfirm] = useState("");
+  const [emailPasswordSetupLoading, setEmailPasswordSetupLoading] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
   const [nativeSplashDone, setNativeSplashDone] = useState(false);
   const [error, setError] = useState("");
@@ -5436,15 +5446,37 @@ export default function Page() {
     void supabaseBrowser.auth.getSession().then(({ data }) => {
       if (cancelled) return;
       if (intentionalSignOutRef.current) return;
+      if (data.session) {
+        const sessionEmail = data.session.user?.email?.toLowerCase() ?? "";
+        const pendingEmailSetup =
+          typeof window !== "undefined" && sessionEmail
+            ? window.localStorage.getItem(getEmailPasswordSetupPendingKey(sessionEmail)) === "true"
+            : false;
+        if (!userRef.current.signedIn || pendingEmailSetup) {
+          void finishSupabaseAuthSession(data.session, sessionEmail.split("@")[0] || undefined);
+        }
+        return;
+      }
       if (!data.session && userRef.current.signedIn) {
-        resetExpiredSession("sign in with google to keep going.");
+        resetExpiredSession("sign in again to keep going.");
       }
     });
 
     const { data: authListener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
       if (intentionalSignOutRef.current) return;
-      if (session || !userRef.current.signedIn) return;
-      resetExpiredSession("sign in with google to keep going.");
+      if (session) {
+        const sessionEmail = session.user?.email?.toLowerCase() ?? "";
+        const pendingEmailSetup =
+          typeof window !== "undefined" && sessionEmail
+            ? window.localStorage.getItem(getEmailPasswordSetupPendingKey(sessionEmail)) === "true"
+            : false;
+        if (!userRef.current.signedIn || pendingEmailSetup) {
+          void finishSupabaseAuthSession(session, sessionEmail.split("@")[0] || undefined);
+        }
+        return;
+      }
+      if (!userRef.current.signedIn) return;
+      resetExpiredSession("sign in again to keep going.");
     });
 
     return () => {
@@ -5471,7 +5503,7 @@ export default function Page() {
       setAuthMode("login");
       setShowWelcomeScreen(false);
       setStudentTab("feed");
-      setError("that account was removed. sign up or log in with another google account.");
+      setError("that account was removed. sign up or log in with another account.");
       return;
     }
 
@@ -6429,49 +6461,10 @@ export default function Page() {
     });
 
     const onNativeAuth = async (e: Event) => {
-      const session = (e as CustomEvent<{ session: { user: { user_metadata: Record<string, string> } } }>).detail.session;
-      if (!session?.user?.user_metadata) return;
-
-      const meta = session.user.user_metadata;
-      const profile: GoogleProfile = {
-        name: meta.full_name ?? meta.name ?? "",
-        email: meta.email ?? "",
-        picture: meta.avatar_url ?? meta.picture,
-      };
-      if (!profile.name || !profile.email) return;
-
-      const authResult = await supabaseBrowser.auth.getSession();
-      if (authResult.error) {
-        setError("google sign-in didn't finish. try again.");
-        return;
-      }
-
-      const sharedAccounts = await fetch("/api/state", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((p) => (p?.ok ? (p.accounts as StoredUser[]) : null))
-        .catch(() => null);
-
-      const sourceAccounts =
-        sharedAccounts?.length ? sharedAccounts : accountsRef.current.length ? accountsRef.current : readAccounts();
-      const existingAccount =
-        sourceAccounts.find((a) => a.googleProfile?.email?.toLowerCase() === profile.email.toLowerCase()) ?? null;
-
-      setError("");
-
-      if (existingAccount) {
-        const nextSignedInAccount = { ...existingAccount, signedIn: true };
-        const result = await mutateAccountState({ action: "upsert_account", account: nextSignedInAccount }).catch(() => null);
-        persistUser((result?.user as StoredUser | null) ?? nextSignedInAccount);
-        if (result?.accounts?.length) setAccounts(result.accounts);
-        else if (sharedAccounts?.length) setAccounts(sharedAccounts);
-        if (profile.picture) void fetchAndCachePicture(profile.email, profile.picture);
-        setFullName(null); setUsername(null); setCity(null); setIsStudent(null); setSchoolName(null);
-        return;
-      }
-
-      setFullName(profile.name);
-      setUsername((current) => current ?? "");
-      setIsStudent(null);
+      const session = (e as CustomEvent<{ session: AuthSessionLike }>).detail.session;
+      if (!session?.user) return;
+      const email = String(session.user.email ?? session.user.user_metadata?.email ?? "").toLowerCase();
+      await finishSupabaseAuthSession(session, email.split("@")[0] || undefined);
     };
 
     window.addEventListener("crumbz-native-auth", onNativeAuth);
@@ -6819,12 +6812,22 @@ export default function Page() {
     saveSettingsProfile({ isStudent: true, schoolName: nextSchool }, "school updated.");
   };
 
+  const maybeOpenEmailPasswordSetup = (email: string) => {
+    if (typeof window === "undefined") return;
+    const setupKey = getEmailPasswordSetupPendingKey(email);
+    if (window.localStorage.getItem(setupKey) !== "true") return;
+    setEmailPasswordSetupEmail(email);
+    setEmailPasswordSetupOpen(true);
+    setEmailPasswordSetupPassword("");
+    setEmailPasswordSetupConfirm("");
+  };
+
   const finishSupabaseAuthSession = async (session: AuthSessionLike, fallbackName?: string) => {
     const meta = session.user?.user_metadata ?? {};
     const email = String(session.user?.email ?? meta.email ?? "").trim().toLowerCase();
     if (!email) {
       setError("couldn't read your email. try again.");
-      return;
+      return null;
     }
 
     const nameFromMeta = [meta.full_name, meta.name].find((value) => typeof value === "string" && value.trim());
@@ -6862,7 +6865,8 @@ export default function Page() {
       setCity(null);
       setIsStudent(null);
       setSchoolName(null);
-      return;
+      maybeOpenEmailPasswordSetup(profile.email);
+      return profile.email;
     }
 
     const currentUser = userRef.current;
@@ -6898,9 +6902,53 @@ export default function Page() {
     setFullName(profile.name);
     setUsername((current) => current ?? "");
     setIsStudent(null);
+    maybeOpenEmailPasswordSetup(profile.email);
+    return profile.email;
   };
 
-  const submitEmailPasswordAuth = async () => {
+  const getEmailAuthRedirectUrl = () => {
+    if (isNativePlatform) return "crumbz://login-callback";
+    if (typeof window === "undefined") return undefined;
+    return window.location.origin;
+  };
+
+  const submitEmailMagicLinkSignup = async () => {
+    const email = emailAuthEmail.trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      setError("add a real email first.");
+      return;
+    }
+
+    setEmailAuthLoading(true);
+    setError("");
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(getEmailPasswordSetupPendingKey(email), "true");
+      }
+      const { error: otpError } = await supabaseBrowser.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: getEmailAuthRedirectUrl(),
+          data: {
+            name: email.split("@")[0],
+            full_name: email.split("@")[0],
+          },
+        },
+      });
+      if (otpError) throw otpError;
+      setError("check your email. tap the crumbz link, then set your password.");
+    } catch {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(getEmailPasswordSetupPendingKey(email));
+      }
+      setError("we couldn’t send the email link. try again.");
+    } finally {
+      setEmailAuthLoading(false);
+    }
+  };
+
+  const submitEmailPasswordLogin = async () => {
     const email = emailAuthEmail.trim().toLowerCase();
     const password = emailAuthPassword;
     if (!email || !email.includes("@")) {
@@ -6920,36 +6968,46 @@ export default function Page() {
         await finishSupabaseAuthSession(signInResult.data.session, email.split("@")[0]);
         return;
       }
-
-      const signUpResult = await supabaseBrowser.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: email.split("@")[0],
-            full_name: email.split("@")[0],
-          },
-        },
-      });
-      if (signUpResult.error) {
-        throw signUpResult.error;
-      }
-      if (!signUpResult.data.session) {
-        setError("check your email to finish signing in.");
-        return;
-      }
-      await finishSupabaseAuthSession(signUpResult.data.session, email.split("@")[0]);
+      setError("email login failed. try again.");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message.toLowerCase() : "";
       if (message.includes("invalid login") || message.includes("invalid credentials")) {
         setError("wrong password for this email.");
-      } else if (message.includes("already registered") || message.includes("already exists")) {
-        setError("this email already exists. use its password to continue.");
       } else {
         setError("email sign-in failed. try again.");
       }
     } finally {
       setEmailAuthLoading(false);
+    }
+  };
+
+  const saveEmailPasswordSetup = async () => {
+    const email = emailPasswordSetupEmail || user.googleProfile?.email?.toLowerCase() || "";
+    if (emailPasswordSetupPassword.length < 6) {
+      setError("password should be at least 6 characters.");
+      return;
+    }
+    if (emailPasswordSetupPassword !== emailPasswordSetupConfirm) {
+      setError("passwords don’t match yet.");
+      return;
+    }
+
+    setEmailPasswordSetupLoading(true);
+    setError("");
+    try {
+      const { error: updateError } = await supabaseBrowser.auth.updateUser({ password: emailPasswordSetupPassword });
+      if (updateError) throw updateError;
+      if (typeof window !== "undefined" && email) {
+        window.localStorage.removeItem(getEmailPasswordSetupPendingKey(email));
+      }
+      setEmailPasswordSetupOpen(false);
+      setEmailPasswordSetupPassword("");
+      setEmailPasswordSetupConfirm("");
+      setError("");
+    } catch {
+      setError("that password didn’t save. try again.");
+    } finally {
+      setEmailPasswordSetupLoading(false);
     }
   };
 
@@ -10788,6 +10846,12 @@ export default function Page() {
               </div>
 
               <div className="space-y-3">
+                {authMode === "login" ? (
+                  <div className="text-center">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#B56D19]">welcome back</p>
+                  </div>
+                ) : null}
+
                 {GOOGLE_CLIENT_ID ? (
                   <div className="flex flex-col items-center gap-3">
                     {isNativePlatform ? (
@@ -10867,10 +10931,11 @@ export default function Page() {
                   className="h-12 w-full border border-[#ead8bb] bg-[#FFF7E8] text-sm font-bold text-[#2C1A0E]"
                   onPress={() => {
                     setEmailAuthOpen((current) => !current);
+                    if (authMode === "signup") setEmailAuthPassword("");
                     setError("");
                   }}
                 >
-                  Continue with Email
+                  {authMode === "signup" ? "Continue with Email" : "Login with Email and Password"}
                 </Button>
 
                 {emailAuthOpen ? (
@@ -10878,7 +10943,7 @@ export default function Page() {
                     className="space-y-3 rounded-[24px] bg-[#FFF7E8] p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      void submitEmailPasswordAuth();
+                      void (authMode === "signup" ? submitEmailMagicLinkSignup() : submitEmailPasswordLogin());
                     }}
                   >
                     <Input
@@ -10893,34 +10958,117 @@ export default function Page() {
                       }}
                       classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
                     />
-                    <Input
-                      type="password"
-                      label="password"
-                      labelPlacement="outside"
-                      radius="lg"
-                      value={emailAuthPassword}
-                      onValueChange={(value) => {
-                        setEmailAuthPassword(value);
-                        setError("");
-                      }}
-                      classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
-                    />
+                    {authMode === "login" ? (
+                      <Input
+                        type="password"
+                        label="password"
+                        labelPlacement="outside"
+                        radius="lg"
+                        value={emailAuthPassword}
+                        onValueChange={(value) => {
+                          setEmailAuthPassword(value);
+                          setError("");
+                        }}
+                        classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
+                      />
+                    ) : (
+                      <p className="text-sm font-semibold leading-6 text-[#6c7289]">
+                        we’ll email you a secure link. after you tap it, you’ll set a password for next time.
+                      </p>
+                    )}
                     <Button
                       type="submit"
                       radius="full"
                       className="h-11 w-full bg-[#2C1A0E] text-sm font-bold text-white"
                       isLoading={emailAuthLoading}
                     >
-                      Continue
+                      {authMode === "signup" ? "Email me the link" : "Login"}
                     </Button>
                   </form>
                 ) : null}
 
                 {error ? <p className="text-sm text-[#F5A623]">{error}</p> : null}
+
+                <button
+                  type="button"
+                  className="w-full pt-1 text-center text-sm font-bold text-[#6c7289]"
+                  onClick={() => {
+                    setAuthMode(authMode === "signup" ? "login" : "signup");
+                    setEmailAuthOpen(false);
+                    setEmailAuthPassword("");
+                    setError("");
+                  }}
+                >
+                  {authMode === "signup" ? "Already have an account? Login" : "New to crumbz? Create account"}
+                </button>
               </div>
             </div>
           </motion.section>
 
+        </div>
+      </main>
+    );
+  }
+
+  if (emailPasswordSetupOpen) {
+    return (
+      <main className="min-h-screen bg-[#fb8803] px-5 py-8 text-[#2C1A0E]">
+        <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-md items-center">
+          <Card className="w-full rounded-[38px] bg-white shadow-[0_26px_70px_rgba(44,26,14,0.16)]">
+            <CardBody className="gap-5 p-6 text-center">
+              <img src="/brand/logo-tagline.png" alt="CRUMBZ - the feed that keeps you hungry" className="mx-auto w-56 max-w-full" />
+              <div className="mx-auto h-px w-16 bg-[#fb8803]" />
+              <div className="space-y-2">
+                <h1 className="font-[family-name:var(--font-young-serif)] text-[2.2rem] leading-none text-[#2C1A0E]">
+                  set your password
+                </h1>
+                <p className="mx-auto max-w-[19rem] text-sm font-semibold leading-6 text-[#6c7289]">
+                  next time, tap login and use this email with your password.
+                </p>
+              </div>
+              <form
+                className="space-y-3 rounded-[24px] bg-[#FFF7E8] p-4 text-left"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveEmailPasswordSetup();
+                }}
+              >
+                <Input
+                  type="password"
+                  label="password"
+                  labelPlacement="outside"
+                  radius="lg"
+                  value={emailPasswordSetupPassword}
+                  onValueChange={(value) => {
+                    setEmailPasswordSetupPassword(value);
+                    setError("");
+                  }}
+                  classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
+                />
+                <Input
+                  type="password"
+                  label="confirm password"
+                  labelPlacement="outside"
+                  radius="lg"
+                  value={emailPasswordSetupConfirm}
+                  onValueChange={(value) => {
+                    setEmailPasswordSetupConfirm(value);
+                    setError("");
+                  }}
+                  classNames={{ inputWrapper: "bg-white shadow-none border border-[#ead8bb]" }}
+                />
+                <Button
+                  type="submit"
+                  radius="full"
+                  className="h-11 w-full bg-[#2C1A0E] text-sm font-bold text-white"
+                  isLoading={emailPasswordSetupLoading}
+                >
+                  Save password
+                </Button>
+              </form>
+              {error ? <p className="text-sm font-semibold text-[#F5A623]">{error}</p> : null}
+            </CardBody>
+          </Card>
         </div>
       </main>
     );
