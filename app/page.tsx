@@ -394,6 +394,11 @@ type AuthSessionLike = {
   } | null;
 };
 
+type NativeAuthEventDetail = {
+  session: AuthSessionLike;
+  url?: string;
+};
+
 type StoredUser = {
   signedIn: boolean;
   googleProfile: GoogleProfile | null;
@@ -1028,6 +1033,31 @@ function getPostSignupOnboardingStepKey(email: string) {
 
 function getEmailPasswordSetupPendingKey(email: string) {
   return `${EMAIL_PASSWORD_SETUP_PENDING_PREFIX}:${email.toLowerCase()}`;
+}
+
+function isEmailPasswordSetupCallback(url?: string | null, email?: string) {
+  if (typeof window === "undefined" && !url) return false;
+
+  try {
+    const targetUrl = new URL(url || window.location.href);
+    const callbackEmail = targetUrl.searchParams.get("email_setup_for")?.trim().toLowerCase() ?? "";
+    const wantsSetup = targetUrl.searchParams.get("email_password_setup") === "1";
+    if (!wantsSetup) return false;
+    return !email || !callbackEmail || callbackEmail === email.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+function clearEmailPasswordSetupCallbackMarker() {
+  if (typeof window === "undefined") return;
+
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("email_password_setup");
+    url.searchParams.delete("email_setup_for");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
 }
 
 function getFavoriteLocationModeKey(email: string) {
@@ -5475,23 +5505,84 @@ export default function Page() {
   useEffect(() => {
     let cancelled = false;
 
-    void supabaseBrowser.auth.getSession().then(({ data }) => {
+    const cleanAuthCallbackUrl = () => {
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      [
+        "code",
+        "access_token",
+        "refresh_token",
+        "expires_at",
+        "expires_in",
+        "provider_token",
+        "provider_refresh_token",
+        "token_type",
+        "type",
+      ].forEach((key) => url.searchParams.delete(key));
+      url.hash = "";
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    };
+
+    const finishSessionIfNeeded = (session: AuthSessionLike) => {
+      const sessionEmail = session.user?.email?.toLowerCase() ?? "";
+      const pendingEmailSetup =
+        typeof window !== "undefined" && sessionEmail
+          ? window.localStorage.getItem(getEmailPasswordSetupPendingKey(sessionEmail)) === "true" ||
+            isEmailPasswordSetupCallback(window.location.href, sessionEmail)
+          : false;
+      if (!userRef.current.signedIn || pendingEmailSetup) {
+        void finishSupabaseAuthSession(session, sessionEmail.split("@")[0] || undefined, pendingEmailSetup);
+      }
+    };
+
+    const processAuthUrl = async () => {
+      if (typeof window === "undefined") return null;
+      const currentUrl = window.location.href;
+      const hasCode = new URL(currentUrl).searchParams.has("code");
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (hasCode) {
+        const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(currentUrl);
+        if (!error && data.session) {
+          cleanAuthCallbackUrl();
+          return data.session;
+        }
+      }
+
+      if (accessToken) {
+        const { data, error } = await supabaseBrowser.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken ?? "",
+        });
+        if (!error && data.session) {
+          cleanAuthCallbackUrl();
+          return data.session;
+        }
+      }
+
+      return null;
+    };
+
+    void processAuthUrl().then((callbackSession) => {
       if (cancelled) return;
       if (intentionalSignOutRef.current) return;
-      if (data.session) {
-        const sessionEmail = data.session.user?.email?.toLowerCase() ?? "";
-        const pendingEmailSetup =
-          typeof window !== "undefined" && sessionEmail
-            ? window.localStorage.getItem(getEmailPasswordSetupPendingKey(sessionEmail)) === "true"
-            : false;
-        if (!userRef.current.signedIn || pendingEmailSetup) {
-          void finishSupabaseAuthSession(data.session, sessionEmail.split("@")[0] || undefined);
-        }
+      if (callbackSession) {
+        finishSessionIfNeeded(callbackSession);
         return;
       }
-      if (!data.session && userRef.current.signedIn) {
-        resetExpiredSession("sign in again to keep going.");
-      }
+      void supabaseBrowser.auth.getSession().then(({ data }) => {
+        if (cancelled) return;
+        if (intentionalSignOutRef.current) return;
+        if (data.session) {
+          finishSessionIfNeeded(data.session);
+          return;
+        }
+        if (!data.session && userRef.current.signedIn) {
+          resetExpiredSession("sign in again to keep going.");
+        }
+      });
     });
 
     const { data: authListener } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
@@ -5501,9 +5592,10 @@ export default function Page() {
         const pendingEmailSetup =
           typeof window !== "undefined" && sessionEmail
             ? window.localStorage.getItem(getEmailPasswordSetupPendingKey(sessionEmail)) === "true"
+              || isEmailPasswordSetupCallback(window.location.href, sessionEmail)
             : false;
         if (!userRef.current.signedIn || pendingEmailSetup) {
-          void finishSupabaseAuthSession(session, sessionEmail.split("@")[0] || undefined);
+          void finishSupabaseAuthSession(session, sessionEmail.split("@")[0] || undefined, pendingEmailSetup);
         }
         return;
       }
@@ -6493,10 +6585,14 @@ export default function Page() {
     });
 
     const onNativeAuth = async (e: Event) => {
-      const session = (e as CustomEvent<{ session: AuthSessionLike }>).detail.session;
+      const detail = (e as CustomEvent<NativeAuthEventDetail>).detail;
+      const session = detail.session;
       if (!session?.user) return;
       const email = String(session.user.email ?? session.user.user_metadata?.email ?? "").toLowerCase();
-      await finishSupabaseAuthSession(session, email.split("@")[0] || undefined);
+      const pendingEmailSetup =
+        Boolean(email && typeof window !== "undefined" && window.localStorage.getItem(getEmailPasswordSetupPendingKey(email)) === "true") ||
+        isEmailPasswordSetupCallback(detail.url, email);
+      await finishSupabaseAuthSession(session, email.split("@")[0] || undefined, pendingEmailSetup);
     };
 
     window.addEventListener("crumbz-native-auth", onNativeAuth);
@@ -6845,17 +6941,18 @@ export default function Page() {
     saveSettingsProfile({ isStudent: true, schoolName: nextSchool }, "school updated.");
   };
 
-  const maybeOpenEmailPasswordSetup = (email: string) => {
+  const maybeOpenEmailPasswordSetup = (email: string, forceOpen = false) => {
     if (typeof window === "undefined") return;
     const setupKey = getEmailPasswordSetupPendingKey(email);
-    if (window.localStorage.getItem(setupKey) !== "true") return;
+    if (!forceOpen && window.localStorage.getItem(setupKey) !== "true" && !isEmailPasswordSetupCallback(window.location.href, email)) return;
+    window.localStorage.setItem(setupKey, "true");
     setEmailPasswordSetupEmail(email);
     setEmailPasswordSetupOpen(true);
     setEmailPasswordSetupPassword("");
     setEmailPasswordSetupConfirm("");
   };
 
-  const finishSupabaseAuthSession = async (session: AuthSessionLike, fallbackName?: string) => {
+  const finishSupabaseAuthSession = async (session: AuthSessionLike, fallbackName?: string, forcePasswordSetup = false) => {
     const meta = session.user?.user_metadata ?? {};
     const email = String(session.user?.email ?? meta.email ?? "").trim().toLowerCase();
     if (!email) {
@@ -6898,7 +6995,7 @@ export default function Page() {
       setCity(null);
       setIsStudent(null);
       setSchoolName(null);
-      maybeOpenEmailPasswordSetup(profile.email);
+      maybeOpenEmailPasswordSetup(profile.email, forcePasswordSetup);
       return profile.email;
     }
 
@@ -6935,14 +7032,15 @@ export default function Page() {
     setFullName(profile.name);
     setUsername((current) => current ?? "");
     setIsStudent(null);
-    maybeOpenEmailPasswordSetup(profile.email);
+    maybeOpenEmailPasswordSetup(profile.email, forcePasswordSetup);
     return profile.email;
   };
 
-  const getEmailAuthRedirectUrl = () => {
-    if (isNativePlatform) return "crumbz://login-callback";
+  const getEmailAuthRedirectUrl = (email?: string) => {
+    const marker = `email_password_setup=1${email ? `&email_setup_for=${encodeURIComponent(email.toLowerCase())}` : ""}`;
+    if (isNativePlatform) return `crumbz://login-callback?${marker}`;
     if (typeof window === "undefined") return undefined;
-    return window.location.origin;
+    return `${window.location.origin}/?${marker}`;
   };
 
   const submitEmailMagicLinkSignup = async () => {
@@ -6962,10 +7060,11 @@ export default function Page() {
         email,
         options: {
           shouldCreateUser: true,
-          emailRedirectTo: getEmailAuthRedirectUrl(),
+          emailRedirectTo: getEmailAuthRedirectUrl(email),
           data: {
             name: email.split("@")[0],
             full_name: email.split("@")[0],
+            email_password_setup: true,
           },
         },
       });
@@ -7033,6 +7132,7 @@ export default function Page() {
       if (typeof window !== "undefined" && email) {
         window.localStorage.removeItem(getEmailPasswordSetupPendingKey(email));
       }
+      clearEmailPasswordSetupCallbackMarker();
       setEmailPasswordSetupOpen(false);
       setEmailPasswordSetupPassword("");
       setEmailPasswordSetupConfirm("");

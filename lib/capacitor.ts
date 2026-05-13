@@ -95,7 +95,7 @@ export async function handleNativeAuthCallback(url: string) {
     if (url.includes('code=')) {
       const { data, error } = await supabaseBrowser.auth.exchangeCodeForSession(url);
       if (error || !data.session) return;
-      window.dispatchEvent(new CustomEvent('crumbz-native-auth', { detail: { session: data.session } }));
+      window.dispatchEvent(new CustomEvent('crumbz-native-auth', { detail: { session: data.session, url } }));
     } else if (url.includes('access_token=')) {
       const hash = url.split('#')[1] ?? '';
       const params = new URLSearchParams(hash);
@@ -104,7 +104,7 @@ export async function handleNativeAuthCallback(url: string) {
       if (!access_token) return;
       const { data, error } = await supabaseBrowser.auth.setSession({ access_token, refresh_token });
       if (error || !data.session) return;
-      window.dispatchEvent(new CustomEvent('crumbz-native-auth', { detail: { session: data.session } }));
+      window.dispatchEvent(new CustomEvent('crumbz-native-auth', { detail: { session: data.session, url } }));
     }
   } catch {}
 }
