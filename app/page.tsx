@@ -2609,6 +2609,8 @@ export default function Page() {
   const [emailPasswordSetupConfirm, setEmailPasswordSetupConfirm] = useState("");
   const [emailPasswordSetupLoading, setEmailPasswordSetupLoading] = useState(false);
   const [isNativePlatform, setIsNativePlatform] = useState(false);
+  const [isIosPlatform, setIsIosPlatform] = useState(false);
+  const [appleAuthLoading, setAppleAuthLoading] = useState(false);
   const [nativeSplashDone, setNativeSplashDone] = useState(false);
   const [error, setError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
@@ -6580,8 +6582,9 @@ export default function Page() {
 
   // Detect native Capacitor platform and handle native OAuth callbacks
   useEffect(() => {
-    import("@/lib/capacitor").then(({ isNative }) => {
+    import("@/lib/capacitor").then(({ isNative, platform }) => {
       setIsNativePlatform(isNative());
+      setIsIosPlatform(platform() === "ios");
     });
 
     const onNativeAuth = async (e: Event) => {
@@ -7034,6 +7037,49 @@ export default function Page() {
     setIsStudent(null);
     maybeOpenEmailPasswordSetup(profile.email, forcePasswordSetup);
     return profile.email;
+  };
+
+  const submitAppleSignIn = async () => {
+    setError("");
+    setAppleAuthLoading(true);
+    try {
+      const { SignInWithApple } = await import("@/lib/native-apple-sign-in");
+      const result = await SignInWithApple.authorize({
+        clientId: "com.crumbz.app",
+        redirectURI: "https://crumbz.app/auth/callback",
+        scopes: "email name",
+      });
+      const identityToken = result.response.identityToken;
+      if (!identityToken) {
+        setError("apple sign-in didn’t come through. try again.");
+        return;
+      }
+
+      const authResult = await supabaseBrowser.auth.signInWithIdToken({
+        provider: "apple",
+        token: identityToken,
+      });
+      if (authResult.error || !authResult.data.session) {
+        console.error("[crumbz auth] apple signInWithIdToken failed", authResult.error);
+        setError("apple sign-in didn’t finish. try again.");
+        return;
+      }
+
+      const fullName = [result.response.givenName, result.response.familyName].filter(Boolean).join(" ").trim();
+      const email = (result.response.email || authResult.data.session.user?.email || "").toLowerCase();
+      const fallbackName = fullName || (email ? email.split("@")[0] : undefined);
+      await finishSupabaseAuthSession(authResult.data.session, fallbackName);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err ?? "");
+      if (message === "cancel") {
+        // user cancelled — silent
+        return;
+      }
+      console.error("[crumbz auth] apple sign-in failed", err);
+      setError(`apple sign-in failed: ${message || "try again."}`);
+    } finally {
+      setAppleAuthLoading(false);
+    }
   };
 
   const getEmailAuthRedirectUrl = (email?: string) => {
@@ -11132,18 +11178,25 @@ export default function Page() {
                   </div>
                 )}
 
-                <Button
-                  radius="full"
-                  variant="flat"
-                  className="h-12 w-full border border-[#ead8bb] bg-[#FFF7E8] text-sm font-bold text-[#2C1A0E]"
-                  onPress={() => {
-                    setEmailAuthOpen((current) => !current);
-                    if (authMode === "signup") setEmailAuthPassword("");
-                    setError("");
-                  }}
-                >
-                  {authMode === "signup" ? "Continue with Email" : "Login with Email and Password"}
-                </Button>
+                {isIosPlatform ? (
+                  <Button
+                    radius="full"
+                    className="h-12 w-full bg-black text-sm font-bold text-white"
+                    isLoading={appleAuthLoading}
+                    startContent={
+                      appleAuthLoading ? null : (
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="white" aria-hidden="true">
+                          <path d="M16.365 1.43c0 1.14-.45 2.234-1.196 3.04-.81.876-2.123 1.564-3.232 1.474-.135-1.082.42-2.214 1.146-2.992.81-.876 2.197-1.518 3.282-1.522zM20.5 17.27c-.554 1.214-.82 1.758-1.534 2.832-.998 1.5-2.406 3.366-4.15 3.38-1.55.014-1.95-1.012-4.05-1-2.1.012-2.54 1.018-4.094 1.004-1.744-.014-3.078-1.7-4.078-3.2C-.234 16.96-.546 11.78 1.94 9.05c.99-1.094 2.55-1.79 4.022-1.79 1.5 0 2.444.83 3.686.83 1.204 0 1.94-.834 3.674-.834 1.308 0 2.696.714 3.69 1.95-3.244 1.78-2.716 6.414.488 8.064z"/>
+                        </svg>
+                      )
+                    }
+                    onPress={() => {
+                      void submitAppleSignIn();
+                    }}
+                  >
+                    Continue with Apple
+                  </Button>
+                ) : null}
 
                 {emailAuthOpen ? (
                   <form
