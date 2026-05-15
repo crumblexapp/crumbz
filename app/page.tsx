@@ -7570,11 +7570,61 @@ export default function Page() {
       });
   };
 
+  const applyFriendRequestPreview = (
+    action: "accept" | "decline",
+    currentEmail: string,
+    requesterEmail: string,
+    currentAccounts = accountsRef.current,
+  ) => {
+    const current = currentEmail.toLowerCase();
+    const requester = requesterEmail.toLowerCase();
+
+    return currentAccounts.map((account) => {
+      const email = account.googleProfile?.email?.toLowerCase() ?? "";
+
+      if (email === current) {
+        return normalizeAccounts([{
+          ...account,
+          profile: {
+            ...account.profile,
+            friends:
+              action === "accept"
+                ? [...new Set([...account.profile.friends, requester])]
+                : account.profile.friends,
+            incomingFriendRequests: account.profile.incomingFriendRequests.filter((item) => item !== requester),
+          },
+        }])[0] ?? account;
+      }
+
+      if (email === requester) {
+        return normalizeAccounts([{
+          ...account,
+          profile: {
+            ...account.profile,
+            friends:
+              action === "accept"
+                ? [...new Set([...account.profile.friends, current])]
+                : account.profile.friends,
+            outgoingFriendRequests: account.profile.outgoingFriendRequests.filter((item) => item !== current),
+          },
+        }])[0] ?? account;
+      }
+
+      return account;
+    });
+  };
+
   const acceptFriendRequest = async (requesterEmail: string) => {
     const currentEmail = user.googleProfile?.email;
     if (!currentEmail) return;
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
+
+    const previousAccounts = accountsRef.current;
+    const previewAccounts = applyFriendRequestPreview("accept", currentEmail, requesterEmail, previousAccounts);
+    const previewUser = previewAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail.toLowerCase()) ?? null;
+    setAccounts(previewAccounts);
+    if (previewUser) persistUser(previewUser);
 
     void haptic("heavy");
     void mutateAccountState({
@@ -7591,6 +7641,9 @@ export default function Page() {
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "accepting that friend request failed. try once more.";
+        setAccounts(previousAccounts);
+        const previousUser = previousAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail.toLowerCase()) ?? null;
+        if (previousUser) persistUser(previousUser);
         setError(message);
         setSocialActionNotice(message);
       });
@@ -7601,6 +7654,12 @@ export default function Page() {
     if (!currentEmail) return;
     if (!(await ensureAuthenticatedSession())) return;
     setSocialActionNotice("");
+
+    const previousAccounts = accountsRef.current;
+    const previewAccounts = applyFriendRequestPreview("decline", currentEmail, requesterEmail, previousAccounts);
+    const previewUser = previewAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail.toLowerCase()) ?? null;
+    setAccounts(previewAccounts);
+    if (previewUser) persistUser(previewUser);
 
     void mutateAccountState({
       action: "decline_friend_request",
@@ -7616,6 +7675,9 @@ export default function Page() {
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : "declining that request failed. try again.";
+        setAccounts(previousAccounts);
+        const previousUser = previousAccounts.find((account) => account.googleProfile?.email?.toLowerCase() === currentEmail.toLowerCase()) ?? null;
+        if (previousUser) persistUser(previousUser);
         setError(message);
         setSocialActionNotice(message);
       });
@@ -15361,7 +15423,7 @@ export default function Page() {
         <ModalContent className="max-h-[100dvh] bg-[#fffaf2]">
           {(onClose) => (
             <>
-              <ModalHeader className="border-b border-[#FFF0D0]">
+              <ModalHeader className="border-b border-[#FFF0D0] pt-[calc(1rem+env(safe-area-inset-top))]">
                 <div className="w-full">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -15370,17 +15432,17 @@ export default function Page() {
                       </p>
                       <p className="mt-2 text-sm text-[#6c7289]">their crumbz profile</p>
                     </div>
-                    <Button
-                      radius="full"
-                      variant="light"
-                      className="shrink-0 text-[#2C1A0E]"
-                      onPress={() => {
+                    <button
+                      type="button"
+                      aria-label="close profile"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-2xl leading-none text-[#2C1A0E] shadow-[0_10px_24px_rgba(44,26,14,0.08)]"
+                      onClick={() => {
                         closeSelectedProfile();
                         onClose();
                       }}
                     >
-                      close
-                    </Button>
+                      ×
+                    </button>
                   </div>
 
                   <div className="mt-5 grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-3">

@@ -956,11 +956,13 @@ export async function POST(request: Request) {
   }
 
   if (pendingPush) {
-    await sendPushToEmails(pendingPush.emails, {
+    void sendPushToEmails(pendingPush.emails, {
       title: pendingPush.title,
       body: pendingPush.body,
       url: pendingPush.url ?? "/",
       tag: pendingPush.tag,
+    }).catch((error) => {
+      console.error("friend push failed", error);
     });
   }
 
